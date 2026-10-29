@@ -242,7 +242,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Gruppi di schede con nome e colore, comprimibili; raggruppa per host; dal gruppo broadcast, snippet, "Apri in griglia" e chiudi.
   - Spazi di lavoro salvati per nome, anche di un solo gruppo; l'ultima sessione è offerta di nuovo all'avvio.
   - Criterio raggiunto: `TabLayoutFlowTest` salva due gruppi e una scheda divisa, riavvia l'app e li ritrova uguali, con le sessioni ricollegate.
-- Fase 5: implementata il 29 ottobre 2026 ([decisione 0010](decisions/0010-http-requests.md)).
+- Fase 5: completata il 29 ottobre 2026 ([decisione 0010](decisions/0010-http-requests.md)).
   - Tunnel nel nucleo SSH (`forwardLocal`), anche dietro un jump host; ai server di test si è aggiunto un servizio HTTP raggiungibile solo dall'interno.
   - Scheda "Richieste" dal menu dell'host: metodo, URL, header, corpo (JSON, form, testo), auth (Bearer, Basic, API key) con i segreti nel vault, variabili `{{nome}}` per host.
   - Form multipart con campi di testo e file (percorsi sul desktop, documenti scelti su Android).
@@ -251,7 +251,11 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Verifiche senza codice ed esecuzione della collezione su un host o su un gruppo, con la tabella host × richiesta.
   - Import da Postman v2.1 e da comandi curl.
   - Criterio raggiunto: `HttpRunFlowTest` esegue una collezione di verifiche su tutti gli host di un gruppo, uno dietro il bastion, e mostra l'esito per host.
-  - Restano fuori: redirect seguiti, certificati non validi accettati a mano.
+  - Punti aperti:
+    - i redirect non vengono seguiti, perché potrebbero puntare a un altro host che il tunnel non raggiunge;
+    - i certificati HTTPS non validi (per esempio autofirmati) non si possono accettare a mano;
+    - da provare a mano: le finestre della scheda (variabili, esecuzione su un gruppo, import) e l'editor dei campi multipart nell'app vera;
+    - da provare su un telefono: la scelta di un file per un form multipart su Android.
 - Fase 6: implementata il 29 ottobre 2026 ([decisione 0009](decisions/0009-first-run-themes-and-termius.md)).
   - Benvenuto con "Usi Termius?" e import diretto dai dati locali di Termius (LevelDB e V8, campi decifrati con la chiave del portachiavi), tutorial in sei passi.
   - Temi Carta, Notte (blu notte), Nord, Solarized chiaro, Dracula e Tokyo Night, per app e terminale, scelti in Impostazioni o dal sistema.
@@ -270,7 +274,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 | 2. Multi-sessione SSH | `SessionManager`, tab, split view, riconnessione, Foreground Service. Broadcast input, snippet. | 10 sessioni stabili in parallelo per ore |
 | 3. SFTP multi-sessione | Workspace a N pannelli, `TransferManager`, remoto ↔ remoto, pausa e ripresa. Editor remoto. | Trasferimenti paralleli tra 3 o più host in un'unica coda |
 | 4. Schede unite e gruppi | Disposizione dei riquadri per scheda, unione e separazione trascinando, gruppi di schede con nome e colore, raggruppa per host, azioni sul gruppo, spazi di lavoro salvati | Uno spazio di lavoro con due gruppi e una scheda divisa si riapre uguale dopo un riavvio |
-| 5. Richieste HTTP | Scheda di richieste per host via tunnel SSH, risposta formattata, collezioni con variabili per host, verifiche, esecuzione su un gruppo, import da Postman e curl | Una collezione di verifiche gira su tutti gli host di un gruppo e mostra l'esito per host |
+| 5. Richieste HTTP ✓ | Scheda di richieste per host via tunnel SSH, risposta formattata, collezioni con variabili per host, verifiche, esecuzione su un gruppo, import da Postman e curl | Una collezione di verifiche gira su tutti gli host di un gruppo e mostra l'esito per host |
 | 6. Primo avvio, temi e avvisi | Benvenuto con ricerca dei dati di Termius, tema scuro "Notte" e temi iconici, notifiche dei trasferimenti, file trascinati sul terminale | Al primo avvio su un Mac con Termius gli host si importano senza export manuale |
 | 7. Autenticazione avanzata | SSH agent e forwarding, certificati, YubiKey / FIDO2, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
 | 8. Strumenti | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | |
@@ -297,6 +301,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 - [x] Esito dello spike sulla libreria SSH: Apache MINA SSHD ([decisione 0001](decisions/0001-ssh-library.md))
 - [x] Esito dello spike sul terminale: kmp-terminal-emulator dietro `core/terminal` ([decisione 0002](decisions/0002-terminal-emulator.md))
 - [ ] YubiKey su Android: FIDO2 o PIV
+- [ ] Fase 5 nell'app vera: finestre della scheda Richieste, campi multipart, file scelto su Android
 
 ## Riferimenti
 
