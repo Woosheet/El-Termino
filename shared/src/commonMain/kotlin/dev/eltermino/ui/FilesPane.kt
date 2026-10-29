@@ -81,7 +81,7 @@ import dev.eltermino.ui.components.MenuDivider
 import dev.eltermino.ui.components.MenuItem
 import dev.eltermino.ui.components.MenuLabel
 import dev.eltermino.ui.components.Pressable
-import dev.eltermino.ui.components.Spinner
+import dev.eltermino.ui.components.HoppingSombrero
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
 import dev.eltermino.ui.theme.tabular
@@ -234,7 +234,7 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                 Divider()
                 when {
                     path == null && loading -> Centered {
-                        Spinner()
+                        HoppingSombrero()
                         Gap(height = 12)
                         Text("Apertura di ${tab.label}…", color = colors.textDim)
                     }

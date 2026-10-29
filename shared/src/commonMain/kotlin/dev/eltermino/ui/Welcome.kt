@@ -35,7 +35,7 @@ import dev.eltermino.ui.components.CartaIcons
 import dev.eltermino.ui.components.Dialog
 import dev.eltermino.ui.components.Icon
 import dev.eltermino.ui.components.ProgressBar
-import dev.eltermino.ui.components.Spinner
+import dev.eltermino.ui.components.HoppingSombrero
 import dev.eltermino.ui.components.StatusDot
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
@@ -139,7 +139,7 @@ internal fun WelcomeFlow(state: AppState, startAtTour: Boolean, onOpenImport: ()
                     )
                 }
                 TermiusStep.Looking -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spinner(size = 18.dp)
+                    HoppingSombrero(height = 20.dp)
                     Text("Cerco i dati di Termius…", modifier = Modifier.padding(start = 10.dp), color = Carta.colors.textDim)
                 }
                 is TermiusStep.Found -> {

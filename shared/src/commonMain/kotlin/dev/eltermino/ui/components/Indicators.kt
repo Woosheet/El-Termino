@@ -28,8 +28,6 @@ import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.ui.theme.Carta
@@ -42,25 +40,9 @@ fun Divider(modifier: Modifier = Modifier, vertical: Boolean = false, color: Col
     )
 }
 
-@Composable
-fun Spinner(modifier: Modifier = Modifier, size: Dp = 28.dp, color: Color = Carta.colors.accent) {
-    val rotation by rememberInfiniteTransition(label = "spinner").animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart),
-        label = "rotation",
-    )
-    val track = Carta.colors.line
-    Canvas(modifier.size(size)) {
-        val stroke = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-        drawArc(track, 0f, 360f, useCenter = false, style = stroke)
-        drawArc(color, rotation, 90f, useCenter = false, style = stroke)
-    }
-}
-
 /**
- * The sombrero of the app icon hopping from left to right, for waiting on a host: an SSH
- * connection or an HTTP answer. [height] includes the room for the jump; the width follows.
+ * The sombrero of the app icon hopping from left to right: the app's one waiting indicator.
+ * [height] includes the room for the jump; the width follows.
  */
 @Composable
 fun HoppingSombrero(modifier: Modifier = Modifier, height: Dp = 56.dp, color: Color = Carta.colors.accent) {

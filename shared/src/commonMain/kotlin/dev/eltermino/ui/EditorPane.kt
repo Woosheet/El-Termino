@@ -57,7 +57,7 @@ import dev.eltermino.ui.components.ButtonKind
 import dev.eltermino.ui.components.Dialog
 import dev.eltermino.ui.components.DialogTone
 import dev.eltermino.ui.components.Divider
-import dev.eltermino.ui.components.Spinner
+import dev.eltermino.ui.components.HoppingSombrero
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
 import dev.eltermino.ui.theme.CartaColors
@@ -87,7 +87,7 @@ internal fun EditorPane(state: AppState, tab: EditorTab, focused: Boolean) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Spinner()
+            HoppingSombrero()
             Gap(height = 12)
             Text("Apertura di ${tab.label}…", color = Carta.colors.textDim)
         }
