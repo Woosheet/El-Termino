@@ -156,6 +156,11 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 - Font monospace inclusi nell'app (per esempio JetBrains Mono) per avere lo stesso rendering ovunque.
 - Layout desktop: sidebar degli host, tab in alto, area centrale divisibile, barra di stato con connessioni e trasferimenti attivi. Layout Android: elenco host, terminale a schermo intero, SFTP con pannello dei trasferimenti in basso.
 
+## Stato
+
+- Fase 0: completata il 29 ottobre 2026.
+- Fase 1: implementata il 29 ottobre 2026; il criterio "tutte le 48 macchine raggiungibili" va verificato con i tuoi host veri. Restano da provare a mano la digitazione nella finestra desktop, il primo uso del portachiavi di sistema e le chiavi PuTTY.
+
 ## Roadmap
 
 | Fase | Contenuto | Fatto quando |
@@ -184,7 +189,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 
 ## Da verificare
 
-- [ ] Quale export offre il Termius installato, e un file di esempio con dati finti
+- [ ] Quale export offre il Termius installato. Termius non documenta un formato di export; l'importer CSV usa le colonne dei tool di export della community (`Groups,Label,Tags,Hostname/IP,Protocol,Port,Username,Password`). Serve un file di esempio con dati finti.
 - [x] Esito dello spike sulla libreria SSH: Apache MINA SSHD ([decisione 0001](decisions/0001-ssh-library.md))
 - [x] Esito dello spike sul terminale: kmp-terminal-emulator dietro `core/terminal` ([decisione 0002](decisions/0002-terminal-emulator.md))
 - [ ] YubiKey su Android: FIDO2 o PIV

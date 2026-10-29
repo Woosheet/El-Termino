@@ -1,14 +1,18 @@
 package dev.eltermino.ui.theme
 
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 
 /**
  * Design tokens of the "Carta" style. Components read these instead of raw colors,
@@ -21,8 +25,18 @@ data class CartaColors(
     val text: Color,
     val textDim: Color,
     val line: Color,
+    /** Borders that must stay visible on [chrome], such as secondary buttons. */
+    val lineStrong: Color,
+    /** Background of rows and buttons under the pointer. */
+    val hover: Color,
+    val pressed: Color,
     val accent: Color,
+    val accentHover: Color,
+    val accentPressed: Color,
     val accentBackground: Color,
+    val danger: Color,
+    val dangerBackground: Color,
+    val scrim: Color,
     val online: Color,
     val offline: Color,
     val terminalBackground: Color,
@@ -35,19 +49,59 @@ val CartaLight = CartaColors(
     text = Color(0xFF2C2C2A),
     textDim = Color(0xFF6B6A65),
     line = Color(0xFFE2E0D8),
+    lineStrong = Color(0xFFD3D1C7),
+    hover = Color(0xFFECEAE4),
+    pressed = Color(0xFFE2E0D8),
     accent = Color(0xFF185FA5),
+    accentHover = Color(0xFF14518C),
+    accentPressed = Color(0xFF0C447C),
     accentBackground = Color(0xFFE6F1FB),
+    danger = Color(0xFFA32D2D),
+    dangerBackground = Color(0xFFFCEBEB),
+    scrim = Color(0x662C2C2A),
     online = Color(0xFF3B6D11),
     offline = Color(0xFFB4B2A9),
     terminalBackground = Color(0xFFFBFAF7),
     terminalText = Color(0xFF2C2C2A),
 )
 
+/** The few text sizes the app uses; components pick from these, never ad-hoc sizes. */
+@Immutable
+data class CartaTypography(
+    val body: TextStyle,
+    val bodyStrong: TextStyle,
+    val small: TextStyle,
+    val caption: TextStyle,
+    val title: TextStyle,
+    val heading: TextStyle,
+    val label: TextStyle,
+)
+
+private val Sans = FontFamily.Default
+
+val CartaType = CartaTypography(
+    body = TextStyle(fontFamily = Sans, fontSize = 14.sp, lineHeight = 20.sp),
+    bodyStrong = TextStyle(fontFamily = Sans, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+    small = TextStyle(fontFamily = Sans, fontSize = 13.sp, lineHeight = 18.sp),
+    caption = TextStyle(fontFamily = Sans, fontSize = 11.sp, lineHeight = 15.sp),
+    title = TextStyle(fontFamily = Sans, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium),
+    heading = TextStyle(fontFamily = Sans, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
+    label = TextStyle(fontFamily = Sans, fontSize = 12.sp, lineHeight = 16.sp),
+)
+
 private val LocalCartaColors = staticCompositionLocalOf { CartaLight }
+private val LocalCartaType = staticCompositionLocalOf { CartaType }
+
+/** Text style and color inherited by [dev.eltermino.ui.components.Text] and icons. */
+val LocalTextStyle = compositionLocalOf { CartaType.body }
+val LocalContentColor = compositionLocalOf { CartaLight.text }
 
 object Carta {
     val colors: CartaColors
         @Composable @ReadOnlyComposable get() = LocalCartaColors.current
+
+    val type: CartaTypography
+        @Composable @ReadOnlyComposable get() = LocalCartaType.current
 
     // Replaced by a bundled JetBrains Mono once compose resources are set up.
     val monospace: FontFamily = FontFamily.Monospace
@@ -55,21 +109,12 @@ object Carta {
 
 @Composable
 fun CartaTheme(colors: CartaColors = CartaLight, content: @Composable () -> Unit) {
-    val scheme = lightColorScheme(
-        primary = colors.accent,
-        onPrimary = Color.White,
-        primaryContainer = colors.accentBackground,
-        onPrimaryContainer = colors.accent,
-        background = colors.background,
-        onBackground = colors.text,
-        surface = colors.background,
-        onSurface = colors.text,
-        surfaceVariant = colors.chrome,
-        onSurfaceVariant = colors.textDim,
-        outline = colors.line,
-        outlineVariant = colors.line,
+    CompositionLocalProvider(
+        LocalCartaColors provides colors,
+        LocalCartaType provides CartaType,
+        LocalTextStyle provides CartaType.body,
+        LocalContentColor provides colors.text,
+        LocalTextSelectionColors provides TextSelectionColors(handleColor = colors.accent, backgroundColor = colors.accentBackground),
+        content = content,
     )
-    CompositionLocalProvider(LocalCartaColors provides colors) {
-        MaterialTheme(colorScheme = scheme, content = content)
-    }
 }

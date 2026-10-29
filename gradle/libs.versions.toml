@@ -3,7 +3,9 @@ kotlin = "2.4.21"
 agp = "9.5.0"
 compose-multiplatform = "1.12.2"
 compose-material3 = "1.9.0"
+compose-material-icons = "1.7.3"
 coroutines = "1.11.0"
+serialization = "1.12.0"
 androidx-activity = "1.13.0"
 android-compileSdk = "37"
 android-minSdk = "26"
@@ -15,6 +17,7 @@ cbssh = "0.6.6"
 kmp-terminal = "1.0.6"
 bouncycastle = "1.86"
 slf4j = "2.0.17"
+java-keyring = "1.0.4"
 junit = "6.1.3"
 androidx-test-runner = "1.7.0"
 androidx-test-ext-junit = "1.3.0"
@@ -24,15 +27,19 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "coroutines" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
 
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
 compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
 compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-material3" }
+compose-material-icons = { module = "org.jetbrains.compose.material:material-icons-core", version.ref = "compose-material-icons" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 
 sshd-core = { module = "org.apache.sshd:sshd-core", version.ref = "sshd" }
 sshd-sftp = { module = "org.apache.sshd:sshd-sftp", version.ref = "sshd" }
+sshd-putty = { module = "org.apache.sshd:sshd-putty", version.ref = "sshd" }
+java-keyring = { module = "com.github.javakeyring:java-keyring", version.ref = "java-keyring" }
 cbssh = { module = "org.connectbot.sshlib:sshlib", version.ref = "cbssh" }
 kmp-terminal-core = { module = "io.github.johnan:terminal-core", version.ref = "kmp-terminal" }
 kmp-terminal-ui = { module = "io.github.johnan:terminal-ui", version.ref = "kmp-terminal" }
@@ -50,6 +57,7 @@ androidx-test-ext-junit = { module = "androidx.test.ext:junit", version.ref = "a
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kmp-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }

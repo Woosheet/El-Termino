@@ -39,7 +39,10 @@ data class SecretRef(val id: String)
 
 data class HostKeyFingerprint(
     val keyType: String,
+    /** `SHA256:` followed by unpadded base64, as `ssh-keygen -l` prints it. */
     val sha256: String,
+    /** The key in `authorized_keys` form, so a known-hosts store can keep it. */
+    val publicKey: String,
 )
 
 fun interface HostKeyVerifier {

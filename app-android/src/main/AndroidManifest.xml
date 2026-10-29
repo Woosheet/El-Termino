@@ -4,6 +4,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+        android:name=".ElTerminoApp"
         android:label="El Termino"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity

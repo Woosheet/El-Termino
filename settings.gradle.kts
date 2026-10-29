@@ -17,6 +17,10 @@ dependencyResolutionManagement {
 
 include(
     ":core:ssh",
+    ":core:terminal",
+    ":core:importer",
+    ":core:data",
+    ":core:vault",
     ":shared",
     ":app-android",
     ":app-desktop",
