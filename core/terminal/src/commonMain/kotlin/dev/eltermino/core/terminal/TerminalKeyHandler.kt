@@ -35,10 +35,27 @@ internal fun decideKeyAction(
 ): KeyAction {
     val (shift, alt, ctrl, meta) = modifiers
     if (macOs && meta) {
+        // Editing the line the way macOS text fields do, as iTerm2's "Natural Text Editing":
+        // the shell's own keys for the start and end of the line and for deleting it.
+        if (!alt && !ctrl && !shift) {
+            when (key) {
+                Key.Backspace -> return KeyAction.SendChar('u'.code, KeyModifiers(ctrl = true))
+                Key.Delete -> return KeyAction.SendChar('k'.code, KeyModifiers(ctrl = true))
+                Key.DirectionLeft -> return KeyAction.SendChar('a'.code, KeyModifiers(ctrl = true))
+                Key.DirectionRight -> return KeyAction.SendChar('e'.code, KeyModifiers(ctrl = true))
+            }
+        }
         return when (key) {
             Key.C -> KeyAction.Copy
             Key.V -> KeyAction.Paste
             else -> KeyAction.PassThrough
+        }
+    }
+    // Option+arrows move by word: Meta-b and Meta-f, which bash and zsh understand out of the box.
+    if (macOs && alt && !ctrl && !shift) {
+        when (key) {
+            Key.DirectionLeft -> return KeyAction.SendChar('b'.code, KeyModifiers(alt = true))
+            Key.DirectionRight -> return KeyAction.SendChar('f'.code, KeyModifiers(alt = true))
         }
     }
     if (!macOs && ctrl && shift && !alt) {

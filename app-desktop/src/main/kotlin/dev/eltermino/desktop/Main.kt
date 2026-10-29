@@ -1,5 +1,6 @@
 package dev.eltermino.desktop
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -7,14 +8,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.KeyShortcut
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.FrameWindowScope
+import androidx.compose.ui.window.MenuBar
+import androidx.compose.ui.window.MenuScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import dev.eltermino.app.AppCommand
 import dev.eltermino.app.AppState
+import dev.eltermino.app.Shortcuts
 import dev.eltermino.app.createAppServices
 import dev.eltermino.core.vault.KeychainMasterKeyProvider
 import dev.eltermino.ui.App
@@ -24,6 +39,11 @@ import java.awt.Frame
 import java.awt.Taskbar
 
 fun main() {
+    if (isMac) {
+        // The menu bar goes at the top of the screen, as in every Mac app, under the app's name.
+        System.setProperty("apple.laf.useScreenMenuBar", "true")
+        System.setProperty("apple.awt.application.name", "El Termino")
+    }
     var frame: Frame? = null
     val services = createAppServices(
         dataDir = DesktopPlatform.dataDir(),
@@ -32,6 +52,10 @@ fun main() {
         localFilesRoot = java.io.File(System.getProperty("user.home")),
     )
     val state = AppState(services)
+    if (isMac && java.awt.Desktop.isDesktopSupported()) {
+        // "Impostazioni…" with ⌘, in the app menu.
+        runCatching { java.awt.Desktop.getDesktop().setPreferencesHandler { state.run(AppCommand.Settings) } }
+    }
 
     application {
         val workspace by state.services.workspace.workspace.collectAsState()
@@ -48,8 +72,17 @@ fun main() {
             onCloseRequest = { if (!state.requestExit()) exitApplication() },
             title = "El Termino",
             state = rememberWindowState(width = 1200.dp, height = 760.dp),
+            // Ahead of the focused view, so the terminal never sees the app's shortcuts.
+            onPreviewKeyEvent = { event ->
+                val command = if (event.type != KeyEventType.KeyDown) null else Shortcuts.commandFor(
+                    event.key, event.isMetaPressed, event.isCtrlPressed, event.isAltPressed, event.isShiftPressed, isMac,
+                )
+                command?.let(state::run)
+                command != null
+            },
         ) {
             frame = window
+            if (isMac) AppMenuBar(state)
             // On macOS the app draws under a transparent title bar, so the theme's colours reach the top.
             val titleBar = remember { if (isMac) drawUnderTitleBar(window) else 0.dp }
             App(state, onExit = ::exitApplication, titleBarHeight = titleBar)
@@ -59,6 +92,31 @@ fun main() {
 
 private val isMac = "mac" in System.getProperty("os.name").lowercase()
 
+/** The macOS menu bar: the shortcuts' commands where Mac users look for them, with their keys. */
+@Composable
+private fun FrameWindowScope.AppMenuBar(state: AppState) {
+    MenuBar {
+        Menu("File") {
+            CommandItem(state, "Nuova scheda", AppCommand.NewTab)
+            CommandItem(state, "Nuovo host…", AppCommand.NewHost)
+            Separator()
+            CommandItem(state, "Chiudi", AppCommand.Close)
+        }
+        Menu("Vista") {
+            CommandItem(state, "Mostra o nascondi la barra laterale", AppCommand.ToggleSidebar)
+        }
+        Menu("Finestra") {
+            CommandItem(state, "Scheda successiva", AppCommand.NextTab)
+            CommandItem(state, "Scheda precedente", AppCommand.PreviousTab)
+            Separator()
+            listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six, Key.Seven, Key.Eight, Key.Nine).forEachIndexed { i, key ->
+                val last = i == 8
+                Item(if (last) "Ultima scheda" else "Scheda ${i + 1}", shortcut = KeyShortcut(key, meta = true), onClick = { state.run(AppCommand.GoToTab(if (last) -1 else i)) })
+            }
+        }
+    }
+}
+
 /** Makes the title bar transparent with the content under it, and says how tall it is. */
 private fun drawUnderTitleBar(window: ComposeWindow): Dp {
     // Measured before the content moves under it; 28 is macOS's height for a plain title bar.
@@ -67,4 +125,11 @@ private fun drawUnderTitleBar(window: ComposeWindow): Dp {
     window.rootPane.putClientProperty("apple.awt.transparentTitleBar", true)
     window.rootPane.putClientProperty("apple.awt.windowTitleVisible", false)
     return height.dp
+}
+
+/** A menu item for [command], showing the first of its macOS shortcuts. */
+@Composable
+private fun MenuScope.CommandItem(state: AppState, text: String, command: AppCommand) {
+    val keys = Shortcuts.all(macOs = true).first { it.first == command }.second.first()
+    Item(text, shortcut = KeyShortcut(keys.key, ctrl = keys.ctrl, meta = keys.meta, alt = keys.alt, shift = keys.shift), onClick = { state.run(command) })
 }

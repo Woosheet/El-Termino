@@ -21,8 +21,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,7 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.eltermino.app.AppCommand
 import dev.eltermino.app.AppState
+import dev.eltermino.app.EditorTab
 import dev.eltermino.core.data.Host
 import dev.eltermino.ui.components.AppIconPainter
 import dev.eltermino.ui.components.AppIconStyle
@@ -43,6 +47,7 @@ import dev.eltermino.ui.components.LocalAppIcon
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
 import dev.eltermino.ui.components.CartaIcons
+import dev.eltermino.ui.components.Dialog
 import dev.eltermino.ui.components.Divider
 import dev.eltermino.ui.components.Fab
 import dev.eltermino.ui.components.Icon
@@ -128,6 +133,41 @@ private fun AppContent(state: AppState) {
             screen = Screen.Sessions
             showHostsOnPhone = false
         }
+        // An editor with changes waiting for ⌘W to be confirmed.
+        var closingEditor by remember { mutableStateOf<EditorTab?>(null) }
+
+        LaunchedEffect(state) {
+            state.commands.collect { command ->
+                val sessions = state.sessions
+                fun toSessions() {
+                    screen = Screen.Sessions
+                    showHostsOnPhone = false
+                }
+                when (command) {
+                    AppCommand.NewTab -> {
+                        toSessions()
+                        state.newTabMenu.value = true
+                    }
+                    AppCommand.Close -> when {
+                        screen != Screen.Sessions -> screen = Screen.Sessions
+                        else -> when (val tab = sessions.focusedTab()) {
+                            null -> Unit
+                            is EditorTab -> if (tab.dirty.value) closingEditor = tab else sessions.close(tab)
+                            else -> sessions.close(tab)
+                        }
+                    }
+                    AppCommand.NextTab -> { toSessions(); sessions.selectNeighbour(1) }
+                    AppCommand.PreviousTab -> { toSessions(); sessions.selectNeighbour(-1) }
+                    is AppCommand.GoToTab -> { toSessions(); sessions.selectFrameAt(command.index) }
+                    AppCommand.NewHost -> editing = Editing(null)
+                    AppCommand.ToggleSidebar -> state.services.workspace.update { it.copy(ui = it.ui.copy(sidebarOpen = !it.ui.sidebarOpen)) }
+                    AppCommand.Settings -> {
+                        screen = Screen.Settings
+                        showHostsOnPhone = false
+                    }
+                }
+            }
+        }
 
         // Insets are zero on desktop; on Android they keep us clear of the system bars.
         BoxWithConstraints(Modifier.fillMaxSize().background(Carta.colors.background).safeDrawingPadding()) {
@@ -153,6 +193,22 @@ private fun AppContent(state: AppState) {
         }
 
         editing?.let { HostEditorDialog(state, it.host) { editing = null } }
+        closingEditor?.let { tab ->
+            Dialog(
+                onDismiss = { closingEditor = null },
+                title = "Chiudere ${tab.label} senza salvare?",
+                icon = Icons.Default.Warning,
+                actions = {
+                    Button("Annulla", onClick = { closingEditor = null }, kind = ButtonKind.Ghost)
+                    Button("Chiudi senza salvare", kind = ButtonKind.Danger, onClick = {
+                        closingEditor = null
+                        state.sessions.close(tab)
+                    })
+                },
+            ) {
+                Text("Le modifiche non salvate andranno perse.")
+            }
+        }
         val settings by state.services.workspace.workspace.collectAsState()
         if (!settings.ui.welcomeDone || tour) {
             WelcomeFlow(state, startAtTour = tour, onOpenImport = { screen = Screen.Import; showHostsOnPhone = false }) { tour = false }

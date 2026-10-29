@@ -88,6 +88,48 @@ class AppSnapshotTest {
         state.sessions.close(tab)
     }
 
+    /** The shortcuts' commands on the real screen: the "+" menu, closing, the settings and their list. */
+    @Test
+    fun shortcutsActOnTheScreen(): Unit = runBlocking {
+        val state = lightState()
+        seed(state)
+        val first = state.sessions.openFiles(null)
+        state.sessions.openFiles(null)
+        ImageComposeScene(2400, 1520, Density(2f)) { App(state) }.use { scene ->
+            fun settle() = repeat(4) { scene.render(System.nanoTime()); Thread.sleep(60) }
+            settle()
+            state.run(AppCommand.NewTab)
+            settle()
+            kotlin.test.assertTrue(state.newTabMenu.value, "⌘T opens the + menu")
+            File("build/snapshots/shortcut-new-tab.png").writeBytes(scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+            state.newTabMenu.value = false
+
+            state.run(AppCommand.Close)
+            settle()
+            kotlin.test.assertEquals(listOf(first.id), state.sessions.tabs.value.map { it.id }, "⌘W closes the focused tab")
+
+            val editor = state.sessions.openEditor(Endpoint.Local, "/tmp/nota.txt")
+            editor.dirty.value = true
+            settle()
+            Thread.sleep(40)
+            state.run(AppCommand.Close)
+            settle()
+            kotlin.test.assertTrue(editor in state.sessions.tabs.value, "an editor with changes asks first")
+            File("build/snapshots/shortcut-close-editor.png").writeBytes(scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+        }
+        ImageComposeScene(2000, 3000, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(dev.eltermino.ui.theme.Carta.colors.background)) {
+                    dev.eltermino.ui.SettingsScreen(state, androidx.compose.ui.Modifier.fillMaxSize())
+                }
+            }
+        }.use { scene ->
+            repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+            File("build/snapshots/settings-shortcuts.png").writeBytes(scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+        }
+        state.sessions.closeAll()
+    }
+
     /** The import dialog, with the row that fetches an OpenAPI description from the tab's host. */
     @Test
     fun requestsImportDialog(): Unit = runBlocking {

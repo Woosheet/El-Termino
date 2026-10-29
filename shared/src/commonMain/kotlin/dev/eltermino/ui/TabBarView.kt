@@ -416,7 +416,8 @@ private fun GroupMenu(state: AppState, group: TabGroup, onDialog: (BarDialog) ->
 /** "+" after the tabs: another shell like the focused one, files, or a recent host. */
 @Composable
 private fun NewTabMenu(state: AppState, onConnect: (Host) -> Unit) {
-    var open by remember { mutableStateOf(false) }
+    // In the app state, so ⌘T opens it too.
+    var open by state.newTabMenu.collectAsMutableState()
     val workspace by state.services.workspace.workspace.collectAsState()
     val tabs by state.sessions.tabs.collectAsState()
     val selectedId by state.sessions.selectedId.collectAsState()

@@ -20,6 +20,9 @@ class AppServices(
 interface Platform {
     val isDesktop: Boolean
 
+    /** Picks the shortcuts the app shows: ⌘ on macOS, Ctrl elsewhere. */
+    val isMacOs: Boolean get() = false
+
     /** Lets the user choose a file; null when they cancel. */
     suspend fun pickFile(title: String): PickedFile?
 

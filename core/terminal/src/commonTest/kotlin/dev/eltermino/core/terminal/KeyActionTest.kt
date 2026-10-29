@@ -21,7 +21,24 @@ class KeyActionTest {
         assertEquals(KeyAction.SendKey(TerminalKey.Tab, KeyModifiers.Shift), decide(Key.Tab, mods = KeyModifiers.Shift))
         assertEquals(KeyAction.SendKey(TerminalKey.Escape, KeyModifiers.None), decide(Key.Escape))
         assertEquals(KeyAction.SendKey(TerminalKey.F10, KeyModifiers.None), decide(Key.F10))
-        assertEquals(KeyAction.SendKey(TerminalKey.Left, KeyModifiers.Alt), decide(Key.DirectionLeft, mods = KeyModifiers.Alt, macOs = true))
+        assertEquals(KeyAction.SendKey(TerminalKey.Left, KeyModifiers.Alt), decide(Key.DirectionLeft, mods = KeyModifiers.Alt))
+    }
+
+    @Test
+    fun macOsEditsTheLineLikeItsTextFields() {
+        val cmd = KeyModifiers(meta = true)
+        val ctrl = KeyModifiers(ctrl = true)
+        assertEquals(KeyAction.SendChar('u'.code, ctrl), decide(Key.Backspace, mods = cmd, macOs = true), "⌘⌫ deletes the line")
+        assertEquals(KeyAction.SendChar('k'.code, ctrl), decide(Key.Delete, mods = cmd, macOs = true), "⌘⌦ deletes to its end")
+        assertEquals(KeyAction.SendChar('a'.code, ctrl), decide(Key.DirectionLeft, mods = cmd, macOs = true))
+        assertEquals(KeyAction.SendChar('e'.code, ctrl), decide(Key.DirectionRight, mods = cmd, macOs = true))
+        assertEquals(KeyAction.SendChar('b'.code, KeyModifiers.Alt), decide(Key.DirectionLeft, mods = KeyModifiers.Alt, macOs = true))
+        assertEquals(KeyAction.SendChar('f'.code, KeyModifiers.Alt), decide(Key.DirectionRight, mods = KeyModifiers.Alt, macOs = true))
+        assertEquals(KeyAction.SendKey(TerminalKey.Backspace, KeyModifiers.Alt), decide(Key.Backspace, mods = KeyModifiers.Alt, macOs = true), "⌥⌫ deletes a word")
+        // With Option too, ⌘ and an arrow are the app's: the next or previous tab.
+        assertEquals(KeyAction.PassThrough, decide(Key.DirectionLeft, mods = KeyModifiers(meta = true, alt = true), macOs = true))
+        // Elsewhere Ctrl+Backspace stays the terminal's own.
+        assertEquals(KeyAction.SendKey(TerminalKey.Backspace, ctrl), decide(Key.Backspace, mods = ctrl))
     }
 
     @Test

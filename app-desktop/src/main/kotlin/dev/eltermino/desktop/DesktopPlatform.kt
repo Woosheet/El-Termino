@@ -21,6 +21,8 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
 
     override val isDesktop = true
 
+    override val isMacOs = "mac" in System.getProperty("os.name").lowercase()
+
     override suspend fun pickFile(title: String): PickedFile? = withContext(Dispatchers.Main) {
         val dialog = FileDialog(window(), title, FileDialog.LOAD).apply {
             // ~/.ssh is hidden in most file pickers, so start there.

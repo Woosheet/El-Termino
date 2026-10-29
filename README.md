@@ -16,6 +16,7 @@ Un client SSH e SFTP per chi passa la giornata su tante macchine. Terminali, fil
 - **Accesso.** Password, chiavi Ed25519, RSA ed ECDSA (anche PuTTY), OTP e jump host, con la host key sempre verificata. Password e chiavi stanno in un vault cifrato con AES-256-GCM, la cui chiave è nel portachiavi del sistema.
 - **Import.** Da Termius installato sullo stesso computer, credenziali comprese, da un CSV o da `~/.ssh/config`.
 - **A modo tuo.** Sei temi per app e terminale (Carta, Notte, Nord, Solarized chiaro, Dracula, Tokyo Night), due icone (El Bigote e Píxel), spazi di lavoro salvati che si riaprono con un clic, una barra laterale che si richiude.
+- **Tastiera.** Le scorciatoie di un'app del Mac: ⌘T per una nuova scheda, ⌘W per chiuderla, ⌥⌘← e ⌥⌘→ per passare dall'una all'altra, ⌘1…⌘9, ⌃⌘S per la barra laterale, tutte anche nei menu. Nel terminale ⌘⌫ cancella la riga e ⌥← ⌥→ si spostano di una parola, come in iTerm2. Su Windows e Linux sono le stesse con Ctrl+Maiuscole.
 - **Aggiornamenti.** L'app installata trova le nuove versioni pubblicate su GitHub e si aggiorna da sola.
 
 ## Installare

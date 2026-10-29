@@ -26,7 +26,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import dev.eltermino.app.AppCommand
 import dev.eltermino.app.AppState
+import dev.eltermino.app.Shortcuts
 import dev.eltermino.ui.components.AppIconPainter
 import dev.eltermino.ui.components.AppIconStyle
 import dev.eltermino.ui.components.Checkbox
@@ -82,7 +84,46 @@ internal fun SettingsScreen(state: AppState, modifier: Modifier = Modifier, extr
             )
         }
         UpdatesSection(state, workspace.ui.checkUpdates) { on -> update { it.copy(checkUpdates = on) } }
+        if (state.services.platform.isDesktop) ShortcutsSection(state.services.platform.isMacOs)
         extra()
+    }
+}
+
+/** The app's shortcuts, and on macOS the terminal's line editing, as a list to look up. */
+@Composable
+private fun ShortcutsSection(macOs: Boolean) {
+    val shortcuts = Shortcuts.all(macOs).associate { (command, keys) -> command to keys.joinToString(" · ") { Shortcuts.label(it, macOs) } }
+    val rows = buildList {
+        add("Nuova scheda" to shortcuts.getValue(AppCommand.NewTab))
+        add("Chiudi il riquadro o la scheda" to shortcuts.getValue(AppCommand.Close))
+        add("Scheda successiva" to shortcuts.getValue(AppCommand.NextTab))
+        add("Scheda precedente" to shortcuts.getValue(AppCommand.PreviousTab))
+        add("Vai alla scheda 1–8, l'ultima con 9" to "${Shortcuts.tabLabel(1, macOs)} … ${Shortcuts.tabLabel(9, macOs)}")
+        add("Nuovo host" to shortcuts.getValue(AppCommand.NewHost))
+        add("Mostra o nascondi la barra laterale" to shortcuts.getValue(AppCommand.ToggleSidebar))
+        add("Impostazioni" to shortcuts.getValue(AppCommand.Settings))
+        if (macOs) {
+            add("Terminale: cancella la riga" to "⌘⌫")
+            add("Terminale: cancella fino alla fine della riga" to "⌘⌦")
+            add("Terminale: inizio e fine della riga" to "⌘← · ⌘→")
+            add("Terminale: parola precedente e successiva" to "⌥← · ⌥→")
+            add("Terminale: cancella la parola" to "⌥⌫")
+            add("Terminale: copia e incolla" to "⌘C · ⌘V")
+        } else {
+            add("Terminale: copia e incolla" to "Ctrl+Shift+C · Ctrl+Shift+V")
+        }
+    }
+    SettingsSection(
+        "Scorciatoie da tastiera",
+        if (macOs) "Con ⌘, che la shell non riceve mai. Le trovi anche nei menu File, Vista e Finestra."
+        else "Con Ctrl+Maiuscole, perché Ctrl e una lettera restano alla shell.",
+    ) {
+        rows.forEach { (what, keys) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(what, modifier = Modifier.weight(1f))
+                Text(keys, style = Carta.type.small, color = Carta.colors.textDim, modifier = Modifier.padding(start = 16.dp))
+            }
+        }
     }
 }
 

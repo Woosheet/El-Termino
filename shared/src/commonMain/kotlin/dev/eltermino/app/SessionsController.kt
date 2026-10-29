@@ -173,6 +173,29 @@ class SessionsController(
 
     fun selectFrame(frameId: String) = updateBar { it.select(frameId) }
 
+    /** The session with the keyboard, if any. */
+    fun focusedTab(): Tab? = selectedId.value?.let { id -> tabs.value.firstOrNull { it.id == id } }
+
+    /** The tabs in the bar, left to right, leaving out those folded into a collapsed group. */
+    private fun visibleFrames(): List<Frame> {
+        val bar = bar.value
+        return bar.frames.filter { frame -> bar.groups.none { it.id == frame.groupId && it.collapsed } }
+    }
+
+    /** The next tab ([step] 1) or the previous one (-1), going round at the ends. */
+    fun selectNeighbour(step: Int) {
+        val frames = visibleFrames().ifEmpty { return }
+        val current = frames.indexOfFirst { it.id == bar.value.selected }
+        val next = if (current < 0) 0 else ((current + step) % frames.size + frames.size) % frames.size
+        selectFrame(frames[next].id)
+    }
+
+    /** The tab at [index] from the left; -1 is the last one. */
+    fun selectFrameAt(index: Int) {
+        val frames = visibleFrames()
+        (if (index < 0) frames.lastOrNull() else frames.getOrNull(index))?.let { selectFrame(it.id) }
+    }
+
     fun focusPane(index: Int) = updateBar { it.focusPane(index) }
 
     /** Shows [tabId] in pane [index] of the selected tab; whatever was there takes its place. */

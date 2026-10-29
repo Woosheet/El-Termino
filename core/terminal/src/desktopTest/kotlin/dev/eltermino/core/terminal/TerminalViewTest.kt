@@ -63,6 +63,23 @@ class TerminalViewTest {
         }
     }
 
+    /** On macOS ⌘ and ⌥ edit the line as in iTerm2: these are the bytes the shell gets. */
+    @Test
+    fun macOsLineEditingReachesTheShell() {
+        org.junit.jupiter.api.Assumptions.assumeTrue(isMacOs)
+        HeadlessView(session, 1200, 700).use { view ->
+            view.settle()
+            view.press(Key.Backspace, 8, meta = true)
+            view.press(Key.DirectionLeft, meta = true)
+            view.press(Key.DirectionRight, meta = true)
+            view.press(Key.DirectionLeft, alt = true)
+            view.press(Key.DirectionRight, alt = true)
+            view.press(Key.Backspace, 8, alt = true)
+            val expected = "\u0015\u0001\u0005${ESC}b${ESC}f$ESC\u007F"
+            eventually({ shell.writtenText().visible() }) { shell.writtenText() == expected }
+        }
+    }
+
     @Test
     fun rendersColorsAndUnicode() {
         HeadlessView(session, 1800, 760).use { view ->

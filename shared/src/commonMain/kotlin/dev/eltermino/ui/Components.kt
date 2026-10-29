@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
@@ -18,6 +21,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @Composable
 internal fun SectionLabel(text: String, modifier: Modifier = Modifier) {
@@ -66,5 +70,25 @@ internal fun Modifier.onEnter(action: () -> Unit): Modifier = onPreviewKeyEvent 
         true
     } else {
         false
+    }
+}
+
+/** A [MutableStateFlow] read and written like Compose state: `var open by flow.collectAsMutableState()`. */
+@Composable
+internal fun <T> MutableStateFlow<T>.collectAsMutableState(): MutableState<T> {
+    val current = collectAsState()
+    val flow = this
+    return remember(flow) {
+        object : MutableState<T> {
+            override var value: T
+                get() = current.value
+                set(value) {
+                    flow.value = value
+                }
+
+            override fun component1(): T = value
+
+            override fun component2(): (T) -> Unit = { flow.value = it }
+        }
     }
 }
