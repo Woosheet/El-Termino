@@ -35,6 +35,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
 import dev.eltermino.core.data.Host
+import dev.eltermino.ui.components.AppIconStyle
+import dev.eltermino.ui.components.LocalAppIcon
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
 import dev.eltermino.ui.components.CartaIcons
@@ -77,9 +79,14 @@ private val LocalTitleBar = staticCompositionLocalOf { 0.dp }
 
 @Composable
 fun App(state: AppState, onExit: () -> Unit = {}, titleBarHeight: Dp = 0.dp) {
+    val workspace by state.services.workspace.workspace.collectAsState()
     CartaTheme(currentTheme(state)) {
         val chipDrag = remember { ChipDrag() }
-        CompositionLocalProvider(LocalChipDrag provides chipDrag, LocalTitleBar provides titleBarHeight) { AppContent(state) }
+        CompositionLocalProvider(
+            LocalChipDrag provides chipDrag,
+            LocalTitleBar provides titleBarHeight,
+            LocalAppIcon provides AppIconStyle.of(workspace.ui.appIcon),
+        ) { AppContent(state) }
         ExitDialog(state, onExit)
     }
 }

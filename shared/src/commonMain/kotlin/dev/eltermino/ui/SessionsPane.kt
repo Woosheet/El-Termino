@@ -60,6 +60,7 @@ import dev.eltermino.core.terminal.ExtraKeysColors
 import dev.eltermino.core.terminal.TerminalExtraKeys
 import dev.eltermino.core.terminal.TerminalSession
 import dev.eltermino.core.terminal.TerminalView
+import dev.eltermino.ui.components.HoppingSombrero
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
 import dev.eltermino.ui.components.CartaIcons
@@ -72,7 +73,6 @@ import dev.eltermino.ui.components.MenuDivider
 import dev.eltermino.ui.components.MenuItem
 import dev.eltermino.ui.components.MenuLabel
 import dev.eltermino.ui.components.Pressable
-import dev.eltermino.ui.components.Spinner
 import dev.eltermino.ui.components.StatusDot
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.components.VerticalResizeHandle
@@ -383,7 +383,7 @@ internal fun TabMark(tab: Tab) {
 private fun TerminalTabBody(state: AppState, tab: SessionTab, showExtraKeys: Boolean, focused: Boolean) {
     when (val status = tab.status.collectAsState().value) {
         TabStatus.Connecting -> Centered {
-            Spinner()
+            HoppingSombrero()
             Gap(height = 12)
             Text("Connessione a ${tab.label}…", color = Carta.colors.textDim)
         }
@@ -438,7 +438,7 @@ private fun ReconnectingBar(state: AppState, tab: SessionTab, status: TabStatus.
         Modifier.fillMaxWidth().background(colors.chrome).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Spinner(size = 16.dp)
+        HoppingSombrero(height = 20.dp)
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
             Text(text, style = Carta.type.small)
             status.message?.let { Text(it, style = Carta.type.caption, color = colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis) }

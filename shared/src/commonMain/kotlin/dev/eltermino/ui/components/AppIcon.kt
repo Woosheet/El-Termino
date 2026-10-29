@@ -1,10 +1,12 @@
 package dev.eltermino.ui.components
 
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -24,6 +26,9 @@ enum class AppIconStyle(val id: String, val label: String) {
         fun of(id: String) = entries.firstOrNull { it.id == id } ?: Bigote
     }
 }
+
+/** The icon picked in Settings, for what echoes it inside the app (the waiting sombrero). */
+val LocalAppIcon = staticCompositionLocalOf { AppIconStyle.Bigote }
 
 /**
  * Draws an app icon on the 512-unit grid of docs/logo/proposte.html: a 464 tile centred in the canvas.
@@ -67,7 +72,7 @@ private fun DrawScope.bigote() {
     }
 }
 
-private fun DrawScope.sombrero() {
+internal fun DrawScope.sombrero(color: Color = Color.White) {
     val brim = Path().apply {
         moveTo(-120f, -16f)
         cubicTo(-102f, 4f, -60f, 12f, 0f, 12f)
@@ -83,10 +88,10 @@ private fun DrawScope.sombrero() {
         cubicTo(20f, 12f, -20f, 12f, -36f, 8f)
         close()
     }
-    drawPath(brim, Color.White)
-    drawPath(crown, Color.White)
-    // The band, cut out in the tile colour.
-    clipPath(crown) { drawRect(Accent, Offset(-40f, -18f), Size(80f, 14f)) }
+    // The band is a hole, so whatever is behind the hat shows through.
+    val band = Path().apply { addRect(androidx.compose.ui.geometry.Rect(-40f, -18f, 40f, -4f)) }
+    drawPath(brim, color)
+    drawPath(Path.combine(PathOperation.Difference, crown, band), color)
 }
 
 /** A handlebar moustache: two lobes that meet under the nose and curl up at the tips. */
@@ -132,12 +137,20 @@ private val PixelColors = mapOf(
     'W' to Color.White,
 )
 
-private fun DrawScope.pixel() {
-    // 29-unit cells fill the 464 tile. One path per colour, so neighbouring cells join without seams.
+// 29-unit cells fill the 464 tile.
+private fun DrawScope.pixel() = pixelCells(PixelGrid, 29f, Offset(24f, 24f))
+
+/** Píxel's hat alone (rows 1–7, columns 1–14), standing on the origin: the spinner's sombrero. */
+internal fun DrawScope.pixelHat(cell: Float) =
+    pixelCells(PixelGrid.subList(1, 8).map { it.substring(1, 15) }, cell, Offset(-7 * cell, -7 * cell), skip = 'B')
+
+// One path per colour, so neighbouring cells join without seams.
+private fun DrawScope.pixelCells(grid: List<String>, cell: Float, origin: Offset, skip: Char? = null) {
     PixelColors.forEach { (key, color) ->
+        if (key == skip) return@forEach
         val cells = Path()
-        PixelGrid.forEachIndexed { y, row ->
-            row.forEachIndexed { x, c -> if (c == key) cells.addRect(androidx.compose.ui.geometry.Rect(Offset(24f + x * 29f, 24f + y * 29f), Size(29f, 29f))) }
+        grid.forEachIndexed { y, row ->
+            row.forEachIndexed { x, c -> if (c == key) cells.addRect(androidx.compose.ui.geometry.Rect(origin + Offset(x * cell, y * cell), Size(cell, cell))) }
         }
         drawPath(cells, color)
     }

@@ -56,6 +56,7 @@ import dev.eltermino.core.data.HttpHeader
 import dev.eltermino.core.data.HttpPart
 import dev.eltermino.core.data.HttpRequest
 import dev.eltermino.core.data.newId
+import dev.eltermino.ui.components.HoppingSombrero
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
 import dev.eltermino.ui.components.CartaIcons
@@ -71,7 +72,6 @@ import dev.eltermino.ui.components.Picker
 import dev.eltermino.ui.components.Pressable
 import dev.eltermino.ui.components.RadioOption
 import dev.eltermino.ui.components.SearchField
-import dev.eltermino.ui.components.Spinner
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
 import kotlinx.coroutines.delay
@@ -169,7 +169,7 @@ private fun LinkStrip(tab: RequestsTab) {
         is LinkState.Down -> "Non connesso a ${tab.label}: ${s.message}. Chiudi la scheda e riaprila per riprovare."
     }
     Row(Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (linkState !is LinkState.Down) Spinner(size = 14.dp)
+        if (linkState !is LinkState.Down) HoppingSombrero(height = 20.dp)
         Text(text, style = Carta.type.small, color = Carta.colors.textDim, modifier = Modifier.padding(start = 8.dp))
     }
 }
@@ -210,7 +210,7 @@ private fun CollectionList(
                         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 5.dp, bottom = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(request.method, style = Carta.type.caption, color = methodColor(request.method), fontFamily = Carta.monospace, modifier = Modifier.width(52.dp))
                             Text(request.name, style = Carta.type.small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            if (request.id in sending) Spinner(size = 12.dp)
+                            if (request.id in sending) HoppingSombrero(height = 18.dp)
                         }
                     }
                 }
@@ -512,6 +512,7 @@ private const val SHOWN_CHARS = 200_000
 @Composable
 private fun ResponseView(tab: RequestsTab, request: HttpRequest, compact: Boolean) {
     val history by tab.history.collectAsState()
+    val sending by tab.sending.collectAsState()
     val outcomes = history[request.id].orEmpty()
     var shown by remember(request.id) { mutableStateOf(0) }
     LaunchedEffect(outcomes.size) { shown = 0 }
@@ -530,6 +531,10 @@ private fun ResponseView(tab: RequestsTab, request: HttpRequest, compact: Boolea
                 Modifier.width(220.dp),
             )
         }
+    }
+    if (request.id in sending) Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        HoppingSombrero(height = 32.dp)
+        Text("In attesa di risposta…", style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(start = 10.dp))
     }
     when (outcome) {
         null -> Text("Invia la richiesta per vedere qui stato, tempi, header e corpo.", style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(top = 8.dp))

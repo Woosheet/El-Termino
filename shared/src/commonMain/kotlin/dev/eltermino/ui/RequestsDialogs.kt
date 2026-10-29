@@ -40,6 +40,7 @@ import dev.eltermino.core.data.HttpCollection
 import dev.eltermino.core.data.Workspace
 import dev.eltermino.core.data.groupPath
 import dev.eltermino.core.data.newId
+import dev.eltermino.ui.components.HoppingSombrero
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
 import dev.eltermino.ui.components.Dialog
@@ -48,7 +49,6 @@ import dev.eltermino.ui.components.Field
 import dev.eltermino.ui.components.Picker
 import dev.eltermino.ui.components.Pressable
 import dev.eltermino.ui.components.RadioOption
-import dev.eltermino.ui.components.Spinner
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
 import kotlinx.coroutines.launch
@@ -293,7 +293,7 @@ private fun RunCellView(cell: RunCell, selected: Boolean, onClick: () -> Unit) {
             when (cell) {
                 RunCell.Waiting -> Text("In attesa", style = Carta.type.small, color = colors.textDim)
                 RunCell.Running -> {
-                    Spinner(size = 12.dp)
+                    HoppingSombrero(height = 18.dp)
                     Text("In corso", style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(start = 6.dp))
                 }
                 is RunCell.Done -> when (val outcome = cell.outcome) {

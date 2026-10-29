@@ -161,6 +161,28 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun waitingSombrero() {
+        // El Bigote and Píxel, a few frames into a crossing: on the ground, mid-hop, at the top.
+        ImageComposeScene(600, 260, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme {
+                androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.padding(10.dp)) {
+                    for (style in dev.eltermino.ui.components.AppIconStyle.entries) {
+                        androidx.compose.runtime.CompositionLocalProvider(dev.eltermino.ui.components.LocalAppIcon provides style) {
+                            dev.eltermino.ui.components.HoppingSombrero()
+                        }
+                    }
+                }
+            }
+        }.use { scene ->
+            scene.render(0)
+            for (ms in listOf(650L, 1300L + 160, 1950L + 325)) {
+                val png = scene.render(ms * 1_000_000).encodeToData(EncodedImageFormat.PNG)!!.bytes
+                File("build/snapshots/sombrero-$ms.png").apply { parentFile.mkdirs(); writeBytes(png) }
+            }
+        }
+    }
+
+    @Test
     fun hostMenuStaysNarrow() {
         ImageComposeScene(1400, 700, Density(2f)) {
             dev.eltermino.ui.theme.CartaTheme {
