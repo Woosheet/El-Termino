@@ -21,8 +21,9 @@ jobs:
           distribution: corretto
           java-version: "21"
       - uses: gradle/actions/setup-gradle@v4
+      # compileSdk 37 in gradle/libs.versions.toml; from 37 the package name has the minor version.
       - name: Android platform, which the shared modules need to configure
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" > /dev/null
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" > /dev/null
       - name: DMG
         run: |
           version="${GITHUB_REF_NAME#v}"
