@@ -4,6 +4,7 @@ import dev.eltermino.core.data.HttpAuth
 import dev.eltermino.core.data.HttpCheck
 import dev.eltermino.core.data.HttpCollection
 import dev.eltermino.core.data.HttpHeader
+import dev.eltermino.core.data.HttpPart
 import dev.eltermino.core.data.HttpRequest
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -52,6 +53,27 @@ class HttpRequestsTest {
         val json = prep(HttpRequest("r", "x", "post", "http://h/", headers = listOf(HttpHeader("content-type", "application/vnd+json"), HttpHeader("X-Off", "1", enabled = false)), bodyType = "json", body = "{}"))
         assertEquals("POST", json.method)
         assertEquals(listOf("content-type" to "application/vnd+json"), json.headers)
+    }
+
+    @Test
+    fun multipartKeepsFilesForLaterAndLetsTheClientSetTheBoundary() = runTest {
+        val request = HttpRequest(
+            "r", "x", "POST", "http://h/upload",
+            headers = listOf(HttpHeader("Content-Type", "text/plain")),
+            bodyType = "multipart",
+            parts = listOf(
+                HttpPart("utente", "{{user}}"),
+                HttpPart("report", file = "/tmp/a b.pdf", fileName = "a b.pdf"),
+                HttpPart("spento", "x", enabled = false),
+            ),
+        )
+        val prepared = prep(request)
+        assertEquals(emptyList(), prepared.headers)
+        assertEquals(listOf(PreparedPart("utente", "anna"), PreparedPart("report", "", "/tmp/a b.pdf", "a b.pdf")), prepared.parts)
+        assertEquals(
+            """curl -sS -X 'POST' --form-string 'utente=anna' -F 'report=@"/tmp/a b.pdf";filename="a b.pdf"' 'http://h/upload'""",
+            curlCommand(prepared),
+        )
     }
 
     @Test

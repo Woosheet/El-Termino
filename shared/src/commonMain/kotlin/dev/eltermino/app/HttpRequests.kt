@@ -20,7 +20,12 @@ data class PreparedRequest(
     val url: String,
     val headers: List<Pair<String, String>>,
     val body: String?,
+    /** A multipart form instead of [body]. */
+    val parts: List<PreparedPart>? = null,
 )
+
+/** A form field: [value] as text, or the file at [file], read only when sending. */
+data class PreparedPart(val name: String, val value: String, val file: String? = null, val fileName: String? = null)
 
 class HttpResponse(
     val status: Int,
@@ -46,6 +51,7 @@ fun HttpRequest.variables(): List<String> = buildList {
     add(url)
     headers.forEach { add(it.name); add(it.value) }
     add(body)
+    parts.filter { it.enabled }.forEach { add(it.name); if (it.file == null) add(it.value) }
     add(auth.username)
     add(auth.headerName)
 }.flatMap(::snippetVariables).distinct()
@@ -87,7 +93,14 @@ suspend fun prepare(request: HttpRequest, collection: HttpCollection?, hostId: S
         "form" -> formBody(fill(request.body)).also { if (!hasHeader("Content-Type")) headers += "Content-Type" to "application/x-www-form-urlencoded" }
         else -> null
     }
-    return PreparedRequest(request.method.trim().uppercase().ifEmpty { "GET" }, url, headers, body)
+    // The client writes the multipart Content-Type itself, with its boundary.
+    val parts = if (request.bodyType != "multipart") null else request.parts.filter { it.enabled && it.name.isNotBlank() }.map { part ->
+        val file = part.file
+        if (file != null) PreparedPart(fill(part.name), "", file, part.fileName ?: file.substringAfterLast('/'))
+        else PreparedPart(fill(part.name), fill(part.value))
+    }
+    if (parts != null) headers.removeAll { it.first.equals("Content-Type", ignoreCase = true) }
+    return PreparedRequest(request.method.trim().uppercase().ifEmpty { "GET" }, url, headers, body, parts)
 }
 
 /** One `name=value` a line, as `name=value&…` with both sides percent-encoded. */
@@ -126,15 +139,20 @@ internal fun tunnelTarget(url: String): Pair<String, Int> {
 }
 
 /** Sends from this device through a tunnel on [connection]; implemented with OkHttp on the JVM. */
-internal expect suspend fun sendThroughTunnel(connection: SshConnection, request: PreparedRequest, timeout: Duration): HttpResponse
+internal expect suspend fun sendThroughTunnel(connection: SshConnection, request: PreparedRequest, timeout: Duration, readFile: (String) -> ByteArray?): HttpResponse
 
 /** [request] as a `curl` command line, quoted for a POSIX shell. */
 fun curlCommand(request: PreparedRequest, extra: List<String> = emptyList()): String = buildList {
     add("curl")
     add("-sS")
-    if (request.method != "GET" || request.body != null) { add("-X"); add(shellQuote(request.method)) }
+    if (request.method != "GET" || request.body != null || request.parts != null) { add("-X"); add(shellQuote(request.method)) }
     request.headers.forEach { (name, value) -> add("-H"); add(shellQuote("$name: $value")) }
     request.body?.let { add("--data-binary"); add(shellQuote(it)) }
+    request.parts?.forEach { part ->
+        // --form-string, so a value starting with @ or < stays text.
+        if (part.file == null) { add("--form-string"); add(shellQuote("${part.name}=${part.value}")) }
+        else { add("-F"); add(shellQuote("${part.name}=@\"${part.file}\";filename=\"${part.fileName}\"")) }
+    }
     addAll(extra)
     add(shellQuote(request.url))
 }.joinToString(" ")
@@ -145,6 +163,9 @@ private const val CURL_MARK = "\n__ELTERMINO_CURL__ "
 
 /** Runs `curl` on the server, to see exactly what the machine sees: its DNS, proxy and certificates. */
 suspend fun sendWithCurl(connection: SshConnection, request: PreparedRequest, timeout: Duration = 30.seconds): HttpResponse {
+    if (request.parts.orEmpty().any { it.file != null }) {
+        throw HttpRequestException("curl sul server non vede i file di questo dispositivo: togli \"Esegui con curl sul server\" per mandarli")
+    }
     val extra = listOf("-D", "-", "-o", "-", "--max-time", timeout.inWholeSeconds.toString(), "-w", shellQuote("${CURL_MARK}%{time_connect} %{time_starttransfer} %{time_total}"))
     val result = connection.exec(curlCommand(request, extra))
     val stderr = result.stderr.decodeToString().trim()
@@ -200,9 +221,10 @@ suspend fun sendRequest(
     hostId: String?,
     secret: suspend (String) -> ByteArray?,
     timeout: Duration = 30.seconds,
+    readFile: (String) -> ByteArray? = { null },
 ): HttpResponse {
     val prepared = prepare(request, collection, hostId, secret)
-    return if (request.viaCurl) sendWithCurl(connection, prepared, timeout) else sendThroughTunnel(connection, prepared, timeout)
+    return if (request.viaCurl) sendWithCurl(connection, prepared, timeout) else sendThroughTunnel(connection, prepared, timeout, readFile)
 }
 
 class CheckResult(val check: HttpCheck, val passed: Boolean, val actual: String)

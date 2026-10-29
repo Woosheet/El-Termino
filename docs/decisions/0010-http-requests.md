@@ -18,6 +18,7 @@ Data: 29 ottobre 2026. Stato: accettata.
 - **Dove valgono le variabili:** URL, header, corpo, utente di Basic, nome dell'header della API key e il segreto stesso, perché le collezioni di Postman scrivono spesso `{{token}}`.
 - **Segreti:** token, password e chiavi stanno nel vault; il workspace tiene solo il riferimento. Un `Authorization: Bearer` trovato in un comando curl importato diventa un segreto nel vault.
 - **Salvataggio:** l'editor salva da solo poco dopo l'ultima modifica.
+- **Form multipart:** campi di testo e file di questo dispositivo. Del file si salva il riferimento, non il contenuto: un percorso sul desktop, un URI `content://` con permesso di lettura persistente su Android. Il file si rilegge a ogni invio; se non c'è più, l'errore lo dice. Con curl sul server i file non si possono mandare, perché il server non li vede; "Copia come curl" li scrive come `-F nome=@percorso`.
 - **Cronologia:** le ultime 10 risposte di ogni richiesta, per host, restano in memoria. Non si salvano su disco: i corpi possono contenere dati riservati e il file del workspace non è cifrato.
 
 **Verifiche ed esecuzione su un gruppo.**
@@ -25,7 +26,7 @@ Data: 29 ottobre 2026. Stato: accettata.
 - **Esecuzione:** su questo host o su un gruppo con i suoi sottogruppi. Gli host vanno in parallelo, ognuno sul proprio link SSH; le richieste di un host vanno in ordine. Un host che non si connette fa fallire tutte le sue celle con il motivo.
 - **Esito:** una tabella host × richiesta che si riempie mentre arrivano le risposte; una cella aperta mostra stato, tempo e verifiche.
 
-**Import.** Collezioni di Postman v2.1 (cartelle come "Cartella / richiesta", auth della collezione e delle cartelle ereditata, variabili della collezione) e comandi curl incollati. Restano fuori gli script di test di Postman, i file nei form multipart e le API key passate nella query.
+**Import.** Collezioni di Postman v2.1 (cartelle come "Cartella / richiesta", auth della collezione e delle cartelle ereditata, variabili della collezione) e comandi curl incollati. I campi file di Postman e i `-F nome=@file` di curl diventano campi file del form, con il percorso salvato. Restano fuori gli script di test di Postman e le API key passate nella query.
 
 **La scheda.** "Richieste" è un tipo di scheda come terminale e file: si apre dal menu dell'host, sta nella split view accanto a un terminale e si salva negli spazi di lavoro.
 
@@ -38,6 +39,6 @@ Data: 29 ottobre 2026. Stato: accettata.
 ## Verifica
 
 - `MinaSshConnectorTest`: il forward raggiunge il servizio HTTP sul loopback del server, anche dietro il bastion.
-- `HttpRequestFlowTest`: GET e POST attraverso il tunnel e con curl sul server; errore chiaro su una porta chiusa.
+- `HttpRequestFlowTest`: GET e POST attraverso il tunnel e con curl sul server; un form multipart con testo e un file del computer; errore chiaro su una porta chiusa.
 - `HttpRunFlowTest`: criterio della fase. Una collezione con verifiche gira su tre host di un gruppo (uno dietro il bastion, uno con una porta sbagliata di proposito) e dà l'esito per host. Più una scheda che invia dal suo host e tiene le risposte.
 - `HttpRequestsTest`, `HttpImportTest`: variabili, auth, corpi, curl, verifiche, import da Postman e da curl.

@@ -1,5 +1,6 @@
 package dev.eltermino.app
 
+import dev.eltermino.core.data.HttpPart
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -22,6 +23,8 @@ class HttpImportTest {
                {"name":"Login","request":{"method":"POST","url":"{{base}}/login",
                  "auth":{"type":"basic","basic":[{"key":"username","value":"anna"},{"key":"password","value":"pw"}]},
                  "body":{"mode":"urlencoded","urlencoded":[{"key":"a","value":"1"},{"key":"b","value":"2","disabled":true}]}}},
+               {"name":"Carica","request":{"method":"POST","url":"{{base}}/up","body":{"mode":"formdata","formdata":[
+                 {"key":"nota","value":"ciao","type":"text"},{"key":"file","type":"file","src":["/Users/anna/a.csv"]}]}}},
                {"name":"Salute","request":"{{base}}/health"}
              ]}
             """,
@@ -29,8 +32,10 @@ class HttpImportTest {
         val c = imported.collection
         assertEquals("Shop", c.name)
         assertEquals(mapOf("base" to "http://localhost:8080"), c.variables)
-        assertEquals(listOf("Ordini / Crea", "Login", "Salute"), c.requests.map { it.name })
-        val (create, login, health) = c.requests
+        assertEquals(listOf("Ordini / Crea", "Login", "Carica", "Salute"), c.requests.map { it.name })
+        val (create, login, upload, health) = c.requests
+        assertEquals("multipart", upload.bodyType)
+        assertEquals(listOf(HttpPart("nota", "ciao"), HttpPart("file", file = "/Users/anna/a.csv", fileName = "a.csv")), upload.parts)
         assertEquals("POST", create.method)
         assertEquals("{{base}}/orders", create.url)
         assertEquals(listOf(true, false), create.headers.map { it.enabled })
@@ -71,6 +76,10 @@ class HttpImportTest {
         assertEquals("GET" to "http://h/s?q=x", get.method to get.url)
         assertEquals("none", get.bodyType)
         assertNull(parseCurl("curl http://h/").secret)
+
+        val upload = parseCurl("""curl -F 'nota=ciao' -F 'doc=@"/tmp/a b.pdf";type=application/pdf' --form-string 'raw=@x' http://h/up""").request
+        assertEquals("POST" to "multipart", upload.method to upload.bodyType)
+        assertEquals(listOf(HttpPart("nota", "ciao"), HttpPart("doc", file = "/tmp/a b.pdf", fileName = "a b.pdf"), HttpPart("raw", "@x")), upload.parts)
         assertFailsWith<HttpRequestException> { parseCurl("wget http://h/") }
         assertFailsWith<HttpRequestException> { parseCurl("curl -H 'x") }
     }

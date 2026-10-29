@@ -3,6 +3,7 @@ package dev.eltermino.app
 import dev.eltermino.core.data.HttpAuth
 import dev.eltermino.core.data.HttpCollection
 import dev.eltermino.core.data.HttpHeader
+import dev.eltermino.core.data.HttpPart
 import dev.eltermino.core.data.HttpRequest
 import dev.eltermino.core.data.newId
 import kotlinx.serialization.json.Json
@@ -46,7 +47,8 @@ fun parsePostman(text: String): ImportedCollection {
                 HttpRequest(id, "$prefix$name", url = request.content)
             } else {
                 request as JsonObject
-                val (bodyType, body) = postmanBody(request["body"] as? JsonObject)
+                val bodyObject = request["body"] as? JsonObject
+                val (bodyType, body) = postmanBody(bodyObject)
                 HttpRequest(
                     id = id,
                     name = "$prefix$name",
@@ -57,6 +59,7 @@ fun parsePostman(text: String): ImportedCollection {
                     },
                     bodyType = bodyType,
                     body = body,
+                    parts = if (bodyType == "multipart") postmanParts(bodyObject!!) else emptyList(),
                     auth = auth,
                 )
             }
@@ -91,9 +94,20 @@ private fun postmanBody(body: JsonObject?): Pair<String, String> {
             (if (language == "json" || raw.trimStart().startsWith("{") || raw.trimStart().startsWith("[")) "json" else "text") to raw
         }
         "urlencoded" -> "form" to pairs("urlencoded")
-        // Multipart isn't supported: its text fields go as a form.
-        "formdata" -> "form" to pairs("formdata")
+        "formdata" -> "multipart" to ""
         else -> "none" to ""
+    }
+}
+
+/** Text fields keep their value; file fields keep the path Postman saved, which may not exist here. */
+private fun postmanParts(body: JsonObject): List<HttpPart> = (body["formdata"] as? JsonArray).orEmpty().filterIsInstance<JsonObject>().map { field ->
+    val name = field.string("key").orEmpty()
+    val enabled = field.flag("disabled") != true
+    if (field.string("type") == "file") {
+        val src = field["src"].let { (it as? JsonArray)?.firstOrNull() ?: it } as? JsonPrimitive
+        HttpPart(name, file = src?.contentOrNull, fileName = src?.contentOrNull?.substringAfterLast('/'), enabled = enabled)
+    } else {
+        HttpPart(name, field.string("value").orEmpty(), enabled = enabled)
     }
 }
 
@@ -123,7 +137,8 @@ fun parseCurl(text: String): ImportedRequest {
     var json = false
     var get = false
     var user: String? = null
-    val withValue = setOf("-X", "--request", "-H", "--header", "-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode", "--json", "-u", "--user", "--url", "-A", "--user-agent", "-b", "--cookie", "-e", "--referer")
+    val parts = mutableListOf<HttpPart>()
+    val withValue = setOf("-F", "--form", "--form-string", "-X", "--request", "-H", "--header", "-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode", "--json", "-u", "--user", "--url", "-A", "--user-agent", "-b", "--cookie", "-e", "--referer")
     // Options we don't use but whose value must not be taken for the URL.
     val skipValue = setOf("-o", "--output", "-w", "--write-out", "-m", "--max-time", "--connect-timeout", "--retry", "-x", "--proxy", "--cacert", "--cert", "--key", "-c", "--cookie-jar", "-D", "--dump-header")
 
@@ -145,6 +160,20 @@ fun parseCurl(text: String): ImportedRequest {
             "-H", "--header" -> next().let { headers += HttpHeader(it.substringBefore(':').trim(), it.substringAfter(':', "").trim()) }
             "-d", "--data", "--data-raw", "--data-binary", "--data-ascii", "--data-urlencode" -> data += next()
             "--json" -> { data += next(); json = true }
+            "--form-string" -> next().let { parts += HttpPart(it.substringBefore('='), it.substringAfter('=', "")) }
+            // name=@path;type=…;filename=…: a file; name=value: text. A leading < reads text from a file, kept as is.
+            "-F", "--form" -> next().let {
+                val name = it.substringBefore('=')
+                val value = it.substringAfter('=', "")
+                parts += if (value.startsWith("@")) {
+                    val options = value.drop(1).split(';')
+                    val path = options.first().trim('"')
+                    val fileName = options.drop(1).firstOrNull { o -> o.startsWith("filename=") }?.substringAfter('=')?.trim('"')
+                    HttpPart(name, file = path, fileName = fileName ?: path.substringAfterLast('/'))
+                } else {
+                    HttpPart(name, value)
+                }
+            }
             "-u", "--user" -> user = next()
             "--url" -> url = next()
             "-A", "--user-agent" -> headers += HttpHeader("User-Agent", next())
@@ -177,6 +206,7 @@ fun parseCurl(text: String): ImportedRequest {
     }
     val hasContentType = headers.any { it.name.equals("Content-Type", ignoreCase = true) }
     val bodyType = when {
+        parts.isNotEmpty() -> "multipart"
         body.isEmpty() -> "none"
         json || body.trimStart().startsWith("{") || body.trimStart().startsWith("[") -> "json"
         else -> "text".also { if (!hasContentType) headers += HttpHeader("Content-Type", "application/x-www-form-urlencoded") }
@@ -184,7 +214,7 @@ fun parseCurl(text: String): ImportedRequest {
     if (json && !hasContentType) headers += HttpHeader("Content-Type", "application/json")
     val name = url.substringAfter("://").substringBefore('?').substringAfter('/', "").ifEmpty { url.substringAfter("://") }
     return ImportedRequest(
-        HttpRequest(newId(), name, method ?: if (body.isNotEmpty()) "POST" else "GET", url, headers, bodyType, body, auth),
+        HttpRequest(newId(), name, method ?: if (body.isNotEmpty() || parts.isNotEmpty()) "POST" else "GET", url, headers, bodyType, body, parts, auth),
         secret,
     )
 }

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.app.AttachedFile
 import dev.eltermino.app.HttpOutcome
 import dev.eltermino.app.HttpRequestException
 import dev.eltermino.app.LinkState
@@ -52,6 +53,7 @@ import dev.eltermino.core.data.HttpAuth
 import dev.eltermino.core.data.HttpCheck
 import dev.eltermino.core.data.HttpCollection
 import dev.eltermino.core.data.HttpHeader
+import dev.eltermino.core.data.HttpPart
 import dev.eltermino.core.data.HttpRequest
 import dev.eltermino.core.data.newId
 import dev.eltermino.ui.components.Button
@@ -338,7 +340,7 @@ private fun RequestEditor(state: AppState, tab: RequestsTab, collection: HttpCol
     ) { section = it }
     when (section) {
         0 -> HeadersEditor(draft.headers) { draft = draft.copy(headers = it) }
-        1 -> BodyEditor(draft) { draft = it }
+        1 -> BodyEditor(draft, pickFile = { state.services.platform.pickAttachment("File da mandare nel form") }) { draft = it }
         2 -> AuthEditor(draft, onChange = { draft = it }) { secret ->
             scope.launch {
                 draft = state.actions.saveRequest(collection.id, draft, secret)
@@ -380,14 +382,16 @@ private fun HeadersEditor(headers: List<HttpHeader>, onChange: (List<HttpHeader>
 }
 
 @Composable
-private fun BodyEditor(draft: HttpRequest, onChange: (HttpRequest) -> Unit) {
-    val types = listOf("none" to "Nessuno", "json" to "JSON", "form" to "Form", "text" to "Testo")
+private fun BodyEditor(draft: HttpRequest, pickFile: suspend () -> AttachedFile?, onChange: (HttpRequest) -> Unit) {
+    val types = listOf("none" to "Nessuno", "json" to "JSON", "form" to "Form", "multipart" to "Multipart", "text" to "Testo")
     Row {
         types.forEach { (type, label) ->
             RadioOption(draft.bodyType == type, { onChange(draft.copy(bodyType = type)) }, label, Modifier.padding(end = 12.dp))
         }
     }
-    if (draft.bodyType != "none") {
+    if (draft.bodyType == "multipart") {
+        PartsEditor(draft.parts, pickFile) { onChange(draft.copy(parts = it)) }
+    } else if (draft.bodyType != "none") {
         Field(
             null,
             draft.body,
@@ -401,6 +405,44 @@ private fun BodyEditor(draft: HttpRequest, onChange: (HttpRequest) -> Unit) {
             },
             modifier = Modifier.padding(top = 8.dp),
         )
+    }
+}
+
+/** Fields of a multipart form: text, or a file of this device read again at every send. */
+@Composable
+private fun PartsEditor(parts: List<HttpPart>, pickFile: suspend () -> AttachedFile?, onChange: (List<HttpPart>) -> Unit) {
+    val scope = rememberCoroutineScope()
+    fun update(index: Int, part: HttpPart) = onChange(parts.mapIndexed { i, p -> if (i == index) part else p })
+    fun choose(index: Int?) {
+        scope.launch {
+            val file = pickFile() ?: return@launch
+            if (index == null) onChange(parts + HttpPart(file.name.substringBeforeLast('.').ifEmpty { "file" }, file = file.reference, fileName = file.name))
+            else update(index, parts[index].copy(file = file.reference, fileName = file.name))
+        }
+    }
+    Column(Modifier.padding(top = 8.dp)) {
+        parts.forEachIndexed { index, part ->
+            Row(verticalAlignment = Alignment.Top) {
+                Checkbox(part.enabled, { update(index, part.copy(enabled = it)) }, "", Modifier.padding(top = 4.dp))
+                Field(null, part.name, { update(index, part.copy(name = it)) }, Modifier.weight(1f).padding(end = 8.dp), placeholder = "Nome", monospace = true)
+                if (part.file == null) {
+                    Field(null, part.value, { update(index, part.copy(value = it)) }, Modifier.weight(1.6f), placeholder = "Valore", monospace = true)
+                } else {
+                    Pressable(onClick = { choose(index) }, modifier = Modifier.weight(1.6f).padding(bottom = 12.dp), border = Carta.colors.line) {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(CartaIcons.Document, contentDescription = null, tint = Carta.colors.textDim, size = 16.dp)
+                            Text(part.fileName ?: part.file.orEmpty(), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+                IconButton(Icons.Default.Close, "Togli ${part.name}", onClick = { onChange(parts.filterIndexed { i, _ -> i != index }) }, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+            }
+        }
+        Row {
+            Button("Aggiungi campo", onClick = { onChange(parts + HttpPart("")) }, kind = ButtonKind.Ghost, icon = Icons.Default.Add)
+            Button("Aggiungi file…", onClick = { choose(null) }, kind = ButtonKind.Ghost, icon = CartaIcons.Upload)
+        }
+        Text("I file si rileggono a ogni invio: se lo sposti o lo cancelli, sceglilo di nuovo.", style = Carta.type.small, color = Carta.colors.textDim)
     }
 }
 

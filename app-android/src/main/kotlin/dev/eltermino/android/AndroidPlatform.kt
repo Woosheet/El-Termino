@@ -8,6 +8,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.app.NotificationCompat
+import dev.eltermino.app.AttachedFile
 import dev.eltermino.app.PickedFile
 import dev.eltermino.app.Platform
 import kotlinx.coroutines.Dispatchers
@@ -44,9 +45,7 @@ class AndroidPlatform(private val context: Context) : Platform {
         val uri = documentPicker?.invoke() ?: return null
         return withContext(Dispatchers.IO) {
             val resolver = context.contentResolver
-            val name = resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) cursor.getString(0) else null
-            } ?: uri.lastPathSegment ?: "file"
+            val name = displayName(uri)
             val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext null
             PickedFile(name, bytes)
         }
@@ -56,7 +55,24 @@ class AndroidPlatform(private val context: Context) : Platform {
 
     override fun resolveSshInclude(pattern: String): List<Pair<String, String>> = emptyList()
 
-    override fun readLocalFile(path: String): ByteArray? = null
+    /** The document the user picks, kept readable across restarts for a form to send it again. */
+    override suspend fun pickAttachment(title: String): AttachedFile? {
+        val uri = documentPicker?.invoke() ?: return null
+        return withContext(Dispatchers.IO) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            AttachedFile(uri.toString(), displayName(uri))
+        }
+    }
+
+    private fun displayName(uri: Uri): String =
+        context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        } ?: uri.lastPathSegment ?: "file"
+
+    /** Only the documents picked with [pickAttachment]: Android gives apps no plain paths. */
+    override fun readLocalFile(path: String): ByteArray? =
+        if (!path.startsWith("content://")) null
+        else runCatching { context.contentResolver.openInputStream(Uri.parse(path))?.use { it.readBytes() } }.getOrNull()
 
     private companion object {
         const val TRANSFERS = "transfers"

@@ -100,7 +100,7 @@ class HttpRunner(private val services: AppServices, private val connections: Con
         scope.launch {
             val outcome = outcome(request) {
                 val lease = tab.lease.filterNotNull().first()
-                sendRequest(connectionOf(lease), request, collection, tab.hostId, ::secret)
+                sendRequest(connectionOf(lease), request, collection, tab.hostId, ::secret, readFile = services.platform::readLocalFile)
             }
             tab.finished(request.id, outcome)
         }
@@ -129,7 +129,7 @@ class HttpRunner(private val services: AppServices, private val connections: Con
                         }
                         for (request in collection.requests) {
                             run.set(host.id, request.id, RunCell.Running)
-                            val outcome = outcome(request) { sendRequest(connection, request, collection, host.id, ::secret) }
+                            val outcome = outcome(request) { sendRequest(connection, request, collection, host.id, ::secret, readFile = services.platform::readLocalFile) }
                             run.set(host.id, request.id, RunCell.Done(outcome))
                         }
                     } finally {

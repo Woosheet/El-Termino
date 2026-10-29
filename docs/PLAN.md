@@ -245,12 +245,13 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 - Fase 5: implementata il 29 ottobre 2026 ([decisione 0010](decisions/0010-http-requests.md)).
   - Tunnel nel nucleo SSH (`forwardLocal`), anche dietro un jump host; ai server di test si è aggiunto un servizio HTTP raggiungibile solo dall'interno.
   - Scheda "Richieste" dal menu dell'host: metodo, URL, header, corpo (JSON, form, testo), auth (Bearer, Basic, API key) con i segreti nel vault, variabili `{{nome}}` per host.
+  - Form multipart con campi di testo e file (percorsi sul desktop, documenti scelti su Android).
   - Risposta con stato, tempi, dimensione, header e corpo formattato con ricerca; ultime 10 risposte per host, solo in memoria.
   - "Esegui con curl sul server" e "Copia come curl".
   - Verifiche senza codice ed esecuzione della collezione su un host o su un gruppo, con la tabella host × richiesta.
   - Import da Postman v2.1 e da comandi curl.
   - Criterio raggiunto: `HttpRunFlowTest` esegue una collezione di verifiche su tutti gli host di un gruppo, uno dietro il bastion, e mostra l'esito per host.
-  - Restano fuori: redirect seguiti, certificati non validi accettati a mano, form multipart con file.
+  - Restano fuori: redirect seguiti, certificati non validi accettati a mano.
 - Fase 6: implementata il 29 ottobre 2026 ([decisione 0009](decisions/0009-first-run-themes-and-termius.md)).
   - Benvenuto con "Usi Termius?" e import diretto dai dati locali di Termius (LevelDB e V8, campi decifrati con la chiave del portachiavi), tutorial in sei passi.
   - Temi Carta, Notte (blu notte), Nord, Solarized chiaro, Dracula e Tokyo Night, per app e terminale, scelti in Impostazioni o dal sistema.

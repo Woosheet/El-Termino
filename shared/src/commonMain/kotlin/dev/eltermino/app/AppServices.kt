@@ -26,6 +26,10 @@ interface Platform {
     /** Absolute paths of files chosen for upload, where the device has paths; empty otherwise. */
     suspend fun pickLocalFiles(title: String): List<String> = emptyList()
 
+    /** One file to send later, as a reference [readLocalFile] can read again; null when cancelled. */
+    suspend fun pickAttachment(title: String): AttachedFile? =
+        pickLocalFiles(title).firstOrNull()?.let { AttachedFile(it, it.substringAfterLast('/')) }
+
     /** Whether a window of the app is the one the user is looking at. */
     val isInForeground: Boolean get() = true
 
@@ -52,6 +56,8 @@ interface Platform {
 }
 
 class PickedFile(val name: String, val bytes: ByteArray)
+
+class AttachedFile(val reference: String, val name: String)
 
 /** What looking for Termius on this device found. */
 sealed interface TermiusScan {

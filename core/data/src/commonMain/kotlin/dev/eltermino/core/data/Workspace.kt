@@ -130,13 +130,27 @@ data class HttpRequest(
     /** As the server sees it: `http://localhost:8080/health` is a service on the host itself. */
     val url: String = "",
     val headers: List<HttpHeader> = emptyList(),
-    /** "none", "json", "form" (one `name=value` a line) or "text". */
+    /** "none", "json", "form" (one `name=value` a line), "text" or "multipart" (see [parts]). */
     val bodyType: String = "none",
     val body: String = "",
+    /** The fields of a multipart form, text or files. */
+    val parts: List<HttpPart> = emptyList(),
     val auth: HttpAuth = HttpAuth(),
     /** Runs `curl` on the server instead of sending through the tunnel. */
     val viaCurl: Boolean = false,
     val checks: List<HttpCheck> = emptyList(),
+)
+
+/** A multipart field: [value] as text, or the file at [file] when it's set. */
+@Serializable
+data class HttpPart(
+    val name: String,
+    val value: String = "",
+    /** A path on this device, or a `content://` URI on Android. */
+    val file: String? = null,
+    /** The name the server sees for [file]. */
+    val fileName: String? = null,
+    val enabled: Boolean = true,
 )
 
 @Serializable

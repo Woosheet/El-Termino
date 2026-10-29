@@ -1,6 +1,7 @@
 package dev.eltermino.app
 
 import dev.eltermino.core.data.HttpCollection
+import dev.eltermino.core.data.HttpPart
 import dev.eltermino.core.data.HttpRequest
 import dev.eltermino.core.ssh.AuthMethod
 import dev.eltermino.core.ssh.ConnectTarget
@@ -52,6 +53,26 @@ class HttpRequestFlowTest {
         assertEquals(200, curl.status)
         assertEquals("POST x=1\nnome=Anna%20Rossi", curl.text)
         assertTrue(curl.headers.any { it.first.equals("Content-Type", ignoreCase = true) && it.second == "text/plain" })
+    }
+
+    @Test
+    fun aMultipartFormCarriesTextAndAFileFromThisComputer() = onBasic { connection ->
+        val file = java.io.File.createTempFile("dati", ".txt").apply { writeText("riga 1\nriga 2"); deleteOnExit() }
+        val request = HttpRequest(
+            "r", "Carica", "POST", "http://localhost:8080/cgi-bin/echo", bodyType = "multipart",
+            parts = listOf(HttpPart("nota", "ciao {{port}}"), HttpPart("doc", file = file.absolutePath, fileName = "dati.txt")),
+        )
+        val body = sendRequest(connection, request, collection, "basic", { null }, readFile = { java.io.File(it).readBytes() }).text
+        assertTrue(body.startsWith("POST "), body)
+        assertTrue("name=\"nota\"" in body && "ciao 8080" in body, body)
+        assertTrue("filename=\"dati.txt\"" in body && "Content-Type: text/plain" in body && "riga 1\nriga 2" in body, body)
+
+        val gone = assertFailsWith<HttpRequestException> { sendRequest(connection, request, collection, "basic", { null }, readFile = { null }) }
+        assertTrue("dati.txt" in gone.message!!, gone.message)
+        assertFailsWith<HttpRequestException> { send(connection, request.copy(viaCurl = true)) }
+        // Text fields alone are fine with curl on the server.
+        val text = send(connection, request.copy(viaCurl = true, parts = request.parts.take(1))).text
+        assertTrue("ciao 8080" in text, text)
     }
 
     @Test

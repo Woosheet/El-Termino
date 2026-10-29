@@ -9,6 +9,7 @@ import okhttp3.Callback
 import okhttp3.ConnectionPool
 import okhttp3.EventListener
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -19,6 +20,7 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
 import java.net.SocketAddress
+import java.net.URLConnection
 import java.util.concurrent.TimeUnit
 import javax.net.SocketFactory
 import kotlin.coroutines.resume
@@ -39,7 +41,7 @@ private val base = OkHttpClient.Builder()
     .dns { listOf(InetAddress.getLoopbackAddress()) }
     .build()
 
-internal actual suspend fun sendThroughTunnel(connection: SshConnection, request: PreparedRequest, timeout: Duration): HttpResponse {
+internal actual suspend fun sendThroughTunnel(connection: SshConnection, request: PreparedRequest, timeout: Duration, readFile: (String) -> ByteArray?): HttpResponse {
     val (host, port) = tunnelTarget(request.url)
     val start = TimeSource.Monotonic.markNow()
     val forward = connection.forwardLocal(host, port)
@@ -60,7 +62,8 @@ internal actual suspend fun sendThroughTunnel(connection: SshConnection, request
             })
             .build()
         val contentType = request.headers.lastOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
-        val body = request.body?.toRequestBody(contentType?.toMediaTypeOrNull())
+        val body = request.parts?.let { multipart(it, readFile) }
+            ?: request.body?.toRequestBody(contentType?.toMediaTypeOrNull())
             ?: if (request.method in setOf("POST", "PUT", "PATCH")) ByteArray(0).toRequestBody(null) else null
         val built = try {
             Request.Builder().url(request.url).apply {
@@ -86,6 +89,20 @@ internal actual suspend fun sendThroughTunnel(connection: SshConnection, request
     } finally {
         forward.close()
     }
+}
+
+private suspend fun multipart(parts: List<PreparedPart>, readFile: (String) -> ByteArray?): MultipartBody = withContext(Dispatchers.IO) {
+    MultipartBody.Builder().setType(MultipartBody.FORM).apply {
+        parts.forEach { part ->
+            if (part.file == null) {
+                addFormDataPart(part.name, part.value)
+            } else {
+                val bytes = readFile(part.file) ?: throw HttpRequestException("Non riesco più a leggere ${part.fileName}: sceglilo di nuovo")
+                val type = (URLConnection.guessContentTypeFromName(part.fileName) ?: "application/octet-stream").toMediaTypeOrNull()
+                addFormDataPart(part.name, part.fileName, bytes.toRequestBody(type))
+            }
+        }
+    }.build()
 }
 
 private suspend fun Call.await(): Response = suspendCancellableCoroutine { continuation ->
