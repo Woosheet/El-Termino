@@ -18,14 +18,16 @@ dependencies {
     implementation(libs.java.keyring)
 }
 
+// macOS refuses versions that start with 0.
+val appVersion = "1.0.0"
+
 compose.desktop {
     application {
         mainClass = "dev.eltermino.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "El Termino"
-            // macOS refuses versions that start with 0.
-            packageVersion = "1.0.0"
+            packageVersion = appVersion
             description = "Client SSH e SFTP"
             vendor = "Woosheet"
             // What suggestRuntimeModules finds, plus what is only loaded at run time:
@@ -48,4 +50,19 @@ compose.desktop {
             }
         }
     }
+}
+
+// The DMG to hand out: the app next to a link to Applications, built by packaging/make-dmg.sh.
+tasks.register<Exec>("packageShareableDmg") {
+    group = "compose desktop"
+    description = "Builds a DMG with the app and a link to Applications, ready to drag in."
+    dependsOn("createDistributable")
+    val app = layout.buildDirectory.dir("compose/binaries/main/app/El Termino.app")
+    val dmg = layout.buildDirectory.file("dmg/El Termino-$appVersion.dmg")
+    val script = file("packaging/make-dmg.sh")
+    val icon = file("packaging/icon.icns")
+    inputs.dir(app)
+    inputs.files(script, icon)
+    outputs.file(dmg)
+    commandLine("sh", script.path, app.get().asFile.path, icon.path, dmg.get().asFile.path)
 }

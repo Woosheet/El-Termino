@@ -22,10 +22,10 @@ I dati del desktop stanno in `~/Library/Application Support/El Termino` (macOS),
 Il DMG va creato con un JDK 21 che non sia quello di Homebrew: quello si porta dietro librerie di `/opt/homebrew` che sugli altri Mac mancano. Per esempio con Amazon Corretto:
 
 ```bash
-JAVA_HOME=~/Library/Java/JavaVirtualMachines/corretto-21.0.13/Contents/Home ./gradlew :app-desktop:packageDmg
+JAVA_HOME=~/Library/Java/JavaVirtualMachines/corretto-21.0.13/Contents/Home ./gradlew :app-desktop:packageShareableDmg
 ```
 
-Il file esce in `app-desktop/build/compose/binaries/main/dmg/`. Funziona sui Mac con Apple Silicon e non è firmato con un Developer ID, quindi chi lo scarica deve aprirlo la prima volta da Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque». MSI e DEB si creano allo stesso modo su Windows e Linux (`packageMsi`, `packageDeb`). L'icona si rigenera da `app-desktop/packaging/` con `java MakeIcons.java` e poi `iconutil -c icns icon.iconset`.
+Il file esce in `app-desktop/build/dmg/`, con l'app accanto al collegamento ad Applicazioni in cui trascinarla. Lo monta `app-desktop/packaging/make-dmg.sh` con `hdiutil`: il DMG di `packageDmg` dispone il contenuto pilotando il Finder e, senza quel permesso, esce senza il collegamento. Funziona sui Mac con Apple Silicon e non è firmato con un Developer ID, quindi chi lo scarica deve aprirlo la prima volta da Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque». MSI e DEB si creano allo stesso modo su Windows e Linux (`packageMsi`, `packageDeb`). L'icona si rigenera da `app-desktop/packaging/` con `java MakeIcons.java` e poi `iconutil -c icns icon.iconset`.
 
 ## Test
 
