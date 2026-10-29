@@ -1,0 +1,45 @@
+name: eltermino-testenv
+
+x-sshd: &sshd
+  build: .
+  image: eltermino-testenv-sshd:latest
+  restart: unless-stopped
+
+services:
+  basic:
+    <<: *sshd
+    ports: ["127.0.0.1:2201:22"]
+    volumes:
+      - ./config/basic.conf:/testenv/sshd_config:ro
+      - ./keys:/testenv/keys:ro
+    networks: [public]
+
+  otp:
+    <<: *sshd
+    ports: ["127.0.0.1:2202:22"]
+    volumes:
+      - ./config/otp.conf:/testenv/sshd_config:ro
+      - ./config/pam-sshd-otp:/testenv/pam_sshd:ro
+      - ./config/google_authenticator:/testenv/google_authenticator:ro
+    networks: [public]
+
+  bastion:
+    <<: *sshd
+    ports: ["127.0.0.1:2203:22"]
+    volumes:
+      - ./config/pubkey.conf:/testenv/sshd_config:ro
+      - ./keys:/testenv/keys:ro
+    networks: [public, internal]
+
+  # Reachable only through the bastion, as internal:22.
+  internal:
+    <<: *sshd
+    volumes:
+      - ./config/pubkey.conf:/testenv/sshd_config:ro
+      - ./keys:/testenv/keys:ro
+    networks: [internal]
+
+networks:
+  public: {}
+  internal:
+    internal: true
