@@ -222,7 +222,7 @@ private fun CollectionList(
 @Composable
 private fun CollectionRow(state: AppState, collection: HttpCollection, onDialog: (RequestsDialog) -> Unit, onNewRequest: (HttpCollection) -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().onSecondaryClick { menu = true }.padding(start = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(collection.name, style = Carta.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         Box {
             IconButton(Icons.Default.MoreVert, "Azioni per ${collection.name}", onClick = { menu = true }, size = 28.dp, iconSize = 16.dp)

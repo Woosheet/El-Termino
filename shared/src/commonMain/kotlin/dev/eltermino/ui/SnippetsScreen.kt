@@ -106,7 +106,7 @@ internal fun SnippetsScreen(state: AppState, modifier: Modifier = Modifier) {
 @Composable
 private fun SnippetRow(snippet: Snippet, onRun: () -> Unit, onEdit: () -> Unit, onDuplicate: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
-    Pressable(onClick = onRun, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
+    Pressable(onClick = onRun, modifier = Modifier.fillMaxWidth().onSecondaryClick { menu = true }, shape = RoundedCornerShape(6.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -222,6 +222,8 @@ data class SavedGroup(
 @Serializable
 data class UiSettings(
     val sidebarWidthDp: Int = 260,
+    /** False when the user has folded the sidebar away, on desktop. */
+    val sidebarOpen: Boolean = true,
     /** Folders saved in this device's file panel. */
     val localBookmarks: List<String> = emptyList(),
     /** A theme id, or "system" to follow the OS: Carta by day, Notte in dark mode. */

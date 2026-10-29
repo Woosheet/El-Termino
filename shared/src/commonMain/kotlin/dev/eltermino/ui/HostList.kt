@@ -117,7 +117,7 @@ private fun HostRow(
     onDelete: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
-    Pressable(onClick = onConnect, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
+    Pressable(onClick = onConnect, modifier = Modifier.fillMaxWidth().onSecondaryClick { menu = true }, shape = RoundedCornerShape(6.dp)) {
         Row(Modifier.fillMaxWidth().padding(start = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             StatusDot(if (online) Carta.colors.online else Carta.colors.offline)
             Column(Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 5.dp)) {

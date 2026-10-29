@@ -499,6 +499,42 @@ class AppSnapshotTest {
         }
     }
 
+    /** The sidebar folded away: the tabs take the whole width and the tools move to the tab bar. */
+    @Test
+    fun sidebarFolded(): Unit = runBlocking {
+        val state = lightState()
+        seed(state)
+        state.services.workspace.update { it.copy(ui = it.ui.copy(sidebarOpen = false)) }
+        snapshot(state, "app-desktop-sidebar-folded", titleBar = 28.dp)
+    }
+
+    /** A right click on a host opens the same menu as its ⋮. */
+    @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+    @Test
+    fun rightClickOnAHostOpensItsMenu(): Unit = runBlocking {
+        val state = lightState()
+        seed(state)
+        ImageComposeScene(2400, 1520, Density(2f)) { App(state) }.use { scene ->
+            repeat(4) { scene.render(System.nanoTime()); Thread.sleep(100) }
+            // The first host, web-01 under Preferiti.
+            val at = androidx.compose.ui.geometry.Offset(200f, 300f)
+            scene.sendPointerEvent(androidx.compose.ui.input.pointer.PointerEventType.Move, at)
+            scene.sendPointerEvent(
+                androidx.compose.ui.input.pointer.PointerEventType.Press, at,
+                buttons = androidx.compose.ui.input.pointer.PointerButtons(isSecondaryPressed = true),
+                button = androidx.compose.ui.input.pointer.PointerButton.Secondary,
+            )
+            scene.sendPointerEvent(
+                androidx.compose.ui.input.pointer.PointerEventType.Release, at,
+                buttons = androidx.compose.ui.input.pointer.PointerButtons(),
+                button = androidx.compose.ui.input.pointer.PointerButton.Secondary,
+            )
+            repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+            val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
+            File("build/snapshots/host-right-click.png").apply { parentFile.mkdirs(); writeBytes(png) }
+        }
+    }
+
     /** macOS draws its title bar over the app; the bars at the top reach under it. */
     @Test
     fun underTheMacTitleBar(): Unit = runBlocking {

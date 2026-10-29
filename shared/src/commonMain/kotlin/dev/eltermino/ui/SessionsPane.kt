@@ -516,6 +516,12 @@ private fun Terminal(session: TerminalSession, showExtraKeys: Boolean, focused: 
             theme = Carta.theme.terminal,
             fontFamily = Carta.monospace,
             focused = focused,
+            contextMenu = { menu ->
+                Menu(expanded = true, onDismiss = menu.dismiss) {
+                    menu.copy?.let { copy -> MenuItem("Copia", onClick = { copy(); menu.dismiss() }) }
+                    MenuItem("Incolla", onClick = { menu.paste(); menu.dismiss() })
+                }
+            },
         )
         if (showExtraKeys) {
             val colors = Carta.colors

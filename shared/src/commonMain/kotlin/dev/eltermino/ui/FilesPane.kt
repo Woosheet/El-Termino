@@ -473,6 +473,7 @@ private fun FileRow(
                 },
             )
             .hoverable(interaction)
+            .onSecondaryClick { open = true }
             .pointerInput(entry.path) {
                 detectDragGestures(
                     onDragStart = { offset -> onDragStart((coordinates?.positionInWindow() ?: Offset.Zero) + offset) },

@@ -1,5 +1,6 @@
 package dev.eltermino.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -10,8 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
 import dev.eltermino.core.data.Host
+import dev.eltermino.ui.components.AppIconPainter
 import dev.eltermino.ui.components.AppIconStyle
 import dev.eltermino.ui.components.LocalAppIcon
 import dev.eltermino.ui.components.Button
@@ -143,6 +147,8 @@ private fun AppContent(state: AppState) {
                     onTour = showTour,
                 )
             }
+            val titleBar = LocalTitleBar.current
+            if (titleBar > 0.dp) WindowTitle(Modifier.align(Alignment.TopCenter).height(titleBar))
             NoticeToast(state, Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 40.dp))
         }
 
@@ -169,13 +175,15 @@ private fun DesktopLayout(
     val store = state.services.workspace
     val scope = rememberCoroutineScope()
     var sidebarWidth by remember { mutableStateOf(store.workspace.value.ui.sidebarWidthDp.dp) }
+    val workspace by store.workspace.collectAsState()
+    val sidebarOpen = workspace.ui.sidebarOpen
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
-            Column(
+            if (sidebarOpen) Column(
+                // 6 on top, like the tab bar beside it, so "Host" and its + line up with the tabs.
                 Modifier.width(sidebarWidth).fillMaxHeight().background(Carta.colors.chrome)
-                    .padding(top = LocalTitleBar.current).padding(horizontal = 12.dp, vertical = 12.dp),
+                    .padding(top = LocalTitleBar.current).padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 12.dp),
             ) {
-                ProductMark(Modifier.padding(start = 4.dp, bottom = 12.dp))
                 Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Host", style = Carta.type.heading, modifier = Modifier.weight(1f).padding(start = 4.dp))
                     IconButton(Icons.Default.Add, "Nuovo host", onClick = { onEdit(null) }, tint = Carta.colors.text)
@@ -188,7 +196,7 @@ private fun DesktopLayout(
                 ToolRow(CartaIcons.Import, "Importa", screen == Screen.Import) { onScreen(Screen.Import) }
                 ToolRow(CartaIcons.Settings, "Impostazioni", screen == Screen.Settings) { onScreen(Screen.Settings) }
             }
-            VerticalResizeHandle(
+            if (sidebarOpen) VerticalResizeHandle(
                 onDrag = { delta -> sidebarWidth = (sidebarWidth + delta).coerceIn(SidebarMin, SidebarMax) },
                 onDragStopped = {
                     val width = sidebarWidth.value.roundToInt()
@@ -200,11 +208,18 @@ private fun DesktopLayout(
                     Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(top = LocalTitleBar.current).padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    IconButton(
+                        CartaIcons.Sidebar,
+                        if (sidebarOpen) "Nascondi la barra laterale" else "Mostra la barra laterale",
+                        onClick = { scope.launch { store.update { it.copy(ui = it.ui.copy(sidebarOpen = !sidebarOpen)) } } },
+                    )
                     if (screen != Screen.Sessions) {
                         IconButton(Icons.AutoMirrored.Filled.ArrowBack, "Torna alle sessioni", onClick = { onScreen(Screen.Sessions) })
                     }
                     SessionTabs(state, onConnect, Modifier.weight(1f))
                     if (screen == Screen.Sessions) SessionTools(state, wide = true, onManageSnippets = { onScreen(Screen.Snippets) })
+                    // With the sidebar folded away its tools stay one click away.
+                    if (!sidebarOpen) ToolsMenu(onScreen)
                 }
                 Divider()
                 // Tablets get the wide layout but still need Esc, Ctrl and the arrows on screen.
@@ -234,7 +249,8 @@ private fun PhoneLayout(
             Box(Modifier.fillMaxSize()) {
                 Column(Modifier.fillMaxSize().padding(top = LocalTitleBar.current).padding(12.dp)) {
                     Row(Modifier.padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ProductMark(Modifier.weight(1f).padding(start = 4.dp))
+                        // With a title bar over the app the name is already up there.
+                        if (LocalTitleBar.current > 0.dp) Box(Modifier.weight(1f)) else ProductMark(Modifier.weight(1f).padding(start = 4.dp))
                         val tabs by state.sessions.tabs.collectAsState()
                         if (tabs.isNotEmpty()) {
                             Button(sessions(tabs.size), onClick = { onScreen(Screen.Sessions) }, kind = ButtonKind.Ghost)
@@ -308,6 +324,17 @@ private fun ToolRow(icon: ImageVector, label: String, selected: Boolean, onClick
             Icon(icon, contentDescription = null, tint = if (selected) colors.text else colors.textDim, size = 16.dp, modifier = Modifier.padding(end = 10.dp))
             Text(label, color = colors.text)
         }
+    }
+}
+
+/** The title in the bar macOS draws over the app: the icon chosen in the settings and the name. */
+@Composable
+private fun WindowTitle(modifier: Modifier = Modifier) {
+    val style = LocalAppIcon.current
+    val icon = remember(style) { AppIconPainter(style) }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Image(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Text("El Termino", style = Carta.type.bodyStrong, color = Carta.colors.textDim, modifier = Modifier.padding(start = 6.dp))
     }
 }
 

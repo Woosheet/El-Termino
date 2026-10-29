@@ -58,6 +58,14 @@ object CartaIcons {
         }
     }
 
+    /** A window with its sidebar: shows or hides the one on the left. */
+    val Sidebar: ImageVector by lazy {
+        lineIcon("Sidebar") {
+            roundRect(4f, 5f, 20f, 19f)
+            moveTo(9.5f, 5f); lineTo(9.5f, 19f)
+        }
+    }
+
     /** Two overlapping sheets: another session like this one. */
     val Duplicate: ImageVector by lazy {
         lineIcon("Duplicate") {
