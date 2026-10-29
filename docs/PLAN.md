@@ -1,6 +1,6 @@
 # El Termino: piano di progetto
 
-Ultimo aggiornamento: 29 ottobre 2026 (Fase 3)
+Ultimo aggiornamento: 29 ottobre 2026 (Fase 4, nuova Fase 6)
 
 ## Obiettivo
 
@@ -32,7 +32,7 @@ core/ssh           interfaccia comune + implementazione JVM
 core/terminal      emulatore VT/xterm + renderer Compose Canvas
 core/vault         segreti cifrati, Keystore / keychain di sistema
 core/data          database: host, gruppi, identità, chiavi, known_hosts, snippet
-core/mosh          client Mosh (fase 8)
+core/mosh          client Mosh (fase 9)
 ```
 
 Le feature partono come package dentro `shared`. Diventano moduli Gradle separati solo se crescono.
@@ -100,10 +100,10 @@ Requisiti: vim, htop, tmux e mc devono funzionare. Servono quindi alternate scre
 | Chiavi Ed25519 / RSA (rsa-sha2-256/512) / ECDSA, con passphrase | Import da file OpenSSH / PEM / PuTTY `.ppk`, generazione nell'app | 1 |
 | OTP / 2FA | Keyboard-interactive. Opzionale: segreto TOTP salvato nel vault e codice compilato in automatico. | 1 |
 | Jump host / ProxyJump | Catena di bastion, ogni salto con la sua identità | 1 |
-| SSH agent | macOS/Linux con `SSH_AUTH_SOCK` (socket Unix di JDK 16+), Windows con la named pipe di OpenSSH e Pageant. Più l'agent forwarding. | 6 |
-| Certificati OpenSSH | Chiave + `-cert.pub`, host certificate con CA fidata | 6 |
-| YubiKey / FIDO2 | Desktop: tramite l'agent di sistema, poi libfido2 diretto se serve. Android: YubiKit via USB/NFC, da verificare FIDO2 o PIV. | 6 |
-| Sblocco biometrico | BiometricPrompt su Android, Touch ID su macOS | 6 |
+| SSH agent | macOS/Linux con `SSH_AUTH_SOCK` (socket Unix di JDK 16+), Windows con la named pipe di OpenSSH e Pageant. Più l'agent forwarding. | 7 |
+| Certificati OpenSSH | Chiave + `-cert.pub`, host certificate con CA fidata | 7 |
+| YubiKey / FIDO2 | Desktop: tramite l'agent di sistema, poi libfido2 diretto se serve. Android: YubiKit via USB/NFC, da verificare FIDO2 o PIV. | 7 |
+| Sblocco biometrico | BiometricPrompt su Android, Touch ID su macOS | 7 |
 
 Verifica della host key sempre attiva: alla prima connessione mostra il fingerprint SHA256 e chiede conferma. Se la chiave cambia, la connessione si blocca con un avviso esplicito. Sul desktop si possono importare `~/.ssh/known_hosts` e `~/.ssh/config`.
 
@@ -133,6 +133,26 @@ Verifica della host key sempre attiva: alla prima connessione mostra il fingerpr
 - **Spazi di lavoro salvati:** un gruppo si salva con host, tipo di sessione e disposizione, e si riapre con un clic. Per esempio "Deploy": due terminali su web-01 e web-02 più le richieste di salute.
 - **Android:** i gruppi compaiono come sezioni nell'elenco delle sessioni; l'unione in una scheda divisa c'è solo sui tablet.
 
+## Primo avvio, temi e avvisi
+
+- **Benvenuto al primo avvio:** l'app chiede "Usi Termius?". Se sì, cerca i dati di Termius sul computer:
+  - macOS: `~/Library/Application Support/Termius`;
+  - Windows: `%APPDATA%\Termius`;
+  - Linux: `~/.config/Termius`.
+
+  Se li sa leggere, propone host, gruppi e identità da importare con l'anteprima che c'è già. Altrimenti guida all'export (CSV) e all'import di `~/.ssh/config`. **Da verificare:** come Termius tiene i dati in locale. È un'app Electron, quindi probabilmente IndexedDB/LevelDB, forse cifrati con la chiave dell'account. Serve guardare la cartella sul tuo Mac, con il tuo permesso.
+- **Temi:**
+  - "Notte": scuro che tende al blu (blu notte, non nero), con lo stesso accento azzurro;
+  - altri temi dai colori iconici, per l'app e per il terminale (per esempio Nord, Solarized, Dracula, Gruvbox, Tokyo Night);
+  - scelta nelle impostazioni, anche "segui il sistema" per chiaro e scuro.
+
+  I token di Carta permettono di aggiungere temi senza toccare i componenti.
+- **Avvisi dei trasferimenti:**
+  - notifica di sistema quando un trasferimento finisce o non riesce: notifiche di macOS, Windows o Linux sul desktop, notifica su Android;
+  - un avviso prima di chiudere l'app con trasferimenti in corso;
+  - un breve messaggio nell'app per ogni coda completata.
+- **Trascinare file su un terminale:** li carica nella cartella corrente della shell, se la shell la comunica (OSC 7), altrimenti nella home. Oggi si trascinano solo sui pannelli file.
+
 ## Richieste HTTP (tipo Postman)
 
 Servono a provare le API che girano sulle macchine senza esporle in rete. Le richieste partono dal client ma viaggiano dentro la connessione SSH già aperta.
@@ -153,11 +173,11 @@ Servono a provare le API che girano sulle macchine senza esporle in rete. Le ric
 | Snippet | Comandi salvati con variabili, da lanciare su uno o più host | 2 |
 | Broadcast input | Scrivi in più terminali insieme (tab scelte o un gruppo intero), con indicatore ben visibile | 2 |
 | Editor remoto | Editor integrato con evidenziazione per yaml, json, sh, conf. Salvataggio atomico (file temporaneo + rename), controllo di modifiche remote prima di sovrascrivere. Sul desktop anche "apri con editor esterno" e upload a ogni salvataggio. | 3 |
-| Port forwarding | Locale, remoto e dinamico (SOCKS5). Regole salvate per host, avvio automatico alla connessione. | 7 |
-| Monitor risorse | Canale exec sulla connessione esistente: legge `/proc/loadavg`, `/proc/meminfo`, `/proc/stat` e `df` ogni pochi secondi, solo con il pannello aperto. Nessun agente da installare. | 7 |
-| Pannello Docker | `docker ps` / `docker stats` con output JSON, log in streaming, start / stop / restart, `docker exec` che apre un nuovo terminale. L'utente SSH deve poter usare docker. | 7 |
-| Registrazione sessioni | Formato asciicast v2 con replay nell'app ed export. File locali, con durata di conservazione configurabile. | 7 |
-| Mosh | Nessuna libreria JVM disponibile e niente mosh-client nativo su Windows: va scritto in Kotlin (bootstrap via SSH con `mosh-server`, UDP, AES-128-OCB, protobuf, sincronizzazione dello stato). Servono `mosh-server` sugli host e le porte UDP aperte. È la funzione più costosa e rischiosa. | 8 |
+| Port forwarding | Locale, remoto e dinamico (SOCKS5). Regole salvate per host, avvio automatico alla connessione. | 8 |
+| Monitor risorse | Canale exec sulla connessione esistente: legge `/proc/loadavg`, `/proc/meminfo`, `/proc/stat` e `df` ogni pochi secondi, solo con il pannello aperto. Nessun agente da installare. | 8 |
+| Pannello Docker | `docker ps` / `docker stats` con output JSON, log in streaming, start / stop / restart, `docker exec` che apre un nuovo terminale. L'utente SSH deve poter usare docker. | 8 |
+| Registrazione sessioni | Formato asciicast v2 con replay nell'app ed export. File locali, con durata di conservazione configurabile. | 8 |
+| Mosh | Nessuna libreria JVM disponibile e niente mosh-client nativo su Windows: va scritto in Kotlin (bootstrap via SSH con `mosh-server`, UDP, AES-128-OCB, protobuf, sincronizzazione dello stato). Servono `mosh-server` sugli host e le porte UDP aperte. È la funzione più costosa e rischiosa. | 9 |
 
 ## Import da Termius
 
@@ -205,6 +225,12 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
     - "Apri con editor esterno";
     - il trascinamento dall'app al Finder;
     - su Android, il pannello locale fuori dalla cartella dell'app (selettore di sistema).
+- Fase 4: implementata il 29 ottobre 2026 ([decisione 0008](decisions/0008-tabs-groups-and-layouts.md)).
+  - Ogni scheda ha la sua divisione in riquadri.
+  - Unire due schede trascinandone una sull'altra (sinistra, destra, sopra, sotto) o dal menu della scheda; separarle; spostare un riquadro in una scheda nuova.
+  - Gruppi di schede con nome e colore, comprimibili; raggruppa per host; dal gruppo broadcast, snippet, "Apri in griglia" e chiudi.
+  - Spazi di lavoro salvati per nome, anche di un solo gruppo; l'ultima sessione è offerta di nuovo all'avvio.
+  - Criterio raggiunto: `TabLayoutFlowTest` salva due gruppi e una scheda divisa, riavvia l'app e li ritrova uguali, con le sessioni ricollegate.
 
 ## Roadmap
 
@@ -216,9 +242,10 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 | 3. SFTP multi-sessione | Workspace a N pannelli, `TransferManager`, remoto ↔ remoto, pausa e ripresa. Editor remoto. | Trasferimenti paralleli tra 3 o più host in un'unica coda |
 | 4. Schede unite e gruppi | Disposizione dei riquadri per scheda, unione e separazione trascinando, gruppi di schede con nome e colore, raggruppa per host, azioni sul gruppo, spazi di lavoro salvati | Uno spazio di lavoro con due gruppi e una scheda divisa si riapre uguale dopo un riavvio |
 | 5. Richieste HTTP | Scheda di richieste per host via tunnel SSH, risposta formattata, collezioni con variabili per host, verifiche, esecuzione su un gruppo, import da Postman e curl | Una collezione di verifiche gira su tutti gli host di un gruppo e mostra l'esito per host |
-| 6. Autenticazione avanzata | SSH agent e forwarding, certificati, YubiKey / FIDO2, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
-| 7. Strumenti | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | |
-| 8. Mosh | Client Mosh in Kotlin | Sessione che sopravvive a un cambio di rete |
+| 6. Primo avvio, temi e avvisi | Benvenuto con ricerca dei dati di Termius, tema scuro "Notte" e temi iconici, notifiche dei trasferimenti, file trascinati sul terminale | Al primo avvio su un Mac con Termius gli host si importano senza export manuale |
+| 7. Autenticazione avanzata | SSH agent e forwarding, certificati, YubiKey / FIDO2, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
+| 8. Strumenti | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | |
+| 9. Mosh | Client Mosh in Kotlin | Sessione che sopravvive a un cambio di rete |
 
 ## Test
 

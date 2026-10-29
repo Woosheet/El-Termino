@@ -172,6 +172,12 @@ class WorkspaceActions(private val services: AppServices) {
         }
     }
 
+    suspend fun saveLayout(layout: dev.eltermino.core.data.SavedLayout) = store.update { ws ->
+        ws.copy(savedLayouts = ws.savedLayouts.filterNot { it.id == layout.id } + layout)
+    }
+
+    suspend fun deleteLayout(id: String) = store.update { ws -> ws.copy(savedLayouts = ws.savedLayouts.filterNot { it.id == id }) }
+
     suspend fun deleteSnippet(id: String) = store.update { ws -> ws.copy(snippets = ws.snippets.filterNot { it.id == id }) }
 }
 

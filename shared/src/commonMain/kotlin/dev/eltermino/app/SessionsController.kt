@@ -14,7 +14,13 @@ import dev.eltermino.core.vault.VaultException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import dev.eltermino.core.data.SavedGroup
+import dev.eltermino.core.data.SavedLayout
+import dev.eltermino.core.data.SavedPane
+import dev.eltermino.core.data.SavedTab
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.awaitCancellation
@@ -118,11 +124,20 @@ class SessionsController(
 
     private val terminals get() = tabs.value.filterIsInstance<SessionTab>()
 
+    private val mutableBar = MutableStateFlow(TabBar())
+
+    /** The tabs in the bar, each with its own split, their groups and the selected one. */
+    val bar: StateFlow<TabBar> = mutableBar.asStateFlow()
+
     private val mutablePanes = MutableStateFlow(Panes())
+
+    /** The selected tab's panes. */
     val panes: StateFlow<Panes> = mutablePanes.asStateFlow()
 
-    /** The tab with the keyboard: the one in the focused pane. */
-    val selectedId: StateFlow<String?> = panes.map { it.focusedTabId }.stateIn(scope, SharingStarted.Eagerly, null)
+    private val mutableSelectedId = MutableStateFlow<String?>(null)
+
+    /** The session with the keyboard: the focused pane of the selected tab. */
+    val selectedId: StateFlow<String?> = mutableSelectedId.asStateFlow()
 
     private val mutableBroadcast = MutableStateFlow<Set<String>>(emptySet())
 
@@ -140,38 +155,111 @@ class SessionsController(
 
     init {
         scope.launch { mirrorBroadcastInput() }
+        scope.launch { rememberLastSession() }
     }
 
-    fun select(tabId: String) = mutablePanes.update { it.show(tabId) }
+    /** Applies [transform] to the bar; null means "not possible", and returns false. */
+    private fun updateBar(transform: (TabBar) -> TabBar?): Boolean {
+        var changed = false
+        mutableBar.update { current -> transform(current)?.also { changed = true } ?: current }
+        val selected = mutableBar.value.selectedFrame
+        mutablePanes.value = selected?.panes ?: Panes()
+        mutableSelectedId.value = selected?.panes?.focusedTabId
+        return changed
+    }
 
-    fun focusPane(index: Int) = mutablePanes.update { it.focus(index) }
+    /** Selects the tab showing [tabId] and gives its pane the keyboard. */
+    fun select(tabId: String) = updateBar { it.focusSession(tabId) }
 
-    fun showInPane(index: Int, tabId: String) = mutablePanes.update { it.showIn(index, tabId) }
+    fun selectFrame(frameId: String) = updateBar { it.select(frameId) }
 
-    fun setLayout(layout: SplitLayout) = mutablePanes.update { it.withLayout(layout, tabs.value.map(Tab::id)) }
+    fun focusPane(index: Int) = updateBar { it.focusPane(index) }
 
-    /** Opens a new tab on [host], in an empty pane if the split has one, else in the focused one. */
-    fun connect(host: Host): SessionTab {
-        val tab = add(SessionTab(newId(), host.id, host.label))
+    /** Shows [tabId] in pane [index] of the selected tab; whatever was there takes its place. */
+    fun showInPane(index: Int, tabId: String) = updateBar { it.showIn(index, tabId) }
+
+    /** The selected tab's split. Sessions that don't fit any more get tabs of their own. */
+    fun setLayout(layout: SplitLayout) = updateBar { bar -> bar.selected?.let { bar.setLayout(it, layout, ::newId) } }
+
+    /** Drops tab [source] next to [target]'s panes; false when they'd need more than four. */
+    fun merge(source: String, target: String, side: Side): Boolean = updateBar { it.merge(source, target, side) }
+
+    fun separate(frameId: String) = updateBar { it.separate(frameId, ::newId) }
+
+    fun detach(tabId: String) = updateBar { it.detach(tabId, newId()) }
+
+    fun moveFrame(frameId: String, index: Int) = updateBar { it.move(frameId, index) }
+
+    fun closeFrame(frameId: String) {
+        val ids = bar.value.frame(frameId)?.sessionIds.orEmpty()
+        tabs.value.filter { it.id in ids }.forEach(::close)
+    }
+
+    fun createGroup(frameIds: List<String>, name: String) = updateBar { it.createGroup(frameIds, newId(), name) }
+
+    fun addToGroup(frameId: String, groupId: String) = updateBar { it.addToGroup(frameId, groupId) }
+
+    fun removeFromGroup(frameId: String) = updateBar { it.removeFromGroup(frameId) }
+
+    fun renameGroup(groupId: String, name: String) = updateBar { it.renameGroup(groupId, name) }
+
+    fun recolorGroup(groupId: String, color: GroupColor) = updateBar { it.recolorGroup(groupId, color) }
+
+    fun toggleGroup(groupId: String) = updateBar { it.toggleCollapsed(groupId) }
+
+    fun ungroup(groupId: String) = updateBar { it.ungroup(groupId) }
+
+    fun gridFromGroup(groupId: String) = updateBar { it.gridFromGroup(groupId) }
+
+    fun closeGroup(groupId: String) = bar.value.framesIn(groupId).forEach { closeFrame(it.id) }
+
+    /** One group per host with two or more tabs, named after the host. */
+    fun groupByHost() {
+        val byId = tabs.value.associateBy { it.id }
+        val workspace = services.workspace.workspace.value
+        updateBar { bar ->
+            bar.groupByHost(
+                hostOf = { id -> byId[id]?.hostId ?: "local" },
+                labelOf = { host -> workspace.host(host)?.label ?: "Questo computer" },
+                newGroupId = ::newId,
+            )
+        }
+    }
+
+    /** The terminals of a group, for broadcast and snippets. */
+    fun terminalsIn(groupId: String): Set<String> {
+        val ids = bar.value.framesIn(groupId).flatMap { it.sessionIds }.toSet()
+        return terminals.filter { it.id in ids }.map { it.id }.toSet()
+    }
+
+    /** Opens a new tab on [host], in an empty pane of the selected tab if it has one. */
+    fun connect(host: Host): SessionTab = add(createTerminal(host))
+
+    /** A file panel on [host], or on this device when null. */
+    fun openFiles(host: Host?, path: String? = null): FilesTab = add(createFiles(host, path))
+
+    /** [path] as text in a new tab; it gets its own share of the link, so closing the panel doesn't stop it. */
+    fun openEditor(endpoint: Endpoint, path: String): EditorTab = add(createEditor(endpoint, path))
+
+    private fun createTerminal(host: Host): SessionTab {
+        val tab = register(SessionTab(newId(), host.id, host.label))
         start(tab)
         return tab
     }
 
-    /** A file panel on [host], or on this device when null, in the focused pane. */
-    fun openFiles(host: Host?): FilesTab {
+    private fun createFiles(host: Host?, path: String?): FilesTab {
         val browser = if (host == null) {
             val local = services.localFiles ?: throw IllegalStateException("Su questo dispositivo non ci sono file locali")
-            FileBrowser(Endpoint.Local, scope, open = { local })
+            FileBrowser(Endpoint.Local, scope, open = { local }, startPath = path)
         } else {
-            FileBrowser(Endpoint.Remote(host.id), scope, open = { connections.files(host) }, onClose = { (it as? RemoteFileSystem)?.release() })
+            FileBrowser(Endpoint.Remote(host.id), scope, open = { connections.files(host) }, onClose = { (it as? RemoteFileSystem)?.release() }, startPath = path)
         }
-        return add(FilesTab(newId(), host?.id, host?.label ?: "Questo computer", browser))
+        return register(FilesTab(newId(), host?.id, host?.label ?: "Questo computer", browser))
     }
 
-    /** [path] as text in a new tab; it gets its own share of the link, so closing the panel doesn't stop it. */
-    fun openEditor(endpoint: Endpoint, path: String): EditorTab {
+    private fun createEditor(endpoint: Endpoint, path: String): EditorTab {
         val host = (endpoint as? Endpoint.Remote)?.let { services.workspace.workspace.value.host(it.hostId) }
-        val tab = add(EditorTab(newId(), host?.id, fileName(path), path))
+        val tab = register(EditorTab(newId(), host?.id, fileName(path), path))
         scope.launch {
             try {
                 val fs: FileSystem = if (host != null) {
@@ -191,10 +279,80 @@ class SessionsController(
         return tab
     }
 
-    private fun <T : Tab> add(tab: T): T {
+    private fun <T : Tab> register(tab: T): T {
         mutableTabs.update { it + tab }
-        mutablePanes.update { it.place(tab.id) }
         return tab
+    }
+
+    private fun <T : Tab> add(tab: T): T {
+        updateBar { it.open(tab.id, newId()) }
+        return tab
+    }
+
+    /** The bar as it is now, or one group of it, to save and reopen later; null when there's nothing. */
+    fun snapshot(name: String, groupId: String? = null): SavedLayout? {
+        val whole = bar.value
+        val current = if (groupId == null) whole else whole.copy(frames = whole.framesIn(groupId), groups = listOfNotNull(whole.group(groupId)))
+        if (current.frames.isEmpty()) return null
+        val byId = tabs.value.associateBy { it.id }
+        fun pane(id: String?): SavedPane? = when (val tab = id?.let(byId::get)) {
+            null -> null
+            is SessionTab -> SavedPane("terminal", tab.hostId)
+            is FilesTab -> SavedPane("files", tab.hostId, tab.browser.path.value)
+            is EditorTab -> SavedPane("editor", tab.hostId, tab.path)
+        }
+        return SavedLayout(
+            id = newId(),
+            name = name,
+            tabs = current.frames.map { SavedTab(it.panes.layout.name, it.panes.tabIds.map(::pane), it.panes.focused, it.groupId) },
+            groups = current.groups.map { SavedGroup(it.id, it.name, it.color.name, it.collapsed) },
+        )
+    }
+
+    /** Opens [layout]'s tabs after the ones already open, logging in to each host as it goes. */
+    fun restore(layout: SavedLayout) {
+        val workspace = services.workspace.workspace.value
+        val groupIds = layout.groups.associate { it.id to newId() }
+        val frames = layout.tabs.mapNotNull { saved ->
+            val split = SplitLayout.entries.firstOrNull { it.name == saved.layout } ?: SplitLayout.Single
+            val ids = saved.panes.take(split.panes).map { pane -> pane?.let { open(it, workspace) }?.id }
+            if (ids.all { it == null }) return@mapNotNull null
+            val panes = Panes(split, ids + List(split.panes - ids.size) { null }, saved.focused.coerceIn(0, split.panes - 1))
+            // A pane whose host is gone leaves a smaller split, not a hole.
+            val lost = ids.count { it == null } > saved.panes.take(split.panes).count { it == null }
+            Frame(newId(), if (lost) panes.compacted() else panes, saved.groupId?.let(groupIds::get))
+        }
+        if (frames.isEmpty()) return
+        val groups = layout.groups.map { saved ->
+            TabGroup(groupIds.getValue(saved.id), saved.name, GroupColor.entries.firstOrNull { it.name == saved.color } ?: GroupColor.Blu, saved.collapsed)
+        }
+        updateBar { bar -> TabBar(bar.frames + frames, bar.groups + groups, frames.first().id).normalized() }
+    }
+
+    private fun open(pane: SavedPane, workspace: dev.eltermino.core.data.Workspace): Tab? {
+        val host = pane.hostId?.let { workspace.host(it) ?: return null }
+        return when (pane.kind) {
+            "terminal" -> host?.let(::createTerminal)
+            "files" -> if (host == null && services.localFiles == null) null else createFiles(host, pane.path)
+            "editor" -> pane.path?.let { createEditor(host?.let { Endpoint.Remote(it.id) } ?: Endpoint.Local, it) }
+            else -> null
+        }
+    }
+
+    /** Keeps what's open in the workspace, so the next start can offer it again. */
+    @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+    private suspend fun rememberLastSession() {
+        val folders = tabs.flatMapLatest { list ->
+            val panels = list.filterIsInstance<FilesTab>()
+            if (panels.isEmpty()) flowOf(emptyList()) else combine(panels.map { it.browser.path }) { it.toList() }
+        }
+        combine(bar, folders) { current, _ -> current }
+            .debounce(1_000)
+            .collect { current ->
+                if (current.frames.isEmpty()) return@collect
+                val saved = snapshot("Ultima sessione") ?: return@collect
+                runCatching { services.workspace.update { it.copy(lastSession = saved.copy(id = LAST_SESSION)) } }
+            }
     }
 
     /** Another shell on the same host; it shares the connection, so it opens without a login. */
@@ -224,9 +382,8 @@ class SessionsController(
             is FilesTab -> scope.launch { tab.browser.close() }
             is EditorTab -> scope.launch { tab.release?.invoke() }
         }
-        val remaining = mutableTabs.value - tab
-        mutableTabs.value = remaining
-        mutablePanes.update { it.without(tab.id, remaining.map(Tab::id)) }
+        mutableTabs.update { it - tab }
+        updateBar { it.remove(tab.id) }
         mutableBroadcast.update { (it - tab.id).takeIf { ids -> ids.size >= 2 } ?: emptySet() }
     }
 
@@ -368,6 +525,8 @@ class SessionsController(
         return "La sessione è terminata"
     }
 }
+
+internal const val LAST_SESSION = "last"
 
 /** Tab titles, numbered when a host has more than one of a kind: "web-01", "web-01 · 2". */
 fun List<Tab>.titles(): Map<String, String> {

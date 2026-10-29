@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -72,112 +74,11 @@ import dev.eltermino.ui.theme.Carta
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
 
-@Composable
-internal fun SessionTabs(state: AppState, onConnect: (Host) -> Unit, modifier: Modifier = Modifier) {
-    val tabs by state.sessions.tabs.collectAsState()
-    val panes by state.sessions.panes.collectAsState()
-    val broadcast by state.sessions.broadcast.collectAsState()
-    val titles = remember(tabs) { tabs.titles() }
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
-            tabs.forEach { tab ->
-                SessionTabChip(
-                    state = state,
-                    tab = tab,
-                    title = titles.getValue(tab.id),
-                    focused = tab.id == panes.focusedTabId,
-                    visible = panes.layout != SplitLayout.Single && tab.id in panes.tabIds,
-                    broadcasting = tab.id in broadcast,
-                )
-            }
-        }
-        NewTabMenu(state, onConnect)
-    }
-}
-
-@Composable
-private fun SessionTabChip(state: AppState, tab: Tab, title: String, focused: Boolean, visible: Boolean, broadcasting: Boolean) {
-    val colors = Carta.colors
-    Pressable(
-        onClick = { state.sessions.select(tab.id) },
-        modifier = Modifier.padding(end = 4.dp),
-        shape = RoundedCornerShape(6.dp),
-        background = when {
-            focused -> colors.background
-            visible -> colors.background.copy(alpha = 0.55f)
-            else -> colors.chrome
-        },
-        hover = if (focused) colors.background else colors.hover,
-    ) {
-        Row(Modifier.padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            TabMark(tab)
-            Text(
-                title,
-                modifier = Modifier.padding(start = 6.dp).widthIn(max = 180.dp),
-                style = Carta.type.small,
-                color = if (focused) colors.text else colors.textDim,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (broadcasting) Icon(CartaIcons.Broadcast, "Broadcast", tint = colors.accent, size = 14.dp, modifier = Modifier.padding(start = 6.dp))
-            IconButton(Icons.Default.Close, "Chiudi $title", onClick = { state.sessions.close(tab) }, size = 28.dp, iconSize = 14.dp)
-        }
-    }
-}
-
-/** "+" after the tabs: another shell like the focused one, or a quick pick of recent hosts. */
-@Composable
-private fun NewTabMenu(state: AppState, onConnect: (Host) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    val workspace by state.services.workspace.workspace.collectAsState()
-    val tabs by state.sessions.tabs.collectAsState()
-    val selectedId by state.sessions.selectedId.collectAsState()
-    val focused = tabs.firstOrNull { it.id == selectedId } as? SessionTab
-    Box {
-        IconButton(Icons.Default.Add, "Nuova sessione", onClick = { open = true }, size = 28.dp, iconSize = 16.dp)
-        Menu(expanded = open, onDismiss = { open = false }) {
-            val focusedHost = tabs.firstOrNull { it.id == selectedId }?.hostId?.let(workspace::host)
-            if (focused != null) {
-                MenuItem("Duplica ${focused.label}", icon = CartaIcons.Duplicate, onClick = {
-                    open = false
-                    state.sessions.duplicate(focused)
-                })
-            }
-            if (focusedHost != null) {
-                MenuItem("File di ${focusedHost.label}", icon = CartaIcons.Folder, onClick = {
-                    open = false
-                    state.sessions.openFiles(focusedHost)
-                })
-            }
-            if (state.services.localFiles != null) {
-                MenuItem(if (state.services.platform.isDesktop) "File di questo computer" else "File dell'app", icon = CartaIcons.Folder, onClick = {
-                    open = false
-                    state.sessions.openFiles(null)
-                })
-            }
-            MenuDivider()
-            val recent = workspace.hosts
-                .sortedWith(compareByDescending<Host> { it.lastConnectedEpochSeconds ?: 0 }.thenByDescending { it.favorite })
-                .take(8)
-            if (recent.isEmpty()) {
-                MenuLabel("Nessun host: aggiungine uno dalla barra laterale")
-            } else {
-                MenuLabel("Apri una sessione su")
-                recent.forEach { host ->
-                    MenuItem(host.label, detail = host.address, onClick = {
-                        open = false
-                        onConnect(host)
-                    })
-                }
-            }
-        }
-    }
-}
-
 /** Split layout, broadcast and snippets, at the end of the tab bar. */
 @Composable
 internal fun SessionTools(state: AppState, wide: Boolean, onManageSnippets: () -> Unit) {
     var broadcastDialog by remember { mutableStateOf(false) }
+    var workspacesDialog by remember { mutableStateOf(false) }
     val broadcast by state.sessions.broadcast.collectAsState()
     Row(verticalAlignment = Alignment.CenterVertically) {
         SnippetLauncher(state, onManageSnippets)
@@ -186,9 +87,11 @@ internal fun SessionTools(state: AppState, wide: Boolean, onManageSnippets: () -
         } else {
             IconButton(CartaIcons.Broadcast, "Broadcast", onClick = { broadcastDialog = true })
         }
+        IconButton(CartaIcons.Layers, "Spazi di lavoro", onClick = { workspacesDialog = true })
         if (wide) LayoutMenu(state)
     }
     if (broadcastDialog) BroadcastDialog(state) { broadcastDialog = false }
+    if (workspacesDialog) WorkspacesDialog(state) { workspacesDialog = false }
 }
 
 @Composable
@@ -248,9 +151,17 @@ internal fun SessionContent(state: AppState, showExtraKeys: Boolean, split: Bool
 @Composable
 private fun SplitPanes(state: AppState, empty: Boolean, layout: SplitLayout, showExtraKeys: Boolean) {
     val panes by state.sessions.panes.collectAsState()
-    Box(Modifier.fillMaxSize()) {
+    val drag = LocalChipDrag.current
+    val workspace by state.services.workspace.workspace.collectAsState()
+    Box(Modifier.fillMaxSize().onGloballyPositioned { drag?.content = it.boundsInWindow() }) {
         if (empty) {
-            EmptyState("Nessuna sessione aperta", "Scegli un host per aprire un terminale o i suoi file.", Modifier.align(Alignment.Center))
+            val last = workspace.lastSession
+            EmptyState(
+                "Nessuna sessione aperta",
+                if (last != null) "Scegli un host, oppure riprendi da dove eri rimasto: ${summary(last, workspace)}." else "Scegli un host per aprire un terminale o i suoi file.",
+                Modifier.align(Alignment.Center),
+                action = last?.let { { Button("Riapri l'ultima sessione", onClick = { state.sessions.restore(it) }, icon = CartaIcons.Layers) } },
+            )
             return@Box
         }
         var columnRatio by remember { mutableFloatStateOf(0.5f) }
@@ -290,6 +201,7 @@ private fun SplitPanes(state: AppState, empty: Boolean, layout: SplitLayout, sho
                 }
             }
         }
+        DropOverlay(drag, Modifier.matchParentSize())
     }
 }
 
@@ -363,6 +275,13 @@ private fun PaneHeader(state: AppState, index: Int, tab: Tab?, tabs: List<Tab>, 
                 }
             }
             Menu(expanded = picking, onDismiss = { picking = false }) {
+                if (tab != null) {
+                    MenuItem("Sposta in una scheda nuova", icon = CartaIcons.SplitSingle, onClick = {
+                        picking = false
+                        state.sessions.detach(tab.id)
+                    })
+                    MenuDivider()
+                }
                 MenuLabel("Mostra in questo riquadro")
                 tabs.forEach { other ->
                     MenuItem(titles.getValue(other.id), selected = other.id == tab?.id, onClick = {
@@ -438,7 +357,7 @@ private fun TabBody(state: AppState, tab: Tab, showExtraKeys: Boolean, focused: 
 
 /** The dot or icon in front of a tab's title. */
 @Composable
-private fun TabMark(tab: Tab) {
+internal fun TabMark(tab: Tab) {
     when (tab) {
         is SessionTab -> {
             val status by tab.status.collectAsState()
@@ -522,7 +441,7 @@ private fun ReconnectingBar(state: AppState, tab: SessionTab, status: TabStatus.
 }
 
 @Composable
-private fun statusColor(status: TabStatus) = when (status) {
+internal fun statusColor(status: TabStatus) = when (status) {
     is TabStatus.Open -> Carta.colors.online
     TabStatus.Connecting, is TabStatus.Reconnecting -> Carta.colors.accent
     else -> Carta.colors.offline

@@ -21,6 +21,8 @@ class FileBrowser internal constructor(
     private val scope: CoroutineScope,
     private val open: suspend () -> FileSystem,
     private val onClose: suspend (FileSystem) -> Unit = {},
+    /** Where to start instead of the home folder, as when reopening a saved layout. */
+    private val startPath: String? = null,
 ) {
     private val fs = CompletableDeferred<FileSystem>()
 
@@ -53,7 +55,7 @@ class FileBrowser internal constructor(
             try {
                 val opened = open()
                 fs.complete(opened)
-                load(opened.home())
+                load(startPath ?: opened.home())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {

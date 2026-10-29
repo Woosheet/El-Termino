@@ -24,7 +24,7 @@ Il broadcast inoltra eventi (`TerminalInput`), non byte. Ogni sessione che li ri
 ## Perché
 
 - È quello che fa Termius, ed è il modo in cui il protocollo SSH è pensato: una connessione, più canali. Con 48 host e più schede per host, evita login ripetuti e prompt OTP a raffica.
-- I pannelli SFTP (Fase 3), le richieste HTTP (Fase 5) e gli strumenti (Fase 7: monitor, Docker, port forwarding) useranno gli stessi link: un pannello SFTP su un host già aperto non richiede un altro login.
+- I pannelli SFTP (Fase 3), le richieste HTTP (Fase 5) e gli strumenti (Fase 8: monitor, Docker, port forwarding) useranno gli stessi link: un pannello SFTP su un host già aperto non richiede un altro login.
 - Una riconnessione per link, invece che per scheda, significa un solo tentativo e un solo prompt per host anche con cinque schede aperte.
 
 ## Conseguenze

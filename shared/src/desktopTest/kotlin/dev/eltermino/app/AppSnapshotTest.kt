@@ -273,6 +273,65 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun tabGroupsAndASplitTab(): Unit = runBlocking {
+        val state = AppState(testServices())
+        val web = seed(state)
+        val workspace = state.services.workspace.workspace.value
+        val bastion = workspace.hosts.first { it.label == "bastion" }
+        val db = workspace.hosts.first { it.label == "db-01" }
+        val answering = CoroutineScope(Dispatchers.Default)
+        answering.answerHostKeys(state)
+        val sessions = state.sessions
+        val shell = sessions.connect(web)
+        val files = sessions.openFiles(web, "/etc")
+        val second = sessions.connect(web)
+        val jump = sessions.connect(bastion)
+        val database = sessions.connect(db)
+        listOf(shell, second, jump, database).forEach { it.awaitOpen() }
+        fun frameOf(tab: Tab) = sessions.bar.value.frameOf(tab.id)!!.id
+        sessions.merge(frameOf(files), frameOf(shell), Side.Right)
+        sessions.createGroup(listOf(frameOf(shell), frameOf(second)), "Web")
+        sessions.createGroup(listOf(frameOf(jump)), "Accesso")
+        val access = sessions.bar.value.groups.first { it.name == "Accesso" }.id
+        sessions.recolorGroup(access, GroupColor.Corallo)
+        sessions.toggleGroup(access)
+        sessions.selectFrame(frameOf(shell))
+        shell.awaitOpen().terminal.type("tail -n 5 /etc/services\n")
+        withTimeout(30_000) { files.browser.path.first { it == "/etc" } }
+        snapshot(state, "app-desktop-tab-groups", width = 2800, height = 1500)
+        answering.cancel()
+        sessions.closeAll()
+    }
+
+    @Test
+    fun workspacesDialogAndRestoreOffer(): Unit = runBlocking {
+        val state = AppState(testServices())
+        val web = seed(state)
+        val bastion = state.services.workspace.workspace.value.hosts.first { it.label == "bastion" }
+        fun pane(kind: String, host: Host?, path: String? = null) = dev.eltermino.core.data.SavedPane(kind, host?.id, path)
+        val deploy = dev.eltermino.core.data.SavedLayout(
+            newId(), "Deploy di venerdì",
+            tabs = listOf(
+                dev.eltermino.core.data.SavedTab("Columns", listOf(pane("terminal", web), pane("files", web, "/var/www")), groupId = "g1"),
+                dev.eltermino.core.data.SavedTab("Single", listOf(pane("terminal", bastion)), groupId = "g2"),
+                dev.eltermino.core.data.SavedTab("Single", listOf(pane("files", null))),
+            ),
+            groups = listOf(dev.eltermino.core.data.SavedGroup("g1", "Web", "Blu"), dev.eltermino.core.data.SavedGroup("g2", "Accesso", "Corallo")),
+        )
+        state.actions.saveLayout(deploy)
+        state.actions.saveLayout(deploy.copy(id = newId(), name = "Log di produzione", groups = emptyList(), tabs = deploy.tabs.take(1).map { it.copy(groupId = null) }))
+        state.services.workspace.update { it.copy(lastSession = deploy.copy(id = "last", name = "Ultima sessione")) }
+        snapshot(state, "app-desktop-restore-offer")
+        ImageComposeScene(1400, 1300, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme { dev.eltermino.ui.WorkspacesDialog(state) {} }
+        }.use { scene ->
+            repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+            val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
+            File("build/snapshots/workspaces.png").apply { parentFile.mkdirs(); writeBytes(png) }
+        }
+    }
+
+    @Test
     fun emptyFirstRun() {
         snapshot(AppState(testServices()), "app-desktop-empty")
     }

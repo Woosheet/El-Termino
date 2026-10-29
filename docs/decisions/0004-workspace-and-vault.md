@@ -35,4 +35,4 @@ Per il desktop usiamo java-keyring. Se il vault esiste ma la chiave manca, l'app
 ## Limiti noti
 
 - MINA vuole la password come `String`, e anche i campi di testo di Compose lavorano con stringhe: queste copie non si possono azzerare. Chiavi e passphrase in `ByteArray` invece vengono azzerate dopo l'uso.
-- Linux senza Secret Service non ha ancora un ripiego con master password (previsto nella Fase 6, autenticazione avanzata).
+- Linux senza Secret Service non ha ancora un ripiego con master password (previsto nella Fase 7, autenticazione avanzata).

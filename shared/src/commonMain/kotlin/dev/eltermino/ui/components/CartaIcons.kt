@@ -110,6 +110,15 @@ object CartaIcons {
         lineIcon("Play") { moveTo(8f, 5.5f); lineTo(18.5f, 12f); lineTo(8f, 18.5f); close() }
     }
 
+    /** Stacked sheets: a saved set of tabs. */
+    val Layers: ImageVector by lazy {
+        lineIcon("Layers") {
+            moveTo(12f, 4f); lineTo(20f, 8.5f); lineTo(12f, 13f); lineTo(4f, 8.5f); close()
+            moveTo(4f, 12.5f); lineTo(12f, 17f); lineTo(20f, 12.5f)
+            moveTo(4f, 16f); lineTo(12f, 20.5f); lineTo(20f, 16f)
+        }
+    }
+
     private fun PathBuilder.frame() = roundRect(4f, 5f, 20f, 19f)
 
     private fun PathBuilder.roundRect(left: Float, top: Float, right: Float, bottom: Float, radius: Float = 2f) {

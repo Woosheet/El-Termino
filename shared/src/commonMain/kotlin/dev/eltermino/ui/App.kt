@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,14 @@ private class Editing(val host: Host?)
 @Composable
 fun App(state: AppState) {
     CartaTheme {
+        val chipDrag = remember { ChipDrag() }
+        CompositionLocalProvider(LocalChipDrag provides chipDrag) { AppContent(state) }
+    }
+}
+
+@Composable
+private fun AppContent(state: AppState) {
+    run {
         var screen by remember { mutableStateOf(Screen.Sessions) }
         var editing by remember { mutableStateOf<Editing?>(null) }
         // On a phone the host list is its own screen, in front of the sessions.

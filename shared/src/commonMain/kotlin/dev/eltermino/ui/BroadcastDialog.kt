@@ -49,11 +49,14 @@ internal fun BroadcastDialog(state: AppState, onDismiss: () -> Unit) {
             },
         )
     }
-    // Groups of the hosts that have a tab open, for picking "everything in Produzione".
-    val groups = remember(tabs, workspace) {
-        tabs.groupBy { workspace.groupPath(workspace.host(it.hostId)?.groupId).joinToString(" / ") }
-            .filterKeys { it.isNotEmpty() }
+    val bar by state.sessions.bar.collectAsState()
+    // Tab groups first, then the host groups of the open tabs: "everything in Produzione".
+    val groups = remember(tabs, workspace, bar) {
+        val tabGroups = bar.groups.associate { it.name to state.sessions.terminalsIn(it.id) }.filterValues { it.size >= 2 }
+        val hostGroups = tabs.groupBy { workspace.groupPath(workspace.host(it.hostId)?.groupId).joinToString(" / ") }
+            .filterKeys { it.isNotEmpty() && it !in tabGroups }
             .mapValues { (_, members) -> members.map { it.id }.toSet() }
+        tabGroups + hostGroups
     }
 
     Dialog(

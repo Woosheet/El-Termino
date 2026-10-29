@@ -176,7 +176,7 @@ private enum class RunWhere { Focused, Tabs, Hosts }
 
 /** Asks the variables and where to run, then runs. */
 @Composable
-internal fun SnippetRunDialog(state: AppState, snippet: Snippet, onDismiss: () -> Unit) {
+internal fun SnippetRunDialog(state: AppState, snippet: Snippet, initialTabs: Set<String>? = null, onDismiss: () -> Unit) {
     val workspace by state.services.workspace.workspace.collectAsState()
     val allTabs by state.sessions.tabs.collectAsState()
     val tabs = allTabs.filterIsInstance<SessionTab>()
@@ -186,8 +186,8 @@ internal fun SnippetRunDialog(state: AppState, snippet: Snippet, onDismiss: () -
     val focused = tabs.firstOrNull { it.id == selectedId }
     val variables = remember(snippet) { snippetVariables(snippet.command) }
     val values = remember { mutableStateMapOf<String, String>() }
-    var where by remember { mutableStateOf(if (focused != null) RunWhere.Focused else RunWhere.Hosts) }
-    var chosenTabs by remember { mutableStateOf(tabs.map { it.id }.toSet()) }
+    var where by remember { mutableStateOf(if (initialTabs != null) RunWhere.Tabs else if (focused != null) RunWhere.Focused else RunWhere.Hosts) }
+    var chosenTabs by remember { mutableStateOf(initialTabs ?: tabs.map { it.id }.toSet()) }
     var chosenHosts by remember { mutableStateOf(emptySet<String>()) }
     var hostQuery by remember { mutableStateOf("") }
     val command = fillSnippet(snippet.command, values)
@@ -236,7 +236,7 @@ internal fun SnippetRunDialog(state: AppState, snippet: Snippet, onDismiss: () -
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            if (tabs.size > 1) {
+            if (tabs.size > 1 || initialTabs != null) {
                 RadioOption(where == RunWhere.Tabs, { where = RunWhere.Tabs }, "Sessioni aperte…", modifier = Modifier.fillMaxWidth())
                 if (where == RunWhere.Tabs) {
                     Column(Modifier.padding(start = 26.dp)) {

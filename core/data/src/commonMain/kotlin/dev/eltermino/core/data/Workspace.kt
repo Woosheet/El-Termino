@@ -15,6 +15,10 @@ data class Workspace(
     val keys: List<SshKeyEntry> = emptyList(),
     val knownHosts: List<KnownHost> = emptyList(),
     val snippets: List<Snippet> = emptyList(),
+    /** Tab layouts saved by name, to reopen with one click. */
+    val savedLayouts: List<SavedLayout> = emptyList(),
+    /** What was open last time, offered again at the next start. */
+    val lastSession: SavedLayout? = null,
     val ui: UiSettings = UiSettings(),
 ) {
     fun host(id: String?): Host? = id?.let { hosts.firstOrNull { h -> h.id == it } }
@@ -99,6 +103,46 @@ data class Snippet(
     val command: String,
     /** Presses Enter after inserting the command; otherwise it waits on the prompt. */
     val run: Boolean = true,
+)
+
+/**
+ * Tabs, their panes and their groups, without the connections: reopening logs in again.
+ * Hosts are referenced by id, so a deleted host just leaves its pane out.
+ */
+@Serializable
+data class SavedLayout(
+    val id: String,
+    val name: String,
+    val tabs: List<SavedTab>,
+    val groups: List<SavedGroup> = emptyList(),
+)
+
+@Serializable
+data class SavedTab(
+    /** `SplitLayout` name: Single, Columns, Rows, Grid. */
+    val layout: String,
+    val panes: List<SavedPane?>,
+    val focused: Int = 0,
+    val groupId: String? = null,
+)
+
+@Serializable
+data class SavedPane(
+    /** "terminal", "files" or "editor". */
+    val kind: String,
+    /** Null for this device's files. */
+    val hostId: String?,
+    /** The folder of a file panel or the file of an editor. */
+    val path: String? = null,
+)
+
+@Serializable
+data class SavedGroup(
+    val id: String,
+    val name: String,
+    /** `GroupColor` name. */
+    val color: String,
+    val collapsed: Boolean = false,
 )
 
 /** Layout choices the user makes by dragging, kept across restarts. */

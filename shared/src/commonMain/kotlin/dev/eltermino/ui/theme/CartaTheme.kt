@@ -47,6 +47,9 @@ data class CartaColors(
     val syntaxNumber: Color,
     val syntaxComment: Color,
     val syntaxKeyword: Color,
+    /** Tab group colours, strong (text, underline) and soft (label background), in `GroupColor` order. */
+    val groupStrong: List<Color>,
+    val groupSoft: List<Color>,
 )
 
 val CartaLight = CartaColors(
@@ -74,6 +77,9 @@ val CartaLight = CartaColors(
     syntaxNumber = Color(0xFF854F0B),
     syntaxComment = Color(0xFF8A8880),
     syntaxKeyword = Color(0xFF534AB7),
+    // Blu, Verde, Viola, Corallo, Ambra, Rosa, Grigio
+    groupStrong = listOf(Color(0xFF185FA5), Color(0xFF3B6D11), Color(0xFF534AB7), Color(0xFF993C1D), Color(0xFF854F0B), Color(0xFF993556), Color(0xFF5F5E5A)),
+    groupSoft = listOf(Color(0xFFE6F1FB), Color(0xFFEAF3DE), Color(0xFFEEEDFE), Color(0xFFFAECE7), Color(0xFFFAEEDA), Color(0xFFFBEAF0), Color(0xFFF1EFE8)),
 )
 
 /** The few text sizes the app uses; components pick from these, never ad-hoc sizes. */

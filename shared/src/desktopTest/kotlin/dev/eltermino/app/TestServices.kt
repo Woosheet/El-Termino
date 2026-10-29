@@ -62,9 +62,12 @@ class TestPlatform : Platform {
     override fun readLocalFile(path: String): ByteArray? = File(path).takeIf { it.isFile }?.readBytes()
 }
 
-fun testServices(dir: File = Files.createTempDirectory("eltermino").toFile().apply { deleteOnExit() }): AppServices {
+/** Pass the same [dir] and [key] again to simulate a restart of the app. */
+fun testServices(
+    dir: File = Files.createTempDirectory("eltermino").toFile().apply { deleteOnExit() },
+    key: ByteArray = Random.nextBytes(32),
+): AppServices {
     val local = File(dir, "local").apply { mkdirs() }
-    val key = Random.nextBytes(32)
     return AppServices(
         workspace = FileWorkspaceStore(File(dir, "workspace.json")),
         vault = EncryptedFileVault(File(dir, "vault.bin"), MasterKeyProvider { key.copyOf() }),
