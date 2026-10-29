@@ -32,6 +32,9 @@ import dev.eltermino.app.HttpRequestException
 import dev.eltermino.app.RequestsTab
 import dev.eltermino.app.RunCell
 import dev.eltermino.app.describe
+import dev.eltermino.app.isOpenApi
+import dev.eltermino.app.isOpenApiYaml
+import dev.eltermino.app.parseOpenApi
 import dev.eltermino.app.parseCurl
 import dev.eltermino.app.parsePostman
 import dev.eltermino.app.variables
@@ -309,16 +312,42 @@ private fun RunCellView(cell: RunCell, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** A Postman v2.1 collection (pasted or from a file) or a `curl` command. */
+/**
+ * A Postman v2.1 collection, an OpenAPI or Swagger description (pasted, from a file or fetched
+ * from the tab's host) or a `curl` command.
+ */
 @Composable
 private fun ImportDialog(state: AppState, tab: RequestsTab, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val collections = state.services.workspace.workspace.value.httpCollections
+    val workspace = state.services.workspace.workspace.value
+    val collections = workspace.httpCollections
     var text by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    // Where an OpenAPI description came from, to resolve its relative server URLs.
+    var source by remember { mutableStateOf<String?>(null) }
+    var address by remember { mutableStateOf("http://localhost:8080") }
+    var fetching by remember { mutableStateOf(false) }
     val isCurl = text.trimStart().startsWith("curl")
+    val isSpec = remember(text) { isOpenApi(text) || isOpenApiYaml(text) }
+    val preview = remember(text, source) { if (isSpec) runCatching { parseOpenApi(text, source) } else null }
     val newOne = HttpCollection("", "Una nuova collezione")
     var into by remember { mutableStateOf(collections.firstOrNull() ?: newOne) }
+
+    fun fetch() {
+        fetching = true
+        error = null
+        scope.launch {
+            try {
+                val (url, body) = state.requests.fetchApiDescription(tab, address)
+                text = body
+                source = url
+            } catch (e: HttpRequestException) {
+                error = e.message
+            } finally {
+                fetching = false
+            }
+        }
+    }
 
     fun import() {
         scope.launch {
@@ -329,7 +358,7 @@ private fun ImportDialog(state: AppState, tab: RequestsTab, onDismiss: () -> Uni
                     state.actions.saveRequest(target.id, imported.request, imported.secret)
                     tab.selected.value = imported.request.id
                 } else {
-                    val collection = state.actions.importCollection(parsePostman(text))
+                    val collection = state.actions.importCollection(if (isSpec) parseOpenApi(text, source) else parsePostman(text))
                     tab.selected.value = collection.requests.firstOrNull()?.id
                 }
                 onDismiss()
@@ -346,8 +375,9 @@ private fun ImportDialog(state: AppState, tab: RequestsTab, onDismiss: () -> Uni
         actions = {
             Button("Scegli un file…", kind = ButtonKind.Ghost, onClick = {
                 scope.launch {
-                    state.services.platform.pickFile("Collezione di Postman (JSON)")?.let {
+                    state.services.platform.pickFile("Collezione di Postman o descrizione OpenAPI (JSON)")?.let {
                         text = it.bytes.decodeToString()
+                        source = null
                         error = null
                     }
                 }
@@ -358,12 +388,34 @@ private fun ImportDialog(state: AppState, tab: RequestsTab, onDismiss: () -> Uni
         },
     ) {
         Text(
-            "Incolla una collezione di Postman (esportata in formato v2.1) oppure un comando curl. Token e password finiscono nel vault.",
+            "Incolla una collezione di Postman (esportata in formato v2.1), una descrizione OpenAPI o Swagger in JSON oppure un comando curl. Token e password finiscono nel vault.",
             style = Carta.type.small,
             color = Carta.colors.textDim,
             modifier = Modifier.padding(bottom = 8.dp),
         )
-        Field(null, text, { text = it; error = null }, singleLine = false, monospace = true, placeholder = "curl -H 'Accept: application/json' http://localhost:8080/health", error = error, fieldModifier = Modifier.heightIn(max = 280.dp))
+        // The description an API serves about itself, fetched through the tunnel like any request.
+        Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
+            Field(
+                "OpenAPI da ${workspace.host(tab.hostId)?.label ?: "questo host"}",
+                address,
+                { address = it },
+                Modifier.weight(1f),
+                placeholder = "http://localhost:8080",
+                monospace = true,
+            )
+            Button(if (fetching) "Cerco…" else "Scarica", onClick = ::fetch, kind = ButtonKind.Secondary, enabled = !fetching && address.isNotBlank(), modifier = Modifier.padding(start = 8.dp, bottom = 12.dp))
+        }
+        Field(null, text, { text = it; source = null; error = null }, singleLine = false, monospace = true, placeholder = "curl -H 'Accept: application/json' http://localhost:8080/health", error = error, fieldModifier = Modifier.heightIn(max = 280.dp))
+        preview?.let { result ->
+            Text(
+                result.fold(
+                    { imported -> "OpenAPI: ${imported.collection.requests.size} richieste in «${imported.collection.name}», indirizzo base ${imported.collection.variables["baseUrl"]}" },
+                    { it.message ?: "Descrizione OpenAPI non leggibile" },
+                ),
+                style = Carta.type.small,
+                color = if (result.isSuccess) Carta.colors.textDim else Carta.colors.danger,
+            )
+        }
         if (isCurl) {
             Picker("Aggiungi a", collections + newOne, into, { it.name }, { into = it }, Modifier.width(280.dp))
         }

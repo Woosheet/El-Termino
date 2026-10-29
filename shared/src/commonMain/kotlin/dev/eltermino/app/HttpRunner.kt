@@ -2,7 +2,9 @@ package dev.eltermino.app
 
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.HttpCollection
+import dev.eltermino.core.data.HttpHeader
 import dev.eltermino.core.data.HttpRequest
+import dev.eltermino.core.data.newId
 import dev.eltermino.core.ssh.SshConnection
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -139,6 +141,31 @@ class HttpRunner(private val services: AppServices, private val connections: Con
             }
         }
         return run
+    }
+
+    /**
+     * The API description [tab]'s host serves at [address], through the tunnel, as the URL that
+     * answered and its text. Without a path, or when the path isn't the description itself, it
+     * tries the usual places in [API_DESCRIPTION_PATHS] under it.
+     */
+    suspend fun fetchApiDescription(tab: RequestsTab, address: String): Pair<String, String> {
+        val base = address.trim().trimEnd('/').let { if (it.startsWith("http://") || it.startsWith("https://")) it else "http://$it" }
+        val hasPath = Regex("""^https?://[^/]+/.+""").matches(base)
+        val connection = connectionOf(tab.lease.filterNotNull().first())
+        var last: String? = null
+        for (url in (if (hasPath) listOf(base) else emptyList()) + API_DESCRIPTION_PATHS.map { base + it }) {
+            val response = try {
+                sendRequest(connection, HttpRequest(newId(), "API", url = url, headers = listOf(HttpHeader("Accept", "application/json"))), null, tab.hostId, ::secret)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                last = message(e)
+                continue
+            }
+            if (response.status == 200 && (isOpenApi(response.text) || isOpenApiYaml(response.text))) return url to response.text
+            last = "$url risponde ${response.status}"
+        }
+        throw HttpRequestException("Non trovo una descrizione OpenAPI su $base: ho provato anche ${API_DESCRIPTION_PATHS.joinToString(", ")}" + (last?.let { ". L'ultima risposta: $it" } ?: ""))
     }
 
     private suspend fun connectionOf(lease: LinkLease): SshConnection {

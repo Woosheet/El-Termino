@@ -88,6 +88,22 @@ class AppSnapshotTest {
         state.sessions.close(tab)
     }
 
+    /** The import dialog, with the row that fetches an OpenAPI description from the tab's host. */
+    @Test
+    fun requestsImportDialog(): Unit = runBlocking {
+        val state = lightState()
+        val web = seed(state)
+        val tab = state.sessions.openRequests(web)
+        ImageComposeScene(1500, 1300, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme { dev.eltermino.ui.RequestsDialogs(state, tab, dev.eltermino.ui.RequestsDialog.Import) {} }
+        }.use { scene ->
+            repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+            val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
+            File("build/snapshots/requests-import.png").apply { parentFile.mkdirs(); writeBytes(png) }
+        }
+        state.sessions.closeAll()
+    }
+
     @Test
     fun requestsTab(): Unit = runBlocking {
         val state = lightState()

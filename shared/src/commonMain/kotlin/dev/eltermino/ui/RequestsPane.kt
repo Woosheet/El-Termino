@@ -193,7 +193,7 @@ private fun CollectionList(
                 IconButton(Icons.Default.Add, "Nuova collezione o import", onClick = { addMenu = true })
                 Menu(expanded = addMenu, onDismiss = { addMenu = false }, alignEnd = true) {
                     MenuItem("Nuova collezione", onClick = { addMenu = false; onDialog(RequestsDialog.NewCollection) })
-                    MenuItem("Importa da Postman o curl…", icon = CartaIcons.Import, onClick = { addMenu = false; onDialog(RequestsDialog.Import) })
+                    MenuItem("Importa da Postman, OpenAPI o curl…", icon = CartaIcons.Import, onClick = { addMenu = false; onDialog(RequestsDialog.Import) })
                 }
             }
         }

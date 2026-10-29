@@ -35,6 +35,17 @@ printf '%s %s\n' "$REQUEST_METHOD" "$QUERY_STRING"
 exit 0
 CGI
 chmod +x /srv/http/cgi-bin/echo
+# Its own OpenAPI description, where FastAPI keeps it, for the import from the host.
+cat > /srv/http/openapi.json <<'JSON'
+{"openapi":"3.0.3","info":{"title":"Servizio di prova","version":"1"},
+ "paths":{
+  "/health.json":{"get":{"tags":["Stato"],"summary":"Salute","responses":{"200":{"description":"ok"}}}},
+  "/cgi-bin/echo":{"post":{"tags":["Eco"],"summary":"Eco",
+    "parameters":[{"name":"x","in":"query","required":true,"schema":{"type":"integer","example":1}}],
+    "requestBody":{"content":{"application/x-www-form-urlencoded":{"schema":{"type":"object","properties":{"nome":{"type":"string","example":"Anna"}}}}}},
+    "responses":{"200":{"description":"eco"}}}}
+ }}
+JSON
 busybox httpd -p 127.0.0.1:8080 -h /srv/http
 
 exec /usr/sbin/sshd -D -e -f /testenv/sshd_config
