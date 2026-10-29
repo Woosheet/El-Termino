@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
 import dev.eltermino.app.EditorTab
+import dev.eltermino.app.RequestsTab
 import dev.eltermino.app.Endpoint
 import dev.eltermino.app.Location
 import dev.eltermino.app.childPath
@@ -357,6 +358,7 @@ private fun TabBody(state: AppState, tab: Tab, showExtraKeys: Boolean, focused: 
         is SessionTab -> TerminalTabBody(state, tab, showExtraKeys, focused)
         is FilesTab -> FilesPane(state, tab, focused)
         is EditorTab -> EditorPane(state, tab, focused)
+        is RequestsTab -> RequestsPane(state, tab, focused)
     }
 }
 
@@ -373,6 +375,7 @@ internal fun TabMark(tab: Tab) {
             val dirty by tab.dirty.collectAsState()
             Icon(CartaIcons.Document, contentDescription = "Editor", tint = if (dirty) Carta.colors.accent else Carta.colors.textDim, size = 14.dp)
         }
+        is RequestsTab -> RequestsTabMark()
     }
 }
 

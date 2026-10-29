@@ -3,7 +3,7 @@ FROM debian:trixie-slim
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       openssh-server libpam-google-authenticator \
-      vim htop tmux mc less procps locales \
+      vim htop tmux mc less procps locales busybox curl \
  && rm -rf /var/lib/apt/lists/* \
  && sed -i 's/^# *\(en_US.UTF-8\)/\1/' /etc/locale.gen && locale-gen \
  && mkdir -p /run/sshd \

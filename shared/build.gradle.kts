@@ -41,6 +41,12 @@ kotlin {
             implementation(libs.compose.ui)
             implementation(libs.compose.material.icons)
         }
+        named("jvmSharedMain").configure {
+            dependencies {
+                // HTTP requests through the SSH tunnel, on Android and desktop alike.
+                implementation(libs.okhttp)
+            }
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)

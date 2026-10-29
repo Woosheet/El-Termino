@@ -102,6 +102,14 @@ object CartaIcons {
         }
     }
 
+    /** HTTP requests: a paper plane. */
+    val Request: ImageVector by lazy {
+        lineIcon("Request") {
+            moveTo(20f, 4f); lineTo(3.5f, 10.5f); lineTo(10f, 13.5f); lineTo(13f, 20f); close()
+            moveTo(10f, 13.5f); lineTo(20f, 4f)
+        }
+    }
+
     val Pause: ImageVector by lazy {
         lineIcon("Pause") { moveTo(9f, 6f); lineTo(9f, 18f); moveTo(15f, 6f); lineTo(15f, 18f) }
     }

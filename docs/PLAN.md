@@ -1,6 +1,6 @@
 # El Termino: piano di progetto
 
-Ultimo aggiornamento: 29 ottobre 2026 (Fase 6)
+Ultimo aggiornamento: 29 ottobre 2026 (Fase 5)
 
 ## Obiettivo
 
@@ -166,7 +166,7 @@ Servono a provare le API che girano sulle macchine senza esporle in rete. Le ric
 - **Import:** collezioni Postman v2.1 (JSON) e comandi `curl` incollati.
 - **Dove sta:** è un tipo di scheda come il terminale e l'SFTP. Si apre dal menu dell'host o dal "+", e può stare in una scheda divisa accanto a un terminale con i log.
 
-**Piano di lavoro proposto** (29 ottobre 2026, rimandato per ora):
+**Piano di lavoro** (29 ottobre 2026, fatto: vedi Stato):
 
 1. **Tunnel nel nucleo SSH:** un forward locale sulla connessione dell'host, lo stesso che servirà al port forwarding della Fase 8. Per provarlo, ai server di test va aggiunto un piccolo servizio HTTP raggiungibile solo dall'interno della macchina, anche dietro il bastion.
 2. **Motore delle richieste:** OkHttp, che gira su Android e desktop, con il tunnel come presa di rete, così HTTPS verifica il nome giusto. Variabili `{{nome}}`; risposta con stato, tempi e dimensione.
@@ -175,10 +175,7 @@ Servono a provare le API che girano sulle macchine senza esporle in rete. Le ric
 5. **Verifiche ed esecuzione su un gruppo:** la tabella host × richiesta (il criterio della fase).
 6. **Rifiniture:** import da Postman e da `curl`, "Copia come curl", "Esegui con curl sul server".
 
-**Scelte aperte:**
-- collezioni indipendenti dagli host con variabili per host, oppure legate a un gruppo;
-- tunnel di default, con curl sul server come opzione per richiesta;
-- tutta in una fase, oppure prima la 5a (tunnel, editor, risposta, richieste salvate) e poi la 5b (verifiche, gruppo, import).
+**Scelte fatte:** collezioni indipendenti dagli host con variabili per host; tunnel di default, con curl sul server come opzione per richiesta; tutta la fase insieme, 5a e 5b.
 
 ## Funzioni extra
 
@@ -245,6 +242,15 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Gruppi di schede con nome e colore, comprimibili; raggruppa per host; dal gruppo broadcast, snippet, "Apri in griglia" e chiudi.
   - Spazi di lavoro salvati per nome, anche di un solo gruppo; l'ultima sessione è offerta di nuovo all'avvio.
   - Criterio raggiunto: `TabLayoutFlowTest` salva due gruppi e una scheda divisa, riavvia l'app e li ritrova uguali, con le sessioni ricollegate.
+- Fase 5: implementata il 29 ottobre 2026 ([decisione 0010](decisions/0010-http-requests.md)).
+  - Tunnel nel nucleo SSH (`forwardLocal`), anche dietro un jump host; ai server di test si è aggiunto un servizio HTTP raggiungibile solo dall'interno.
+  - Scheda "Richieste" dal menu dell'host: metodo, URL, header, corpo (JSON, form, testo), auth (Bearer, Basic, API key) con i segreti nel vault, variabili `{{nome}}` per host.
+  - Risposta con stato, tempi, dimensione, header e corpo formattato con ricerca; ultime 10 risposte per host, solo in memoria.
+  - "Esegui con curl sul server" e "Copia come curl".
+  - Verifiche senza codice ed esecuzione della collezione su un host o su un gruppo, con la tabella host × richiesta.
+  - Import da Postman v2.1 e da comandi curl.
+  - Criterio raggiunto: `HttpRunFlowTest` esegue una collezione di verifiche su tutti gli host di un gruppo, uno dietro il bastion, e mostra l'esito per host.
+  - Restano fuori: redirect seguiti, certificati non validi accettati a mano, form multipart con file.
 - Fase 6: implementata il 29 ottobre 2026 ([decisione 0009](decisions/0009-first-run-themes-and-termius.md)).
   - Benvenuto con "Usi Termius?" e import diretto dai dati locali di Termius (LevelDB e V8, campi decifrati con la chiave del portachiavi), tutorial in sei passi.
   - Temi Carta, Notte (blu notte), Nord, Solarized chiaro, Dracula e Tokyo Night, per app e terminale, scelti in Impostazioni o dal sistema.

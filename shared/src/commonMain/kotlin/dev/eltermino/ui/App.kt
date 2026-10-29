@@ -112,11 +112,16 @@ private fun AppContent(state: AppState) {
             screen = Screen.Sessions
             showHostsOnPhone = false
         }
+        val openRequests: (Host) -> Unit = { host ->
+            state.sessions.openRequests(host)
+            screen = Screen.Sessions
+            showHostsOnPhone = false
+        }
 
         // Insets are zero on desktop; on Android they keep us clear of the system bars.
         BoxWithConstraints(Modifier.fillMaxSize().background(Carta.colors.background).safeDrawingPadding()) {
             if (maxWidth >= 720.dp) {
-                DesktopLayout(state, screen, { screen = it }, connect, openFiles, onEdit = { editing = Editing(it) }, onTour = showTour)
+                DesktopLayout(state, screen, { screen = it }, connect, openFiles, openRequests, onEdit = { editing = Editing(it) }, onTour = showTour)
             } else {
                 PhoneLayout(
                     state = state,
@@ -126,6 +131,7 @@ private fun AppContent(state: AppState) {
                     onBackToHosts = { showHostsOnPhone = true; screen = Screen.Sessions },
                     onConnect = connect,
                     onOpenFiles = openFiles,
+                    onOpenRequests = openRequests,
                     onEdit = { editing = Editing(it) },
                     onTour = showTour,
                 )
@@ -149,6 +155,7 @@ private fun DesktopLayout(
     onScreen: (Screen) -> Unit,
     onConnect: (Host) -> Unit,
     onOpenFiles: (Host) -> Unit,
+    onOpenRequests: (Host) -> Unit,
     onEdit: (Host?) -> Unit,
     onTour: () -> Unit,
 ) {
@@ -166,7 +173,7 @@ private fun DesktopLayout(
                     Text("Host", style = Carta.type.heading, modifier = Modifier.weight(1f).padding(start = 4.dp))
                     IconButton(Icons.Default.Add, "Nuovo host", onClick = { onEdit(null) }, tint = Carta.colors.text)
                 }
-                HostList(state, onConnect, onEdit, Modifier.weight(1f), onOpenFiles = onOpenFiles)
+                HostList(state, onConnect, onEdit, Modifier.weight(1f), onOpenFiles = onOpenFiles, onOpenRequests = onOpenRequests)
                 SectionLabel("Strumenti")
                 ToolRow(CartaIcons.Key, "Chiavi", screen == Screen.Keys) { onScreen(Screen.Keys) }
                 ToolRow(CartaIcons.User, "Identità", screen == Screen.Identities) { onScreen(Screen.Identities) }
@@ -211,6 +218,7 @@ private fun PhoneLayout(
     onBackToHosts: () -> Unit,
     onConnect: (Host) -> Unit,
     onOpenFiles: (Host) -> Unit,
+    onOpenRequests: (Host) -> Unit,
     onEdit: (Host?) -> Unit,
     onTour: () -> Unit,
 ) {
@@ -226,7 +234,7 @@ private fun PhoneLayout(
                         }
                         ToolsMenu(onScreen)
                     }
-                    HostList(state, onConnect, onEdit, Modifier.weight(1f), onOpenFiles = onOpenFiles)
+                    HostList(state, onConnect, onEdit, Modifier.weight(1f), onOpenFiles = onOpenFiles, onOpenRequests = onOpenRequests)
                 }
                 Fab(Icons.Default.Add, "Nuovo host", onClick = { onEdit(null) }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
             }

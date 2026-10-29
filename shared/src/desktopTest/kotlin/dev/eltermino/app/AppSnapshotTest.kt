@@ -89,6 +89,47 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun requestsTab(): Unit = runBlocking {
+        val state = lightState()
+        val web = seed(state)
+        val answering = CoroutineScope(Dispatchers.Default)
+        answering.launch {
+            state.sessions.prompter.prompt.filterNotNull().collect { prompt ->
+                if (prompt is PendingPrompt.HostKey) prompt.answer(true) else prompt.cancel()
+            }
+        }
+        val health = dev.eltermino.core.data.HttpRequest(
+            newId(), "Salute", url = "http://localhost:{{porta}}/health.json",
+            headers = listOf(dev.eltermino.core.data.HttpHeader("Accept", "application/json")),
+            checks = listOf(dev.eltermino.core.data.HttpCheck("status", expected = "200"), dev.eltermino.core.data.HttpCheck("json", "host", "web-01")),
+        )
+        val collection = dev.eltermino.core.data.HttpCollection(
+            newId(), "API interne",
+            listOf(health, dev.eltermino.core.data.HttpRequest(newId(), "Crea ordine", "POST", "http://localhost:{{porta}}/cgi-bin/echo", bodyType = "json", body = "{\"id\": 1}")),
+            mapOf("porta" to "8080"),
+        )
+        state.actions.saveCollection(collection)
+        state.actions.saveCollection(dev.eltermino.core.data.HttpCollection(newId(), "Elasticsearch", listOf(dev.eltermino.core.data.HttpRequest(newId(), "Salute del cluster", url = "http://10.0.0.5:9200/_cluster/health"))))
+        val tab = state.sessions.openRequests(web)
+        tab.selected.value = health.id
+        state.requests.send(tab, collection, health)
+        withTimeout(30_000) { tab.history.first { it[health.id] != null } }
+        snapshot(state, "app-requests")
+        ImageComposeScene(780, 1600, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(dev.eltermino.ui.theme.Carta.colors.background)) {
+                    dev.eltermino.ui.RequestsPane(state, tab, focused = true)
+                }
+            }
+        }.use { scene ->
+            repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+            File("build/snapshots/app-phone-requests.png").writeBytes(scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes)
+        }
+        answering.cancel()
+        state.sessions.closeAll()
+    }
+
+    @Test
     fun desktopHostKeyPrompt(): Unit = runBlocking {
         val state = lightState()
         val web = seed(state)

@@ -8,6 +8,7 @@ x-sshd: &sshd
 services:
   basic:
     <<: *sshd
+    hostname: basic
     ports: ["127.0.0.1:2201:22"]
     volumes:
       - ./config/basic.conf:/testenv/sshd_config:ro
@@ -25,6 +26,7 @@ services:
 
   bastion:
     <<: *sshd
+    hostname: bastion
     ports: ["127.0.0.1:2203:22"]
     volumes:
       - ./config/pubkey.conf:/testenv/sshd_config:ro
@@ -34,6 +36,7 @@ services:
   # Reachable only through the bastion, as internal:22.
   internal:
     <<: *sshd
+    hostname: internal
     volumes:
       - ./config/pubkey.conf:/testenv/sshd_config:ro
       - ./keys:/testenv/keys:ro

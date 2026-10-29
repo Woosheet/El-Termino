@@ -3,6 +3,7 @@ package dev.eltermino.core.ssh.mina
 import dev.eltermino.core.ssh.ConnectTarget
 import dev.eltermino.core.ssh.ConnectionState
 import dev.eltermino.core.ssh.ExecResult
+import dev.eltermino.core.ssh.PortForward
 import dev.eltermino.core.ssh.PtyConfig
 import dev.eltermino.core.ssh.ShellChannel
 import dev.eltermino.core.ssh.SftpClient
@@ -22,6 +23,7 @@ import org.apache.sshd.client.channel.ClientChannel
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.common.session.Session
 import org.apache.sshd.common.session.SessionListener
+import org.apache.sshd.common.util.net.SshdSocketAddress
 import org.apache.sshd.sftp.client.SftpClientFactory
 import java.io.ByteArrayOutputStream
 import kotlin.coroutines.resume
@@ -123,6 +125,24 @@ internal class MinaSshConnection(
             throw SshException.ChannelFailed("Running a command on ${target.host} timed out", e)
         } finally {
             channel.close(true)
+        }
+    }
+
+    override suspend fun forwardLocal(host: String, port: Int): PortForward {
+        checkOpen()
+        val bound = try {
+            withContext(Dispatchers.IO) {
+                session.startLocalPortForwarding(SshdSocketAddress("127.0.0.1", 0), SshdSocketAddress(host, port))
+            }
+        } catch (e: Exception) {
+            throw SshException.ChannelFailed("Couldn't open a tunnel to $host:$port on ${target.host}", e)
+        }
+        return object : PortForward {
+            override val localPort = bound.port
+
+            override suspend fun close() {
+                withContext(Dispatchers.IO) { runCatching { session.stopLocalPortForwarding(bound) } }
+            }
         }
     }
 

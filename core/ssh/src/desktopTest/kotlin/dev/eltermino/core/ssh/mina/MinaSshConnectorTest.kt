@@ -167,6 +167,43 @@ class MinaSshConnectorTest {
         }
     }
 
+    /** A raw HTTP GET through [connection]'s tunnel to the test service on the server's own loopback. */
+    private suspend fun SshConnection.getThroughTunnel(path: String): String {
+        val forward = forwardLocal("localhost", 8080)
+        try {
+            return java.net.Socket("127.0.0.1", forward.localPort).use { socket ->
+                socket.getOutputStream().write("GET $path HTTP/1.0\r\nHost: localhost\r\n\r\n".toByteArray())
+                socket.getInputStream().readBytes().decodeToString()
+            }
+        } finally {
+            forward.close()
+        }
+    }
+
+    @Test
+    fun localForwardReachesTheServersOwnLoopback() = runBlocking {
+        val connection = connect(TestServers.basic(TestServers.passwordAuth()))
+        try {
+            val response = connection.getThroughTunnel("/health.json")
+            assertTrue(response.startsWith("HTTP/1.") && " 200 " in response.lineSequence().first(), response)
+            assertTrue(response.endsWith("""{"status":"ok","host":"basic"}"""), response)
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun localForwardWorksBehindAJumpHost() = runBlocking {
+        val key = TestServers.keyAuth("id_ed25519")
+        val bastion = ConnectTarget(TestServers.HOST, TestServers.BASTION, TestServers.USER, listOf(key))
+        val connection = connect(ConnectTarget(TestServers.INTERNAL_HOST, 22, TestServers.USER, listOf(key), jumpHosts = listOf(bastion)))
+        try {
+            assertTrue(connection.getThroughTunnel("/health.json").endsWith("""{"status":"ok","host":"internal"}"""))
+        } finally {
+            connection.close()
+        }
+    }
+
     @Test
     fun execExitCode() = runBlocking {
         val connection = connect(TestServers.basic(TestServers.passwordAuth()))

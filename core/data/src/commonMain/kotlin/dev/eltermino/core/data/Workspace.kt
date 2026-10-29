@@ -15,6 +15,8 @@ data class Workspace(
     val keys: List<SshKeyEntry> = emptyList(),
     val knownHosts: List<KnownHost> = emptyList(),
     val snippets: List<Snippet> = emptyList(),
+    /** Saved HTTP requests, sent from a host through its SSH connection. */
+    val httpCollections: List<HttpCollection> = emptyList(),
     /** Tab layouts saved by name, to reopen with one click. */
     val savedLayouts: List<SavedLayout> = emptyList(),
     /** What was open last time, offered again at the next start. */
@@ -26,6 +28,7 @@ data class Workspace(
     fun identity(id: String?): Identity? = id?.let { identities.firstOrNull { i -> i.id == it } }
     fun key(id: String?): SshKeyEntry? = id?.let { keys.firstOrNull { k -> k.id == it } }
     fun snippet(id: String?): Snippet? = id?.let { snippets.firstOrNull { s -> s.id == it } }
+    fun httpCollection(id: String?): HttpCollection? = id?.let { httpCollections.firstOrNull { c -> c.id == it } }
 
     companion object {
         const val CURRENT_VERSION = 1
@@ -106,6 +109,62 @@ data class Snippet(
 )
 
 /**
+ * Requests that belong together, usable on any host. `{{name}}` in a request takes the
+ * host's value from [hostVariables], or else the collection's default from [variables].
+ */
+@Serializable
+data class HttpCollection(
+    val id: String,
+    val name: String,
+    val requests: List<HttpRequest> = emptyList(),
+    val variables: Map<String, String> = emptyMap(),
+    /** Host id to that host's values. */
+    val hostVariables: Map<String, Map<String, String>> = emptyMap(),
+)
+
+@Serializable
+data class HttpRequest(
+    val id: String,
+    val name: String,
+    val method: String = "GET",
+    /** As the server sees it: `http://localhost:8080/health` is a service on the host itself. */
+    val url: String = "",
+    val headers: List<HttpHeader> = emptyList(),
+    /** "none", "json", "form" (one `name=value` a line) or "text". */
+    val bodyType: String = "none",
+    val body: String = "",
+    val auth: HttpAuth = HttpAuth(),
+    /** Runs `curl` on the server instead of sending through the tunnel. */
+    val viaCurl: Boolean = false,
+    val checks: List<HttpCheck> = emptyList(),
+)
+
+@Serializable
+data class HttpHeader(val name: String, val value: String, val enabled: Boolean = true)
+
+@Serializable
+data class HttpAuth(
+    /** "none", "bearer", "basic" or "apikey". */
+    val type: String = "none",
+    /** The Basic username. */
+    val username: String = "",
+    /** The header that carries an API key. */
+    val headerName: String = "X-API-Key",
+    /** The token, password or key, kept in the vault. */
+    val secretId: String? = null,
+)
+
+/** A condition a response must meet, checked without writing code. */
+@Serializable
+data class HttpCheck(
+    /** "status" (equals), "contains" (body text), "json" (field equals) or "time" (under N ms). */
+    val kind: String,
+    /** The JSON field for "json", like `data.items[0].id`. */
+    val path: String = "",
+    val expected: String = "",
+)
+
+/**
  * Tabs, their panes and their groups, without the connections: reopening logs in again.
  * Hosts are referenced by id, so a deleted host just leaves its pane out.
  */
@@ -128,7 +187,7 @@ data class SavedTab(
 
 @Serializable
 data class SavedPane(
-    /** "terminal", "files" or "editor". */
+    /** "terminal", "files", "editor" or "requests". */
     val kind: String,
     /** Null for this device's files. */
     val hostId: String?,

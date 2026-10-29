@@ -48,7 +48,7 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.TimeMark
 
-/** What a tab shows: a terminal, a file panel or an editor. Any of them fits in a pane. */
+/** What a tab shows: a terminal, a file panel, an editor or HTTP requests. Any of them fits in a pane. */
 sealed class Tab(val id: String, val label: String) {
     /** Null for this device's files. */
     abstract val hostId: String?
@@ -241,6 +241,23 @@ class SessionsController(
     /** [path] as text in a new tab; it gets its own share of the link, so closing the panel doesn't stop it. */
     fun openEditor(endpoint: Endpoint, path: String): EditorTab = add(createEditor(endpoint, path))
 
+    /** HTTP requests sent from [host], through its shared link. */
+    fun openRequests(host: Host): RequestsTab = add(createRequests(host))
+
+    private fun createRequests(host: Host): RequestsTab {
+        val tab = register(RequestsTab(newId(), host.id, host.label))
+        tab.job = scope.launch {
+            val lease = connections.acquire(host)
+            tab.mutableLease.value = lease
+            try {
+                awaitCancellation()
+            } finally {
+                withContext(NonCancellable) { lease.release() }
+            }
+        }
+        return tab
+    }
+
     private fun createTerminal(host: Host): SessionTab {
         val tab = register(SessionTab(newId(), host.id, host.label))
         start(tab)
@@ -300,6 +317,7 @@ class SessionsController(
             is SessionTab -> SavedPane("terminal", tab.hostId)
             is FilesTab -> SavedPane("files", tab.hostId, tab.browser.path.value)
             is EditorTab -> SavedPane("editor", tab.hostId, tab.path)
+            is RequestsTab -> SavedPane("requests", tab.hostId)
         }
         return SavedLayout(
             id = newId(),
@@ -335,6 +353,7 @@ class SessionsController(
             "terminal" -> host?.let(::createTerminal)
             "files" -> if (host == null && services.localFiles == null) null else createFiles(host, pane.path)
             "editor" -> pane.path?.let { createEditor(host?.let { Endpoint.Remote(it.id) } ?: Endpoint.Local, it) }
+            "requests" -> host?.let(::createRequests)
             else -> null
         }
     }
@@ -381,6 +400,7 @@ class SessionsController(
             }
             is FilesTab -> scope.launch { tab.browser.close() }
             is EditorTab -> scope.launch { tab.release?.invoke() }
+            is RequestsTab -> tab.job?.cancel()
         }
         mutableTabs.update { it - tab }
         updateBar { it.remove(tab.id) }
@@ -543,10 +563,12 @@ fun List<Tab>.titles(): Map<String, String> {
 private fun Tab.kindKey(): Pair<String?, String> = hostId to (this::class.simpleName ?: "")
 
 /** The host this tab has a working connection to, if any. */
+@OptIn(ExperimentalCoroutinesApi::class)
 private fun Tab.connectedHost(): kotlinx.coroutines.flow.Flow<String?> = when (this) {
     is SessionTab -> status.map { if (it is TabStatus.Open) hostId else null }
     is FilesTab -> combine(browser.path, browser.error) { path, error -> if (hostId != null && path != null && error == null) hostId else null }
     is EditorTab -> flowOf(null)
+    is RequestsTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
 }
 
 @OptIn(ExperimentalTime::class)

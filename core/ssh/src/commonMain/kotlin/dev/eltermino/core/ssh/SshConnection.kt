@@ -15,6 +15,18 @@ interface SshConnection {
     suspend fun openShell(pty: PtyConfig = PtyConfig()): ShellChannel
     suspend fun openSftp(): SftpClient
     suspend fun exec(command: String): ExecResult
+
+    /**
+     * Listens on this device's loopback and carries each connection to [host]:[port] as
+     * the server sees it, so `localhost` there is the server itself.
+     */
+    suspend fun forwardLocal(host: String, port: Int): PortForward
+    suspend fun close()
+}
+
+/** A local forward: connect to `127.0.0.1:[localPort]` to reach the remote end. */
+interface PortForward {
+    val localPort: Int
     suspend fun close()
 }
 

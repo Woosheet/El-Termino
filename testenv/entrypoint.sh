@@ -23,4 +23,18 @@ if [ -f /testenv/pam_sshd ]; then
   cp /testenv/pam_sshd /etc/pam.d/sshd
 fi
 
+# A small HTTP service reachable only from inside the machine, for the Requests tab.
+mkdir -p /srv/http/cgi-bin
+printf '{"status":"ok","host":"%s"}' "$(hostname)" > /srv/http/health.json
+cat > /srv/http/cgi-bin/echo <<'CGI'
+#!/bin/sh
+# Answers with the method, the query and the body it was sent.
+printf 'Content-Type: text/plain\r\n\r\n'
+printf '%s %s\n' "$REQUEST_METHOD" "$QUERY_STRING"
+[ -n "${CONTENT_LENGTH:-}" ] && head -c "$CONTENT_LENGTH"
+exit 0
+CGI
+chmod +x /srv/http/cgi-bin/echo
+busybox httpd -p 127.0.0.1:8080 -h /srv/http
+
 exec /usr/sbin/sshd -D -e -f /testenv/sshd_config

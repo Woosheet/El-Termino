@@ -2,6 +2,8 @@ package dev.eltermino.app
 
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.HostGroup
+import dev.eltermino.core.data.HttpCollection
+import dev.eltermino.core.data.HttpRequest
 import dev.eltermino.core.data.Identity
 import dev.eltermino.core.data.Snippet
 import dev.eltermino.core.data.SshKeyEntry
@@ -179,6 +181,51 @@ class WorkspaceActions(private val services: AppServices) {
     suspend fun deleteLayout(id: String) = store.update { ws -> ws.copy(savedLayouts = ws.savedLayouts.filterNot { it.id == id }) }
 
     suspend fun deleteSnippet(id: String) = store.update { ws -> ws.copy(snippets = ws.snippets.filterNot { it.id == id }) }
+
+    suspend fun saveCollection(collection: HttpCollection) = store.update { ws ->
+        if (ws.httpCollections.any { it.id == collection.id }) ws.copy(httpCollections = ws.httpCollections.map { if (it.id == collection.id) collection else it })
+        else ws.copy(httpCollections = ws.httpCollections + collection)
+    }
+
+    suspend fun deleteCollection(id: String) {
+        store.workspace.value.httpCollection(id)?.requests?.forEach { request -> request.auth.secretId?.let { vault.remove(it) } }
+        store.update { ws -> ws.copy(httpCollections = ws.httpCollections.filterNot { it.id == id }) }
+    }
+
+    /** Saves [request] into its collection; a [newSecret] replaces the token or password in the vault. */
+    suspend fun saveRequest(collectionId: String, request: HttpRequest, newSecret: String? = null): HttpRequest {
+        var saved = request
+        if (newSecret != null) {
+            request.auth.secretId?.let { vault.remove(it) }
+            saved = saved.copy(auth = saved.auth.copy(secretId = if (newSecret.isEmpty()) null else vault.add(newSecret.encodeToByteArray())))
+        }
+        store.update { ws ->
+            ws.copy(httpCollections = ws.httpCollections.map { collection ->
+                if (collection.id != collectionId) collection
+                else if (collection.requests.any { it.id == saved.id }) collection.copy(requests = collection.requests.map { if (it.id == saved.id) saved else it })
+                else collection.copy(requests = collection.requests + saved)
+            })
+        }
+        return saved
+    }
+
+    suspend fun deleteRequest(collectionId: String, requestId: String) {
+        store.workspace.value.httpCollection(collectionId)?.requests?.firstOrNull { it.id == requestId }?.auth?.secretId?.let { vault.remove(it) }
+        store.update { ws ->
+            ws.copy(httpCollections = ws.httpCollections.map { c -> if (c.id == collectionId) c.copy(requests = c.requests.filterNot { it.id == requestId }) else c })
+        }
+    }
+
+    /** Adds an imported collection; [secrets] (request id to token or password) go to the vault. */
+    suspend fun importCollection(imported: ImportedCollection): HttpCollection {
+        val requests = imported.collection.requests.map { request ->
+            val secret = imported.secrets[request.id] ?: return@map request
+            request.copy(auth = request.auth.copy(secretId = vault.add(secret.encodeToByteArray())))
+        }
+        val collection = imported.collection.copy(requests = requests)
+        saveCollection(collection)
+        return collection
+    }
 }
 
 internal fun Workspace.hostsUsing(identityId: String) = hosts.count { it.identityId == identityId }

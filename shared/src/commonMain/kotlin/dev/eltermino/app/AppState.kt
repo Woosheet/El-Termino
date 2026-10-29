@@ -13,6 +13,7 @@ class AppState(val services: AppServices) {
     val actions = WorkspaceActions(services)
     val sessions = SessionsController(services, actions, scope)
     val transfers = TransferManager(scope, services, sessions.connections)
+    val requests = HttpRunner(services, sessions.connections, scope)
     val notifier = TransferNotifier(scope, services, transfers)
 
     private val mutableExitRequested = kotlinx.coroutines.flow.MutableStateFlow(false)

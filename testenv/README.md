@@ -25,3 +25,10 @@ Credenziali di test:
 Le chiavi in `keys/` vengono generate da `gen-keys.sh` e sono escluse da git.
 
 Sugli host sono installati vim, htop, tmux e mc per provare l'emulatore di terminale.
+
+Ogni host ha anche un piccolo servizio HTTP su `127.0.0.1:8080`, raggiungibile solo dall'interno della macchina, per la scheda Richieste:
+
+- `GET /health.json` risponde `{"status":"ok","host":"<nome dell'host>"}`;
+- `/cgi-bin/echo` risponde con metodo, query e corpo ricevuti.
+
+Sugli host c'è anche `curl`, per "Esegui con curl sul server".
