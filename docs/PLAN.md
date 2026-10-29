@@ -166,6 +166,20 @@ Servono a provare le API che girano sulle macchine senza esporle in rete. Le ric
 - **Import:** collezioni Postman v2.1 (JSON) e comandi `curl` incollati.
 - **Dove sta:** è un tipo di scheda come il terminale e l'SFTP. Si apre dal menu dell'host o dal "+", e può stare in una scheda divisa accanto a un terminale con i log.
 
+**Piano di lavoro proposto** (29 ottobre 2026, rimandato per ora):
+
+1. **Tunnel nel nucleo SSH:** un forward locale sulla connessione dell'host, lo stesso che servirà al port forwarding della Fase 8. Per provarlo, ai server di test va aggiunto un piccolo servizio HTTP raggiungibile solo dall'interno della macchina, anche dietro il bastion.
+2. **Motore delle richieste:** OkHttp, che gira su Android e desktop, con il tunnel come presa di rete, così HTTPS verifica il nome giusto. Variabili `{{nome}}`; risposta con stato, tempi e dimensione.
+3. **La scheda "Richieste":** un nuovo tipo di scheda, nella split view accanto a un terminale.
+4. **Collezioni salvate:** variabili per host, token nel vault, cronologia delle ultime risposte.
+5. **Verifiche ed esecuzione su un gruppo:** la tabella host × richiesta (il criterio della fase).
+6. **Rifiniture:** import da Postman e da `curl`, "Copia come curl", "Esegui con curl sul server".
+
+**Scelte aperte:**
+- collezioni indipendenti dagli host con variabili per host, oppure legate a un gruppo;
+- tunnel di default, con curl sul server come opzione per richiesta;
+- tutta in una fase, oppure prima la 5a (tunnel, editor, risposta, richieste salvate) e poi la 5b (verifiche, gruppo, import).
+
 ## Funzioni extra
 
 | Funzione | Come | Fase |
