@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import dev.eltermino.app.SessionTab
 import dev.eltermino.app.TabStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -67,8 +68,9 @@ class SessionService : Service() {
     /** (connected, total) tab counts. */
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun counts() = app.state.sessions.tabs.flatMapLatest { tabs ->
-        if (tabs.isEmpty()) flowOf(0 to 0)
-        else combine(tabs.map { it.status }) { statuses -> statuses.count { it is TabStatus.Open } to statuses.size }
+        val terminals = tabs.filterIsInstance<SessionTab>()
+        if (terminals.isEmpty()) flowOf(0 to tabs.size)
+        else combine(terminals.map { it.status }) { statuses -> statuses.count { it is TabStatus.Open } to statuses.size }
     }
 
     private fun notification(open: Int, total: Int): Notification {

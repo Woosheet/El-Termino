@@ -44,6 +44,8 @@ data class Host(
     val jumpHostId: String? = null,
     val notes: String = "",
     val lastConnectedEpochSeconds: Long? = null,
+    /** Folders saved in the file panel. */
+    val bookmarks: List<String> = emptyList(),
 )
 
 @Serializable
@@ -103,4 +105,6 @@ data class Snippet(
 @Serializable
 data class UiSettings(
     val sidebarWidthDp: Int = 260,
+    /** Folders saved in this device's file panel. */
+    val localBookmarks: List<String> = emptyList(),
 )

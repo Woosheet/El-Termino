@@ -1,6 +1,6 @@
 # El Termino: piano di progetto
 
-Ultimo aggiornamento: 29 ottobre 2026 (Fase 2)
+Ultimo aggiornamento: 29 ottobre 2026 (Fase 3)
 
 ## Obiettivo
 
@@ -26,13 +26,13 @@ La conseguenza più importante: tutte e quattro le piattaforme girano su JVM (AR
 app-android        entry point Android (Activity, Foreground Service)
 app-desktop        entry point desktop (finestra, menu, tray)
 shared             UI Compose, tema Carta, navigazione, feature
-  └─ feature/      hosts · terminal · sftp · keys · import · snippets
+  └─ feature/      hosts · terminal · sftp · http · keys · import · snippets
                    forwarding · monitor · docker · recordings · settings
 core/ssh           interfaccia comune + implementazione JVM
 core/terminal      emulatore VT/xterm + renderer Compose Canvas
 core/vault         segreti cifrati, Keystore / keychain di sistema
 core/data          database: host, gruppi, identità, chiavi, known_hosts, snippet
-core/mosh          client Mosh (fase 6)
+core/mosh          client Mosh (fase 8)
 ```
 
 Le feature partono come package dentro `shared`. Diventano moduli Gradle separati solo se crescono.
@@ -100,10 +100,10 @@ Requisiti: vim, htop, tmux e mc devono funzionare. Servono quindi alternate scre
 | Chiavi Ed25519 / RSA (rsa-sha2-256/512) / ECDSA, con passphrase | Import da file OpenSSH / PEM / PuTTY `.ppk`, generazione nell'app | 1 |
 | OTP / 2FA | Keyboard-interactive. Opzionale: segreto TOTP salvato nel vault e codice compilato in automatico. | 1 |
 | Jump host / ProxyJump | Catena di bastion, ogni salto con la sua identità | 1 |
-| SSH agent | macOS/Linux con `SSH_AUTH_SOCK` (socket Unix di JDK 16+), Windows con la named pipe di OpenSSH e Pageant. Più l'agent forwarding. | 4 |
-| Certificati OpenSSH | Chiave + `-cert.pub`, host certificate con CA fidata | 4 |
-| YubiKey / FIDO2 | Desktop: tramite l'agent di sistema, poi libfido2 diretto se serve. Android: YubiKit via USB/NFC, da verificare FIDO2 o PIV. | 4 |
-| Sblocco biometrico | BiometricPrompt su Android, Touch ID su macOS | 4 |
+| SSH agent | macOS/Linux con `SSH_AUTH_SOCK` (socket Unix di JDK 16+), Windows con la named pipe di OpenSSH e Pageant. Più l'agent forwarding. | 6 |
+| Certificati OpenSSH | Chiave + `-cert.pub`, host certificate con CA fidata | 6 |
+| YubiKey / FIDO2 | Desktop: tramite l'agent di sistema, poi libfido2 diretto se serve. Android: YubiKit via USB/NFC, da verificare FIDO2 o PIV. | 6 |
+| Sblocco biometrico | BiometricPrompt su Android, Touch ID su macOS | 6 |
 
 Verifica della host key sempre attiva: alla prima connessione mostra il fingerprint SHA256 e chiede conferma. Se la chiave cambia, la connessione si blocca con un avviso esplicito. Sul desktop si possono importare `~/.ssh/known_hosts` e `~/.ssh/config`.
 
@@ -125,6 +125,27 @@ Verifica della host key sempre attiva: alla prima connessione mostra il fingerpr
 - Operazioni: rinomina, elimina, crea cartella, chmod, link simbolici, file nascosti, ordinamento, segnalibri per host.
 - Desktop: drag & drop dal sistema e tra pannelli. Android: Storage Access Framework.
 
+## Schede unite e gruppi
+
+- **Unire due sessioni in una scheda:** trascini una scheda sopra un'altra, sul bordo sinistro, destro, alto o basso, e diventano una sola scheda con lo schermo diviso. "Separa" le riporta in schede distinte. La disposizione dei riquadri diventa di ogni scheda invece che globale: una scheda può essere web-01 con i log accanto, un'altra db-01 da sola. Vale per terminali, pannelli SFTP e richieste HTTP.
+- **Gruppi di schede**, come i gruppi di Chrome: nome e colore, si chiudono in un'etichetta nella barra e si riaprono. Un gruppo si crea dalle schede scelte, oppure con "Raggruppa per host", che mette insieme tutte le sessioni della stessa macchina.
+- **Azioni sul gruppo:** broadcast a tutto il gruppo, snippet su tutto il gruppo, "Apri in griglia" (unisce le schede del gruppo in una sola scheda divisa), chiudi gruppo.
+- **Spazi di lavoro salvati:** un gruppo si salva con host, tipo di sessione e disposizione, e si riapre con un clic. Per esempio "Deploy": due terminali su web-01 e web-02 più le richieste di salute.
+- **Android:** i gruppi compaiono come sezioni nell'elenco delle sessioni; l'unione in una scheda divisa c'è solo sui tablet.
+
+## Richieste HTTP (tipo Postman)
+
+Servono a provare le API che girano sulle macchine senza esporle in rete. Le richieste partono dal client ma viaggiano dentro la connessione SSH già aperta.
+
+- **Il tunnel:** un canale `direct-tcpip` sulla connessione dell'host, lo stesso meccanismo del port forwarding, porta a `localhost:8080` visto dal server, o a qualunque indirizzo raggiungibile da lì (per esempio `10.0.0.5:9200` dal bastion). Il client HTTP (OkHttp, che gira su Android e desktop) usa il tunnel come socket. Sul server non serve installare niente, e HTTPS verifica il certificato con il nome giusto.
+- **In alternativa, curl sul server:** "Esegui con curl sul server" lancia `curl` via exec, per riprodurre esattamente quello che vede la macchina (DNS, proxy, certificati). Ogni richiesta si può anche copiare come comando `curl`.
+- **Editor:** metodo, URL, parametri, header, corpo (JSON, form, testo) e autenticazione (Bearer, Basic, API key in un header). Variabili `{{nome}}` come negli snippet; token e password stanno nel vault.
+- **Risposta:** stato, tempi (apertura del tunnel, primo byte, totale), dimensione, header, corpo formattato (JSON con rientri e ricerca) o grezzo. Cronologia delle ultime risposte per host.
+- **Collezioni:** richieste salvate in collezioni, legate a un host o a un gruppo di host. Ogni host ha le sue variabili (porta, token), così la stessa collezione serve web-01, web-02 e web-03.
+- **Verifiche per i test:** condizioni senza scrivere codice, come stato uguale a 200, corpo che contiene un testo, campo JSON uguale a un valore, tempo sotto N ms. "Esegui la collezione" o "Esegui su tutto il gruppo" mostrano una tabella host × richiesta con l'esito di ognuna.
+- **Import:** collezioni Postman v2.1 (JSON) e comandi `curl` incollati.
+- **Dove sta:** è un tipo di scheda come il terminale e l'SFTP. Si apre dal menu dell'host o dal "+", e può stare in una scheda divisa accanto a un terminale con i log.
+
 ## Funzioni extra
 
 | Funzione | Come | Fase |
@@ -132,11 +153,11 @@ Verifica della host key sempre attiva: alla prima connessione mostra il fingerpr
 | Snippet | Comandi salvati con variabili, da lanciare su uno o più host | 2 |
 | Broadcast input | Scrivi in più terminali insieme (tab scelte o un gruppo intero), con indicatore ben visibile | 2 |
 | Editor remoto | Editor integrato con evidenziazione per yaml, json, sh, conf. Salvataggio atomico (file temporaneo + rename), controllo di modifiche remote prima di sovrascrivere. Sul desktop anche "apri con editor esterno" e upload a ogni salvataggio. | 3 |
-| Port forwarding | Locale, remoto e dinamico (SOCKS5). Regole salvate per host, avvio automatico alla connessione. | 5 |
-| Monitor risorse | Canale exec sulla connessione esistente: legge `/proc/loadavg`, `/proc/meminfo`, `/proc/stat` e `df` ogni pochi secondi, solo con il pannello aperto. Nessun agente da installare. | 5 |
-| Pannello Docker | `docker ps` / `docker stats` con output JSON, log in streaming, start / stop / restart, `docker exec` che apre un nuovo terminale. L'utente SSH deve poter usare docker. | 5 |
-| Registrazione sessioni | Formato asciicast v2 con replay nell'app ed export. File locali, con durata di conservazione configurabile. | 5 |
-| Mosh | Nessuna libreria JVM disponibile e niente mosh-client nativo su Windows: va scritto in Kotlin (bootstrap via SSH con `mosh-server`, UDP, AES-128-OCB, protobuf, sincronizzazione dello stato). Servono `mosh-server` sugli host e le porte UDP aperte. È la funzione più costosa e rischiosa. | 6 |
+| Port forwarding | Locale, remoto e dinamico (SOCKS5). Regole salvate per host, avvio automatico alla connessione. | 7 |
+| Monitor risorse | Canale exec sulla connessione esistente: legge `/proc/loadavg`, `/proc/meminfo`, `/proc/stat` e `df` ogni pochi secondi, solo con il pannello aperto. Nessun agente da installare. | 7 |
+| Pannello Docker | `docker ps` / `docker stats` con output JSON, log in streaming, start / stop / restart, `docker exec` che apre un nuovo terminale. L'utente SSH deve poter usare docker. | 7 |
+| Registrazione sessioni | Formato asciicast v2 con replay nell'app ed export. File locali, con durata di conservazione configurabile. | 7 |
+| Mosh | Nessuna libreria JVM disponibile e niente mosh-client nativo su Windows: va scritto in Kotlin (bootstrap via SSH con `mosh-server`, UDP, AES-128-OCB, protobuf, sincronizzazione dello stato). Servono `mosh-server` sugli host e le porte UDP aperte. È la funzione più costosa e rischiosa. | 8 |
 
 ## Import da Termius
 
@@ -172,6 +193,18 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Foreground Service su Android.
   - Il soak test con 10 sessioni gira per 20 secondi a ogni esecuzione dei test; la prova di ore va lanciata a parte con `-PsoakSeconds`.
   - Da provare su un telefono vero: Doze a schermo spento e cambio di rete.
+- Fase 3: implementata il 29 ottobre 2026 ([decisione 0007](decisions/0007-files-and-transfers.md)).
+  - Pannelli file (locale e remoti) come schede, anche affiancati nella split view.
+  - Una coda unica di trasferimenti: locale ↔ remoto e remoto ↔ remoto in streaming, limite di trasferimenti paralleli in totale e per host.
+  - Pausa e ripresa dall'offset; quattro scelte sui conflitti; cartelle ricorsive; attesa automatica se la connessione cade.
+  - Operazioni: rinomina, elimina, nuova cartella, permessi, file nascosti, ordinamento, segnalibri per host.
+  - Copia trascinando tra pannelli o con "Copia in…"; sul desktop anche trascinando dal Finder o da Esplora risorse.
+  - Editor remoto con evidenziazione, salvataggio atomico che mantiene i permessi e avviso se il file è cambiato sul server.
+  - Criterio raggiunto: `TransferFlowTest` copia in parallelo tra 3 host e il computer locale in una sola coda.
+  - Restano da fare:
+    - "Apri con editor esterno";
+    - il trascinamento dall'app al Finder;
+    - su Android, il pannello locale fuori dalla cartella dell'app (selettore di sistema).
 
 ## Roadmap
 
@@ -181,9 +214,11 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 | 1. MVP SSH | Host, gruppi, tag, ricerca, preferiti, identità. Password, chiavi, OTP, jump host. Verifica host key. Un terminale completo. Vault base. Import da Termius e da `~/.ssh/config`. | Tutte le 48 macchine raggiungibili dall'app |
 | 2. Multi-sessione SSH | `SessionManager`, tab, split view, riconnessione, Foreground Service. Broadcast input, snippet. | 10 sessioni stabili in parallelo per ore |
 | 3. SFTP multi-sessione | Workspace a N pannelli, `TransferManager`, remoto ↔ remoto, pausa e ripresa. Editor remoto. | Trasferimenti paralleli tra 3 o più host in un'unica coda |
-| 4. Autenticazione avanzata | SSH agent e forwarding, certificati, YubiKey / FIDO2, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
-| 5. Strumenti | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | |
-| 6. Mosh | Client Mosh in Kotlin | Sessione che sopravvive a un cambio di rete |
+| 4. Schede unite e gruppi | Disposizione dei riquadri per scheda, unione e separazione trascinando, gruppi di schede con nome e colore, raggruppa per host, azioni sul gruppo, spazi di lavoro salvati | Uno spazio di lavoro con due gruppi e una scheda divisa si riapre uguale dopo un riavvio |
+| 5. Richieste HTTP | Scheda di richieste per host via tunnel SSH, risposta formattata, collezioni con variabili per host, verifiche, esecuzione su un gruppo, import da Postman e curl | Una collezione di verifiche gira su tutti gli host di un gruppo e mostra l'esito per host |
+| 6. Autenticazione avanzata | SSH agent e forwarding, certificati, YubiKey / FIDO2, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
+| 7. Strumenti | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | |
+| 8. Mosh | Client Mosh in Kotlin | Sessione che sopravvive a un cambio di rete |
 
 ## Test
 

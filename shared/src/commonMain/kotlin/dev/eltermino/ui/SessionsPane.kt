@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,6 +29,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +41,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.app.EditorTab
+import dev.eltermino.app.FilesTab
 import dev.eltermino.app.SessionTab
+import dev.eltermino.app.Tab
 import dev.eltermino.app.SplitLayout
 import dev.eltermino.app.TabStatus
 import dev.eltermino.app.titles
@@ -91,8 +96,7 @@ internal fun SessionTabs(state: AppState, onConnect: (Host) -> Unit, modifier: M
 }
 
 @Composable
-private fun SessionTabChip(state: AppState, tab: SessionTab, title: String, focused: Boolean, visible: Boolean, broadcasting: Boolean) {
-    val status by tab.status.collectAsState()
+private fun SessionTabChip(state: AppState, tab: Tab, title: String, focused: Boolean, visible: Boolean, broadcasting: Boolean) {
     val colors = Carta.colors
     Pressable(
         onClick = { state.sessions.select(tab.id) },
@@ -106,7 +110,7 @@ private fun SessionTabChip(state: AppState, tab: SessionTab, title: String, focu
         hover = if (focused) colors.background else colors.hover,
     ) {
         Row(Modifier.padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            StatusDot(statusColor(status))
+            TabMark(tab)
             Text(
                 title,
                 modifier = Modifier.padding(start = 6.dp).widthIn(max = 180.dp),
@@ -128,17 +132,30 @@ private fun NewTabMenu(state: AppState, onConnect: (Host) -> Unit) {
     val workspace by state.services.workspace.workspace.collectAsState()
     val tabs by state.sessions.tabs.collectAsState()
     val selectedId by state.sessions.selectedId.collectAsState()
-    val focused = tabs.firstOrNull { it.id == selectedId }
+    val focused = tabs.firstOrNull { it.id == selectedId } as? SessionTab
     Box {
         IconButton(Icons.Default.Add, "Nuova sessione", onClick = { open = true }, size = 28.dp, iconSize = 16.dp)
         Menu(expanded = open, onDismiss = { open = false }) {
+            val focusedHost = tabs.firstOrNull { it.id == selectedId }?.hostId?.let(workspace::host)
             if (focused != null) {
                 MenuItem("Duplica ${focused.label}", icon = CartaIcons.Duplicate, onClick = {
                     open = false
                     state.sessions.duplicate(focused)
                 })
-                MenuDivider()
             }
+            if (focusedHost != null) {
+                MenuItem("File di ${focusedHost.label}", icon = CartaIcons.Folder, onClick = {
+                    open = false
+                    state.sessions.openFiles(focusedHost)
+                })
+            }
+            if (state.services.localFiles != null) {
+                MenuItem(if (state.services.platform.isDesktop) "File di questo computer" else "File dell'app", icon = CartaIcons.Folder, onClick = {
+                    open = false
+                    state.sessions.openFiles(null)
+                })
+            }
+            MenuDivider()
             val recent = workspace.hosts
                 .sortedWith(compareByDescending<Host> { it.lastConnectedEpochSeconds ?: 0 }.thenByDescending { it.favorite })
                 .take(8)
@@ -214,9 +231,26 @@ internal fun SessionContent(state: AppState, showExtraKeys: Boolean, split: Bool
     val panes by state.sessions.panes.collectAsState()
     val tabs by state.sessions.tabs.collectAsState()
     val layout = if (split) panes.layout else SplitLayout.Single
-    Box(modifier.background(Carta.colors.terminalBackground)) {
-        if (tabs.isEmpty()) {
-            EmptyState("Nessuna sessione aperta", "Scegli un host per aprire un terminale.", Modifier.align(Alignment.Center))
+    val scope = rememberCoroutineScope()
+    val drag = remember { FileDrag() }
+    val copier = remember { CopyFlow(state, scope) }
+    CompositionLocalProvider(LocalFileDrag provides drag, LocalCopyFlow provides copier) {
+        Column(modifier) {
+            Box(Modifier.weight(1f).fillMaxWidth().background(Carta.colors.terminalBackground)) {
+                SplitPanes(state, tabs.isEmpty(), layout, showExtraKeys)
+            }
+            TransfersBar(state)
+        }
+    }
+    copier.pending?.let { pending -> ConflictDialog(pending) { policy -> copier.resolve(policy) } }
+}
+
+@Composable
+private fun SplitPanes(state: AppState, empty: Boolean, layout: SplitLayout, showExtraKeys: Boolean) {
+    val panes by state.sessions.panes.collectAsState()
+    Box(Modifier.fillMaxSize()) {
+        if (empty) {
+            EmptyState("Nessuna sessione aperta", "Scegli un host per aprire un terminale o i suoi file.", Modifier.align(Alignment.Center))
             return@Box
         }
         var columnRatio by remember { mutableFloatStateOf(0.5f) }
@@ -305,7 +339,7 @@ private fun Pane(state: AppState, index: Int, framed: Boolean, showExtraKeys: Bo
 }
 
 @Composable
-private fun PaneHeader(state: AppState, index: Int, tab: SessionTab?, tabs: List<SessionTab>, broadcasting: Boolean) {
+private fun PaneHeader(state: AppState, index: Int, tab: Tab?, tabs: List<Tab>, broadcasting: Boolean) {
     val colors = Carta.colors
     var picking by remember { mutableStateOf(false) }
     val titles = remember(tabs) { tabs.titles() }
@@ -316,10 +350,7 @@ private fun PaneHeader(state: AppState, index: Int, tab: SessionTab?, tabs: List
         Box(Modifier.weight(1f)) {
             Pressable(onClick = { picking = true }, shape = RoundedCornerShape(6.dp)) {
                 Row(Modifier.padding(start = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (tab != null) {
-                        val status by tab.status.collectAsState()
-                        StatusDot(statusColor(status))
-                    }
+                    if (tab != null) TabMark(tab)
                     Text(
                         tab?.let { titles[it.id] } ?: "Riquadro libero",
                         modifier = Modifier.padding(start = 6.dp),
@@ -343,7 +374,7 @@ private fun PaneHeader(state: AppState, index: Int, tab: SessionTab?, tabs: List
         }
         if (broadcasting) Text("BROADCAST", style = Carta.type.caption, color = colors.accent, modifier = Modifier.padding(end = 6.dp))
         if (tab != null) {
-            IconButton(CartaIcons.Duplicate, "Duplica ${tab.label}", onClick = { state.sessions.duplicate(tab) }, size = 26.dp, iconSize = 15.dp)
+            if (tab is SessionTab) IconButton(CartaIcons.Duplicate, "Duplica ${tab.label}", onClick = { state.sessions.duplicate(tab) }, size = 26.dp, iconSize = 15.dp)
             IconButton(Icons.Default.Close, "Chiudi ${tab.label}", onClick = { state.sessions.close(tab) }, size = 26.dp, iconSize = 14.dp)
         }
     }
@@ -351,7 +382,7 @@ private fun PaneHeader(state: AppState, index: Int, tab: SessionTab?, tabs: List
 }
 
 @Composable
-private fun EmptyPane(state: AppState, index: Int, tabs: List<SessionTab>, shown: List<String?>) {
+private fun EmptyPane(state: AppState, index: Int, tabs: List<Tab>, shown: List<String?>) {
     val hidden = tabs.filter { it.id !in shown }
     val titles = remember(tabs) { tabs.titles() }
     Column(
@@ -397,7 +428,32 @@ private fun BroadcastBand(state: AppState, members: Int) {
 }
 
 @Composable
-private fun TabBody(state: AppState, tab: SessionTab, showExtraKeys: Boolean, focused: Boolean) {
+private fun TabBody(state: AppState, tab: Tab, showExtraKeys: Boolean, focused: Boolean) {
+    when (tab) {
+        is SessionTab -> TerminalTabBody(state, tab, showExtraKeys, focused)
+        is FilesTab -> FilesPane(state, tab, focused)
+        is EditorTab -> EditorPane(state, tab, focused)
+    }
+}
+
+/** The dot or icon in front of a tab's title. */
+@Composable
+private fun TabMark(tab: Tab) {
+    when (tab) {
+        is SessionTab -> {
+            val status by tab.status.collectAsState()
+            StatusDot(statusColor(status))
+        }
+        is FilesTab -> Icon(CartaIcons.Folder, contentDescription = "File", tint = Carta.colors.textDim, size = 14.dp)
+        is EditorTab -> {
+            val dirty by tab.dirty.collectAsState()
+            Icon(CartaIcons.Document, contentDescription = "Editor", tint = if (dirty) Carta.colors.accent else Carta.colors.textDim, size = 14.dp)
+        }
+    }
+}
+
+@Composable
+private fun TerminalTabBody(state: AppState, tab: SessionTab, showExtraKeys: Boolean, focused: Boolean) {
     when (val status = tab.status.collectAsState().value) {
         TabStatus.Connecting -> Centered {
             Spinner()

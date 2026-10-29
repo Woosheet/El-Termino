@@ -217,6 +217,58 @@ class MinaSshConnectorTest {
     }
 
     @Test
+    fun sftpStreamsResumeFromAnOffset() = runBlocking {
+        val connection = connect(TestServers.basic(TestServers.passwordAuth()))
+        val path = "/home/dev/core-ssh-stream-${System.nanoTime()}.bin"
+        try {
+            val sftp = connection.openSftp()
+            assertEquals("/home/dev", sftp.canonicalPath("."))
+            kotlin.test.assertNull(sftp.find("$path.missing"))
+            val data = ByteArray(300_000) { (it % 251).toByte() }
+
+            // An upload cut after 100 000 bytes, then resumed.
+            sftp.openWrite(path).apply { write(data, 100_000); close() }
+            assertEquals(100_000, sftp.stat(path).size)
+            sftp.openWrite(path, offset = 100_000).apply {
+                write(data.copyOfRange(100_000, data.size))
+                close()
+            }
+            assertEquals(data.size.toLong(), sftp.stat(path).size)
+
+            // Reading from an offset returns exactly the tail.
+            val source = sftp.openRead(path, offset = 250_000)
+            val tail = java.io.ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val n = source.read(buffer)
+                if (n < 0) break
+                tail.write(buffer, 0, n)
+            }
+            source.close()
+            assertTrue(tail.toByteArray().contentEquals(data.copyOfRange(250_000, data.size)))
+            assertEquals(connection.exec("sha256sum < $path").stdout.decodeToString().substringBefore(' '), sha256(data))
+
+            // Starting over truncates.
+            sftp.openWrite(path).apply { write("short".encodeToByteArray()); close() }
+            assertEquals(5, sftp.stat(path).size)
+
+            sftp.setModified(path, 1_700_000_000)
+            assertEquals(1_700_000_000, sftp.stat(path).modifiedEpochSeconds)
+
+            sftp.openWrite("$path.new").apply { write("new".encodeToByteArray()); close() }
+            sftp.rename("$path.new", path, overwrite = true)
+            assertEquals(3, sftp.stat(path).size)
+            sftp.close()
+        } finally {
+            connection.exec("rm -f $path $path.new")
+            connection.close()
+        }
+    }
+
+    private fun sha256(bytes: ByteArray) =
+        java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+
+    @Test
     fun manyChannelsOnOneConnection() = runBlocking {
         val connection = connect(TestServers.basic(TestServers.passwordAuth()))
         try {

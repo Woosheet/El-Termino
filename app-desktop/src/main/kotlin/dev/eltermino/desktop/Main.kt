@@ -16,6 +16,7 @@ fun main() {
         dataDir = DesktopPlatform.dataDir(),
         masterKey = KeychainMasterKeyProvider(),
         platform = DesktopPlatform { frame },
+        localFilesRoot = java.io.File(System.getProperty("user.home")),
     )
     val state = AppState(services)
 

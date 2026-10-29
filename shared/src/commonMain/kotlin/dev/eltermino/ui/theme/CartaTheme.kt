@@ -41,6 +41,12 @@ data class CartaColors(
     val offline: Color,
     val terminalBackground: Color,
     val terminalText: Color,
+    /** Syntax highlighting in the remote editor. */
+    val syntaxKey: Color,
+    val syntaxString: Color,
+    val syntaxNumber: Color,
+    val syntaxComment: Color,
+    val syntaxKeyword: Color,
 )
 
 val CartaLight = CartaColors(
@@ -63,6 +69,11 @@ val CartaLight = CartaColors(
     offline = Color(0xFFB4B2A9),
     terminalBackground = Color(0xFFFBFAF7),
     terminalText = Color(0xFF2C2C2A),
+    syntaxKey = Color(0xFF185FA5),
+    syntaxString = Color(0xFF3B6D11),
+    syntaxNumber = Color(0xFF854F0B),
+    syntaxComment = Color(0xFF8A8880),
+    syntaxKeyword = Color(0xFF534AB7),
 )
 
 /** The few text sizes the app uses; components pick from these, never ad-hoc sizes. */

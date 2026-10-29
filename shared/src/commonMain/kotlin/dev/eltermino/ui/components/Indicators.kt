@@ -66,3 +66,11 @@ fun Badge(text: String, color: Color = Carta.colors.accent, background: Color = 
         color = color,
     )
 }
+
+/** A thin track that fills with accent; [fraction] from 0 to 1. */
+@Composable
+fun ProgressBar(fraction: Float, modifier: Modifier = Modifier, color: Color = Carta.colors.accent) {
+    Box(modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(Carta.colors.line)) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction.coerceIn(0f, 1f)).background(color))
+    }
+}

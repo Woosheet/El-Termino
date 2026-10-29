@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.app.SessionTab
 import dev.eltermino.app.SplitLayout
 import dev.eltermino.app.titles
 import dev.eltermino.core.data.groupPath
@@ -32,12 +33,13 @@ import dev.eltermino.ui.theme.Carta
 /** Picks the sessions that receive each other's typing. */
 @Composable
 internal fun BroadcastDialog(state: AppState, onDismiss: () -> Unit) {
-    val tabs by state.sessions.tabs.collectAsState()
+    val allTabs by state.sessions.tabs.collectAsState()
+    val tabs = allTabs.filterIsInstance<SessionTab>()
     val current by state.sessions.broadcast.collectAsState()
     val panes by state.sessions.panes.collectAsState()
     val workspace by state.services.workspace.workspace.collectAsState()
     val titles = remember(tabs) { tabs.titles() }
-    val visible = panes.tabIds.filterNotNull().toSet()
+    val visible = panes.tabIds.filterNotNull().filter { id -> tabs.any { it.id == id } }.toSet()
     var chosen by remember {
         mutableStateOf(
             when {

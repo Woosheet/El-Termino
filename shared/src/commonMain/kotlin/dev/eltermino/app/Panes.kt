@@ -23,6 +23,12 @@ data class Panes(
         return if (index >= 0) copy(focused = index) else copy(tabIds = tabIds.toMutableList().also { it[focused] = tabId })
     }
 
+    /** Where a new tab goes: the first empty pane, so a split fills up, else the focused one. */
+    fun place(tabId: String): Panes {
+        val empty = tabIds.indexOf(null)
+        return if (empty >= 0) showIn(empty, tabId) else show(tabId)
+    }
+
     /** Shows [tabId] in pane [index]; a pane that showed it already gives it up. */
     fun showIn(index: Int, tabId: String): Panes {
         if (index !in tabIds.indices) return this

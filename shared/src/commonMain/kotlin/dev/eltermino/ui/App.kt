@@ -78,11 +78,16 @@ fun App(state: AppState) {
             screen = Screen.Sessions
             showHostsOnPhone = false
         }
+        val openFiles: (Host) -> Unit = { host ->
+            state.sessions.openFiles(host)
+            screen = Screen.Sessions
+            showHostsOnPhone = false
+        }
 
         // Insets are zero on desktop; on Android they keep us clear of the system bars.
         BoxWithConstraints(Modifier.fillMaxSize().background(Carta.colors.background).safeDrawingPadding()) {
             if (maxWidth >= 720.dp) {
-                DesktopLayout(state, screen, { screen = it }, connect, onEdit = { editing = Editing(it) })
+                DesktopLayout(state, screen, { screen = it }, connect, openFiles, onEdit = { editing = Editing(it) })
             } else {
                 PhoneLayout(
                     state = state,
@@ -91,6 +96,7 @@ fun App(state: AppState) {
                     onScreen = { screen = it; showHostsOnPhone = false },
                     onBackToHosts = { showHostsOnPhone = true; screen = Screen.Sessions },
                     onConnect = connect,
+                    onOpenFiles = openFiles,
                     onEdit = { editing = Editing(it) },
                 )
             }
@@ -107,6 +113,7 @@ private fun DesktopLayout(
     screen: Screen,
     onScreen: (Screen) -> Unit,
     onConnect: (Host) -> Unit,
+    onOpenFiles: (Host) -> Unit,
     onEdit: (Host?) -> Unit,
 ) {
     val store = state.services.workspace
@@ -119,7 +126,7 @@ private fun DesktopLayout(
                     Text("Host", style = Carta.type.title, modifier = Modifier.weight(1f).padding(start = 4.dp))
                     IconButton(Icons.Default.Add, "Nuovo host", onClick = { onEdit(null) }, tint = Carta.colors.accent)
                 }
-                HostList(state, onConnect, onEdit, Modifier.weight(1f))
+                HostList(state, onConnect, onEdit, Modifier.weight(1f), onOpenFiles = onOpenFiles)
                 SectionLabel("Strumenti")
                 ToolRow(Icons.Default.Lock, "Chiavi", screen == Screen.Keys) { onScreen(Screen.Keys) }
                 ToolRow(Icons.Default.Person, "Identità", screen == Screen.Identities) { onScreen(Screen.Identities) }
@@ -162,6 +169,7 @@ private fun PhoneLayout(
     onScreen: (Screen) -> Unit,
     onBackToHosts: () -> Unit,
     onConnect: (Host) -> Unit,
+    onOpenFiles: (Host) -> Unit,
     onEdit: (Host?) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
@@ -176,7 +184,7 @@ private fun PhoneLayout(
                         }
                         ToolsMenu(onScreen)
                     }
-                    HostList(state, onConnect, onEdit, Modifier.weight(1f))
+                    HostList(state, onConnect, onEdit, Modifier.weight(1f), onOpenFiles = onOpenFiles)
                 }
                 Fab(Icons.Default.Add, "Nuovo host", onClick = { onEdit(null) }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
             }
@@ -242,6 +250,7 @@ private fun StatusBar(state: AppState) {
     val connected by state.sessions.connectedHostIds.collectAsState()
     val tabs by state.sessions.tabs.collectAsState()
     val broadcast by state.sessions.broadcast.collectAsState()
+    val transfers by state.transfers.summary.collectAsState()
     Row(
         Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(horizontal = 12.dp, vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -255,6 +264,12 @@ private fun StatusBar(state: AppState) {
             },
             style = Carta.type.label, color = Carta.colors.textDim,
         )
+        if (transfers.active > 0 || transfers.waiting > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(CartaIcons.Transfer, contentDescription = null, tint = Carta.colors.textDim, size = 14.dp)
+                Text(describe(transfers, 0), style = Carta.type.label, color = Carta.colors.textDim, modifier = Modifier.padding(start = 4.dp))
+            }
+        }
         if (broadcast.isNotEmpty()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(CartaIcons.Broadcast, contentDescription = null, tint = Carta.colors.accent, size = 14.dp)

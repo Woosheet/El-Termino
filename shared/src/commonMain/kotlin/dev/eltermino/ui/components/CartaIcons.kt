@@ -70,6 +70,46 @@ object CartaIcons {
         }
     }
 
+    val Folder: ImageVector by lazy {
+        lineIcon("Folder") {
+            moveTo(3.5f, 7.5f); quadTo(3.5f, 5.5f, 5.5f, 5.5f); lineTo(9.5f, 5.5f); lineTo(11.5f, 7.5f)
+            lineTo(18.5f, 7.5f); quadTo(20.5f, 7.5f, 20.5f, 9.5f); lineTo(20.5f, 16.5f); quadTo(20.5f, 18.5f, 18.5f, 18.5f)
+            lineTo(5.5f, 18.5f); quadTo(3.5f, 18.5f, 3.5f, 16.5f); close()
+        }
+    }
+
+    /** A sheet with a folded corner: a file. */
+    val Document: ImageVector by lazy {
+        lineIcon("Document") {
+            moveTo(6f, 3.5f); lineTo(13.5f, 3.5f); lineTo(18.5f, 8.5f); lineTo(18.5f, 20.5f); lineTo(6f, 20.5f); close()
+            moveTo(13.5f, 3.5f); lineTo(13.5f, 8.5f); lineTo(18.5f, 8.5f)
+        }
+    }
+
+    /** An arrow out of a tray. */
+    val Upload: ImageVector by lazy {
+        lineIcon("Upload") {
+            moveTo(12f, 15f); lineTo(12f, 4f); moveTo(7.5f, 8.5f); lineTo(12f, 4f); lineTo(16.5f, 8.5f)
+            moveTo(4.5f, 15f); lineTo(4.5f, 19.5f); lineTo(19.5f, 19.5f); lineTo(19.5f, 15f)
+        }
+    }
+
+    /** Two arrows in opposite directions: files moving between places. */
+    val Transfer: ImageVector by lazy {
+        lineIcon("Transfer") {
+            moveTo(4f, 8f); lineTo(19f, 8f); moveTo(15.5f, 4.5f); lineTo(19f, 8f); lineTo(15.5f, 11.5f)
+            moveTo(20f, 16f); lineTo(5f, 16f); moveTo(8.5f, 12.5f); lineTo(5f, 16f); lineTo(8.5f, 19.5f)
+        }
+    }
+
+    val Pause: ImageVector by lazy {
+        lineIcon("Pause") { moveTo(9f, 6f); lineTo(9f, 18f); moveTo(15f, 6f); lineTo(15f, 18f) }
+    }
+
+    val Play: ImageVector by lazy {
+        lineIcon("Play") { moveTo(8f, 5.5f); lineTo(18.5f, 12f); lineTo(8f, 18.5f); close() }
+    }
+
     private fun PathBuilder.frame() = roundRect(4f, 5f, 20f, 19f)
 
     private fun PathBuilder.roundRect(left: Float, top: Float, right: Float, bottom: Float, radius: Float = 2f) {

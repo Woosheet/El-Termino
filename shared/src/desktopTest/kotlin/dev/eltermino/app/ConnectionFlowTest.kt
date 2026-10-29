@@ -94,7 +94,7 @@ class ConnectionFlowTest {
         assertNotNull(identity.passwordSecretId)
 
         // Tabs on one host share a connection: close it so the second login is a real one.
-        val first = (sessions.tabs.value.single().status.value as TabStatus.Open).connection
+        val first = ((sessions.tabs.value.single() as SessionTab).status.value as TabStatus.Open).connection
         sessions.closeAll()
         withTimeout(10_000) { first.state.first { it is ConnectionState.Closed } }
         asked.clear()

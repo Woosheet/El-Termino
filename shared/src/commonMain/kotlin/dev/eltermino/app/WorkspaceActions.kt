@@ -163,6 +163,15 @@ class WorkspaceActions(private val services: AppServices) {
         else ws.copy(snippets = ws.snippets + snippet)
     }
 
+    /** Adds [path] to the file panel's bookmarks for [endpoint], or removes it if it's there. */
+    suspend fun toggleBookmark(endpoint: Endpoint, path: String) = store.update { ws ->
+        fun List<String>.toggled() = if (path in this) this - path else this + path
+        when (endpoint) {
+            Endpoint.Local -> ws.copy(ui = ws.ui.copy(localBookmarks = ws.ui.localBookmarks.toggled()))
+            is Endpoint.Remote -> ws.copy(hosts = ws.hosts.map { if (it.id == endpoint.hostId) it.copy(bookmarks = it.bookmarks.toggled()) else it })
+        }
+    }
+
     suspend fun deleteSnippet(id: String) = store.update { ws -> ws.copy(snippets = ws.snippets.filterNot { it.id == id }) }
 }
 

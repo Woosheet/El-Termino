@@ -171,7 +171,7 @@ class SessionFlowTest {
         sessions.runSnippet(command, run = true, SnippetTarget.Hosts(hosts.map { it.id }))
 
         eventually({ "tabs: ${sessions.tabs.value.size}" }) { sessions.tabs.value.size == 2 }
-        val connections = sessions.tabs.value.map { awaitOpen(it).connection }
+        val connections = sessions.tabs.value.filterIsInstance<SessionTab>().map { awaitOpen(it).connection }
         eventually({ connections.joinToString { it.run("cat $file 2>&1") } }) { connections.all { it.run("cat $file 2>/dev/null") == "ciao" } }
     }
 

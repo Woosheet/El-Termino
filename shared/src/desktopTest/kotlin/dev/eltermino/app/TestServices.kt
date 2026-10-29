@@ -12,6 +12,7 @@ import java.nio.file.Files
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import kotlin.random.Random
+import kotlinx.coroutines.flow.first
 
 /** Servers and throwaway credentials from testenv/README.md. */
 object TestEnv {
@@ -62,6 +63,7 @@ class TestPlatform : Platform {
 }
 
 fun testServices(dir: File = Files.createTempDirectory("eltermino").toFile().apply { deleteOnExit() }): AppServices {
+    val local = File(dir, "local").apply { mkdirs() }
     val key = Random.nextBytes(32)
     return AppServices(
         workspace = FileWorkspaceStore(File(dir, "workspace.json")),
@@ -69,6 +71,7 @@ fun testServices(dir: File = Files.createTempDirectory("eltermino").toFile().app
         connector = MinaSshConnector(MinaConfig()),
         keyTool = MinaKeyTool(),
         platform = TestPlatform(),
+        localFiles = LocalFileSystem(local),
     )
 }
 
@@ -135,3 +138,34 @@ class TestProxy(private val targetPort: Int) : AutoCloseable {
         cut()
     }
 }
+
+suspend fun WorkspaceActions.keyIdentity(): dev.eltermino.core.data.Identity {
+    val key = importKey("test-ed25519", TestEnv.key("id_ed25519").readBytes())
+    return saveIdentity(dev.eltermino.core.data.Identity(dev.eltermino.core.data.newId(), "dev", TestEnv.USER, keyId = key.id))
+}
+
+suspend fun WorkspaceActions.testHost(
+    label: String,
+    port: Int,
+    identity: dev.eltermino.core.data.Identity,
+    address: String = TestEnv.HOST,
+    jumpHostId: String? = null,
+) = dev.eltermino.core.data.Host(dev.eltermino.core.data.newId(), label, address, port, identityId = identity.id, jumpHostId = jumpHostId)
+    .also { saveHost(it) }
+
+/** Runs [command] on [host] over its shared link and returns stdout, trimmed. */
+suspend fun Connections.run(host: dev.eltermino.core.data.Host, command: String): String {
+    val lease = acquire(host)
+    try {
+        val up = kotlinx.coroutines.withTimeout(30_000) { lease.link.state.first { it is LinkState.Up || it is LinkState.Down } }
+        check(up is LinkState.Up) { (up as LinkState.Down).message }
+        val result = up.connection.exec(command)
+        check(result.exitCode == 0) { "$command: ${result.stderr.decodeToString()}" }
+        return result.stdout.decodeToString().trim()
+    } finally {
+        lease.release()
+    }
+}
+
+fun sha256(bytes: ByteArray): String =
+    java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }

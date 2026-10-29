@@ -31,6 +31,8 @@ class ElTerminoApp : Application() {
                 dataDir = dataDir,
                 masterKey = AndroidKeystoreMasterKeyProvider(File(dataDir, "vault.key")),
                 platform = platform,
+                // App storage: other apps' files are reached through the system picker.
+                localFilesRoot = getExternalFilesDir(null) ?: File(filesDir, "files").apply { mkdirs() },
             ),
         )
         // The foreground service runs exactly while there's at least one tab.

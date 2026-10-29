@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.app.SessionTab
 import dev.eltermino.app.SnippetTarget
 import dev.eltermino.app.fillSnippet
 import dev.eltermino.app.snippetVariables
@@ -177,7 +178,8 @@ private enum class RunWhere { Focused, Tabs, Hosts }
 @Composable
 internal fun SnippetRunDialog(state: AppState, snippet: Snippet, onDismiss: () -> Unit) {
     val workspace by state.services.workspace.workspace.collectAsState()
-    val tabs by state.sessions.tabs.collectAsState()
+    val allTabs by state.sessions.tabs.collectAsState()
+    val tabs = allTabs.filterIsInstance<SessionTab>()
     val selectedId by state.sessions.selectedId.collectAsState()
     val broadcast by state.sessions.broadcast.collectAsState()
     val titles = remember(tabs) { tabs.titles() }
@@ -285,7 +287,7 @@ internal fun SnippetLauncher(state: AppState, onManage: () -> Unit) {
                     MenuItem(snippet.name, detail = snippet.command.lineSequence().first(), onClick = {
                         open = false
                         // Nothing to ask: straight into the focused terminal, like typing it.
-                        if (selectedId != null && snippetVariables(snippet.command).isEmpty()) {
+                        if (selectedId != null && state.sessions.tabs.value.any { it.id == selectedId && it is SessionTab } && snippetVariables(snippet.command).isEmpty()) {
                             state.sessions.runSnippet(snippet.command, snippet.run, SnippetTarget.Focused)
                         } else {
                             running = snippet

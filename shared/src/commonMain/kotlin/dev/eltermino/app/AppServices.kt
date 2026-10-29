@@ -12,6 +12,8 @@ class AppServices(
     val connector: SshConnector,
     val keyTool: SshKeyTool,
     val platform: Platform,
+    /** This device's files for the local panel and transfers; null where there are none. */
+    val localFiles: FileSystem? = null,
 )
 
 /** What differs between desktop and Android. */
@@ -20,6 +22,9 @@ interface Platform {
 
     /** Lets the user choose a file; null when they cancel. */
     suspend fun pickFile(title: String): PickedFile?
+
+    /** Absolute paths of files chosen for upload, where the device has paths; empty otherwise. */
+    suspend fun pickLocalFiles(title: String): List<String> = emptyList()
 
     /** `~/.ssh/config`, or null where there's none (always on Android). */
     fun readSshConfig(): String?

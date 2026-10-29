@@ -58,4 +58,4 @@ Configurazione obbligatoria sul client: `HostConfigEntryResolver.EMPTY` e `KeyId
 
 ## Da rivalutare
 
-cbssh resta l'alternativa. Ha senso riprenderla in Fase 4 se il firmatario FIDO2 con MINA risulta complicato, oppure quando arriverà alla 1.0. Grazie all'interfaccia `core/ssh`, cambiare libreria tocca solo l'implementazione.
+cbssh resta l'alternativa. Ha senso riprenderla nella Fase 6 (autenticazione avanzata) se il firmatario FIDO2 con MINA risulta complicato, oppure quando arriverà alla 1.0. Grazie all'interfaccia `core/ssh`, cambiare libreria tocca solo l'implementazione.

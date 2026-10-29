@@ -45,4 +45,11 @@ class PanesTest {
         val panes = Panes(SplitLayout.Columns, listOf("a", "b"), focused = 0).showIn(1, "a")
         assertEquals(Panes(SplitLayout.Columns, listOf(null, "a"), focused = 1), panes)
     }
+
+    @Test
+    fun newTabsFillEmptyPanesFirst() {
+        val panes = Panes(SplitLayout.Columns, listOf("a", null), focused = 0)
+        assertEquals(Panes(SplitLayout.Columns, listOf("a", "b"), focused = 1), panes.place("b"))
+        assertEquals(Panes(SplitLayout.Columns, listOf("c", "b"), focused = 0), panes.place("b").focus(0).place("c"))
+    }
 }

@@ -12,4 +12,5 @@ class AppState(val services: AppServices) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val actions = WorkspaceActions(services)
     val sessions = SessionsController(services, actions, scope)
+    val transfers = TransferManager(scope, services, sessions.connections)
 }

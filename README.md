@@ -29,6 +29,7 @@ docker compose -f testenv/docker-compose.yml up -d --build
 ```
 
 - `:shared:desktopTest` prova il flusso di connessione completo e salva gli snapshot dell'interfaccia in `shared/build/snapshots/`. Copre host key, password, OTP, chiavi, jump host e import, ma anche connessioni condivise, riconnessione dopo una caduta di rete simulata, broadcast e snippet.
+- `TransferFlowTest` copia file e cartelle tra basic, bastion, internal e una cartella locale in una sola coda. Prova anche pausa e ripresa, i conflitti, una caduta di rete a metà, l'editor remoto e le operazioni del pannello file.
 - `SessionSoakTest` tiene 10 sessioni occupate per 20 secondi. Per la prova lunga della Fase 2:
 
   ```bash

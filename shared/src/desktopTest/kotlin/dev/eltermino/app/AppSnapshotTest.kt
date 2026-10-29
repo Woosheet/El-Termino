@@ -219,6 +219,60 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun filePanelsSideBySideWithATransfer(): Unit = runBlocking {
+        val services = testServices()
+        val state = AppState(services)
+        val web = seed(state)
+        val answering = CoroutineScope(Dispatchers.Default)
+        answering.answerHostKeys(state)
+        val dir = "/tmp/snap-${newId().take(6)}"
+        state.sessions.connections.run(web, "mkdir -p $dir/config $dir/logs && head -c 90000000 /dev/urandom > $dir/backup.tar.gz && printf 'server:\\n  porta: 8080\\n' > $dir/app.yaml && touch $dir/.env $dir/deploy.sh && chmod 755 $dir/deploy.sh")
+        val localRoot = services.localFiles!!.home()
+        java.io.File(localRoot, "Documenti").mkdirs()
+        java.io.File(localRoot, "note.txt").writeText("ciao")
+        java.io.File(localRoot, "foto.jpg").writeBytes(ByteArray(2_400_000))
+
+        val local = state.sessions.openFiles(null)
+        state.sessions.setLayout(SplitLayout.Columns)
+        val remote = state.sessions.openFiles(web)
+        withTimeout(30_000) { remote.browser.path.first { it != null } }
+        remote.browser.open(dir)
+        withTimeout(10_000) { remote.browser.path.first { it == dir } }
+        remote.browser.selection.value = setOf("$dir/app.yaml", "$dir/deploy.sh")
+        val backup = withTimeout(10_000) { remote.browser.entries.first { list -> list.any { it.name == "backup.tar.gz" } } }.first { it.name == "backup.tar.gz" }
+        state.transfers.maxParallel.value = 1
+        state.transfers.enqueue(Endpoint.Remote(web.id), listOf(backup), Location(Endpoint.Local, localRoot), ConflictPolicy.Overwrite)
+        state.transfers.enqueue(Endpoint.Local, listOf(services.localFiles!!.stat("$localRoot/foto.jpg")!!), Location(Endpoint.Remote(web.id), dir), ConflictPolicy.Overwrite)
+        withTimeout(30_000) { state.transfers.transfers.value.first().progress.first { it.bytesDone > 0 } }
+        state.transfers.pause(state.transfers.transfers.value.first())
+        snapshot(state, "app-desktop-files", width = 2800, height = 1700)
+        state.transfers.transfers.value.forEach { state.transfers.cancel(it) }
+        state.sessions.connections.run(web, "rm -rf $dir")
+        answering.cancel()
+        state.sessions.closeAll()
+        local.browser.close()
+    }
+
+    @Test
+    fun remoteEditorWithYaml(): Unit = runBlocking {
+        val state = AppState(testServices())
+        val web = seed(state)
+        val answering = CoroutineScope(Dispatchers.Default)
+        answering.answerHostKeys(state)
+        val path = "/tmp/snap-${newId().take(6)}.yaml"
+        state.sessions.connections.run(
+            web,
+            "printf '# Configurazione del servizio\\nserver:\\n  host: \"0.0.0.0\"\\n  porta: 8080\\n  tls: true\\nlog:\\n  livello: info   # debug in staging\\n  file: /var/log/app.log\\nworker:\\n  - nome: email\\n    repliche: 3\\n' > $path",
+        )
+        val tab = state.sessions.openEditor(Endpoint.Remote(web.id), path)
+        withTimeout(30_000) { tab.editor.first { it != null } }
+        snapshot(state, "app-desktop-editor")
+        state.sessions.connections.run(web, "rm -f $path")
+        answering.cancel()
+        state.sessions.closeAll()
+    }
+
+    @Test
     fun emptyFirstRun() {
         snapshot(AppState(testServices()), "app-desktop-empty")
     }

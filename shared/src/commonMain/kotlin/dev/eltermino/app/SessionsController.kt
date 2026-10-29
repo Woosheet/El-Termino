@@ -1,15 +1,9 @@
 package dev.eltermino.app
 
 import dev.eltermino.core.data.Host
-import dev.eltermino.core.data.KnownHost
-import dev.eltermino.core.data.KnownHostStatus
-import dev.eltermino.core.data.knownHostStatus
 import dev.eltermino.core.data.newId
-import dev.eltermino.core.data.trust
 import dev.eltermino.core.ssh.ConnectionState
-import dev.eltermino.core.ssh.HostKeyVerifier
 import dev.eltermino.core.ssh.PtyConfig
-import dev.eltermino.core.ssh.SecretResolver
 import dev.eltermino.core.ssh.SshConnection
 import dev.eltermino.core.ssh.SshException
 import dev.eltermino.core.terminal.TerminalInput
@@ -48,7 +42,13 @@ import kotlin.time.Duration.Companion.seconds
 import kotlin.time.ExperimentalTime
 import kotlin.time.TimeMark
 
-class SessionTab internal constructor(val id: String, val hostId: String, val label: String) {
+/** What a tab shows: a terminal, a file panel or an editor. Any of them fits in a pane. */
+sealed class Tab(val id: String, val label: String) {
+    /** Null for this device's files. */
+    abstract val hostId: String?
+}
+
+class SessionTab internal constructor(id: String, override val hostId: String, label: String) : Tab(id, label) {
     internal val mutableStatus = MutableStateFlow<TabStatus>(TabStatus.Connecting)
     val status: StateFlow<TabStatus> = mutableStatus.asStateFlow()
 
@@ -59,6 +59,21 @@ class SessionTab internal constructor(val id: String, val hostId: String, val la
 
     internal var job: Job? = null
     internal var link: HostLink? = null
+}
+
+/** A file panel on a host, or on this device when [hostId] is null. */
+class FilesTab internal constructor(id: String, override val hostId: String?, label: String, val browser: FileBrowser) : Tab(id, label)
+
+/** A text file opened from a file panel, with its own share of the host's link. */
+class EditorTab internal constructor(id: String, override val hostId: String?, label: String, val path: String) : Tab(id, label) {
+    internal val mutableEditor = MutableStateFlow<RemoteEditor?>(null)
+    internal var release: (suspend () -> Unit)? = null
+
+    /** The text as loaded; the editor keeps its own copy while you type. */
+    val loaded = MutableStateFlow<String?>(null)
+    val error = MutableStateFlow<String?>(null)
+    val dirty = MutableStateFlow(false)
+    val editor: StateFlow<RemoteEditor?> = mutableEditor.asStateFlow()
 }
 
 sealed interface TabStatus {
@@ -94,13 +109,14 @@ class SessionsController(
     private val scope: CoroutineScope,
     reconnectPolicy: ReconnectPolicy = ReconnectPolicy(),
     private val terminalConfig: TerminalSessionConfig = TerminalSessionConfig(),
+    val connections: Connections = Connections(services, actions, scope, reconnectPolicy),
 ) {
-    val prompter = Prompter()
+    val prompter: Prompter get() = connections.prompter
 
-    private val links = HostLinks(scope, reconnectPolicy, ::openConnection)
+    private val mutableTabs = MutableStateFlow<List<Tab>>(emptyList())
+    val tabs: StateFlow<List<Tab>> = mutableTabs.asStateFlow()
 
-    private val mutableTabs = MutableStateFlow<List<SessionTab>>(emptyList())
-    val tabs: StateFlow<List<SessionTab>> = mutableTabs.asStateFlow()
+    private val terminals get() = tabs.value.filterIsInstance<SessionTab>()
 
     private val mutablePanes = MutableStateFlow(Panes())
     val panes: StateFlow<Panes> = mutablePanes.asStateFlow()
@@ -118,9 +134,7 @@ class SessionsController(
     val connectedHostIds: StateFlow<Set<String>> = tabs
         .flatMapLatest { list ->
             if (list.isEmpty()) flowOf(emptySet())
-            else combine(list.map { tab -> tab.status.map { tab.hostId to (it is TabStatus.Open) } }) { pairs ->
-                pairs.filter { it.second }.map { it.first }.toSet()
-            }
+            else combine(list.map { tab -> tab.connectedHost() }) { hosts -> hosts.filterNotNull().toSet() }
         }
         .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
@@ -134,14 +148,52 @@ class SessionsController(
 
     fun showInPane(index: Int, tabId: String) = mutablePanes.update { it.showIn(index, tabId) }
 
-    fun setLayout(layout: SplitLayout) = mutablePanes.update { it.withLayout(layout, tabs.value.map(SessionTab::id)) }
+    fun setLayout(layout: SplitLayout) = mutablePanes.update { it.withLayout(layout, tabs.value.map(Tab::id)) }
 
-    /** Opens a new tab on [host] in the focused pane. */
+    /** Opens a new tab on [host], in an empty pane if the split has one, else in the focused one. */
     fun connect(host: Host): SessionTab {
-        val tab = SessionTab(newId(), host.id, host.label)
-        mutableTabs.update { it + tab }
-        mutablePanes.update { it.show(tab.id) }
+        val tab = add(SessionTab(newId(), host.id, host.label))
         start(tab)
+        return tab
+    }
+
+    /** A file panel on [host], or on this device when null, in the focused pane. */
+    fun openFiles(host: Host?): FilesTab {
+        val browser = if (host == null) {
+            val local = services.localFiles ?: throw IllegalStateException("Su questo dispositivo non ci sono file locali")
+            FileBrowser(Endpoint.Local, scope, open = { local })
+        } else {
+            FileBrowser(Endpoint.Remote(host.id), scope, open = { connections.files(host) }, onClose = { (it as? RemoteFileSystem)?.release() })
+        }
+        return add(FilesTab(newId(), host?.id, host?.label ?: "Questo computer", browser))
+    }
+
+    /** [path] as text in a new tab; it gets its own share of the link, so closing the panel doesn't stop it. */
+    fun openEditor(endpoint: Endpoint, path: String): EditorTab {
+        val host = (endpoint as? Endpoint.Remote)?.let { services.workspace.workspace.value.host(it.hostId) }
+        val tab = add(EditorTab(newId(), host?.id, fileName(path), path))
+        scope.launch {
+            try {
+                val fs: FileSystem = if (host != null) {
+                    connections.files(host).also { remote -> tab.release = { remote.release() } }
+                } else {
+                    services.localFiles ?: throw IllegalStateException("Su questo dispositivo non ci sono file locali")
+                }
+                val editor = RemoteEditor(endpoint, path, fs)
+                tab.loaded.value = editor.load()
+                tab.mutableEditor.value = editor
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                tab.error.value = failureMessage(e)
+            }
+        }
+        return tab
+    }
+
+    private fun <T : Tab> add(tab: T): T {
+        mutableTabs.update { it + tab }
+        mutablePanes.update { it.place(tab.id) }
         return tab
     }
 
@@ -163,12 +215,18 @@ class SessionsController(
         job.invokeOnCompletion { tab.mutableStatus.value = TabStatus.Closed(tab.terminal.value, "Riconnessione annullata") }
     }
 
-    fun close(tab: SessionTab) {
-        tab.job?.cancel()
-        scope.launch { tab.terminal.value?.let { withContext(NonCancellable) { runCatching { it.close() } } } }
+    fun close(tab: Tab) {
+        when (tab) {
+            is SessionTab -> {
+                tab.job?.cancel()
+                scope.launch { tab.terminal.value?.let { withContext(NonCancellable) { runCatching { it.close() } } } }
+            }
+            is FilesTab -> scope.launch { tab.browser.close() }
+            is EditorTab -> scope.launch { tab.release?.invoke() }
+        }
         val remaining = mutableTabs.value - tab
         mutableTabs.value = remaining
-        mutablePanes.update { it.without(tab.id, remaining.map(SessionTab::id)) }
+        mutablePanes.update { it.without(tab.id, remaining.map(Tab::id)) }
         mutableBroadcast.update { (it - tab.id).takeIf { ids -> ids.size >= 2 } ?: emptySet() }
     }
 
@@ -176,7 +234,7 @@ class SessionsController(
 
     /** Starts broadcasting between [tabIds]; fewer than two turns it off. */
     fun setBroadcast(tabIds: Set<String>) {
-        val open = tabs.value.map(SessionTab::id).toSet()
+        val open = terminals.map(SessionTab::id).toSet()
         mutableBroadcast.value = (tabIds intersect open).takeIf { it.size >= 2 } ?: emptySet()
     }
 
@@ -187,11 +245,11 @@ class SessionsController(
     fun runSnippet(command: String, run: Boolean, target: SnippetTarget) {
         when (target) {
             // Typed like the user would, so broadcast mirrors it.
-            SnippetTarget.Focused -> tabs.value.firstOrNull { it.id == panes.value.focusedTabId }?.terminal?.value?.let { terminal ->
+            SnippetTarget.Focused -> terminals.firstOrNull { it.id == panes.value.focusedTabId }?.terminal?.value?.let { terminal ->
                 terminal.paste(command)
                 if (run) terminal.sendKey(TerminalKey.Enter)
             }
-            is SnippetTarget.Tabs -> tabs.value.filter { it.id in target.tabIds }.forEach { tab ->
+            is SnippetTarget.Tabs -> terminals.filter { it.id in target.tabIds }.forEach { tab ->
                 tab.terminal.value?.let { send(it, command, run) }
             }
             is SnippetTarget.Hosts -> {
@@ -213,7 +271,7 @@ class SessionsController(
     }
 
     private suspend fun mirrorBroadcastInput() {
-        combine(broadcast, tabs) { ids, list -> list.filter { it.id in ids } }
+        combine(broadcast, tabs) { ids, list -> list.filterIsInstance<SessionTab>().filter { it.id in ids } }
             .distinctUntilChanged()
             .collectLatest { members ->
                 if (members.size < 2) return@collectLatest
@@ -240,7 +298,7 @@ class SessionsController(
                 tab.mutableStatus.value = TabStatus.Failed("L'host è stato eliminato")
                 return@launch
             }
-            val lease = links.acquire(host)
+            val lease = connections.acquire(host)
             tab.link = lease.link
             try {
                 follow(tab, lease.link)
@@ -309,61 +367,27 @@ class SessionsController(
         if (withTimeoutOrNull(2.seconds) { connection.state.first { it is ConnectionState.Closed } } != null) awaitCancellation()
         return "La sessione è terminata"
     }
+}
 
-    /** Logs in to [hostId]; any answer the user asked to keep is saved once the login worked. */
-    private suspend fun openConnection(hostId: String): SshConnection {
-        val lazySecrets = LazySecrets()
-        val afterSuccess = mutableListOf<suspend () -> Unit>()
-        try {
-            val workspace = services.workspace.workspace.value
-            val host = workspace.host(hostId) ?: throw HostMissingException()
-            val target = ConnectionPlanner(workspace, prompter, actions, lazySecrets, afterSuccess).plan(host)
-            val connection = services.connector.connect(target, hostKeyVerifier(), secretResolver(lazySecrets))
-            afterSuccess.forEach { save -> runCatching { save() } }
-            markConnected(hostId)
-            return connection
-        } finally {
-            lazySecrets.clear()
-        }
-    }
-
-    private fun hostKeyVerifier() = HostKeyVerifier { host, port, fingerprint ->
-        val workspace = services.workspace.workspace.value
-        when (val status = workspace.knownHostStatus(host, port, fingerprint.keyType, fingerprint.sha256)) {
-            KnownHostStatus.Trusted -> true
-            else -> {
-                val previous = (status as? KnownHostStatus.Changed)?.previous
-                val accepted = prompter.ask(PendingPrompt.HostKey(host, port, fingerprint, previous)) == true
-                if (accepted) {
-                    services.workspace.update {
-                        it.trust(KnownHost(host, port, fingerprint.keyType, fingerprint.sha256, fingerprint.publicKey, nowEpochSeconds()))
-                    }
-                }
-                accepted
-            }
-        }
-    }
-
-    private fun secretResolver(lazySecrets: LazySecrets) = SecretResolver { ref ->
-        lazySecrets.resolve(ref.id)
-            ?: services.vault.get(ref.id)
-            ?: throw VaultException("Un segreto di questo host non è più nel vault")
-    }
-
-    private suspend fun markConnected(hostId: String) = services.workspace.update { ws ->
-        ws.copy(hosts = ws.hosts.map { if (it.id == hostId) it.copy(lastConnectedEpochSeconds = nowEpochSeconds()) else it })
+/** Tab titles, numbered when a host has more than one of a kind: "web-01", "web-01 · 2". */
+fun List<Tab>.titles(): Map<String, String> {
+    val seen = mutableMapOf<Pair<String?, String>, Int>()
+    val counts = groupingBy { it.kindKey() }.eachCount()
+    return associate { tab ->
+        val key = tab.kindKey()
+        val n = (seen[key] ?: 0) + 1
+        seen[key] = n
+        tab.id to if (counts.getValue(key) > 1 && tab !is EditorTab) "${tab.label} · $n" else tab.label
     }
 }
 
-/** Tab titles, numbered when a host has more than one: "web-01", "web-01 · 2". */
-fun List<SessionTab>.titles(): Map<String, String> {
-    val seen = mutableMapOf<String, Int>()
-    val counts = groupingBy { it.hostId }.eachCount()
-    return associate { tab ->
-        val n = (seen[tab.hostId] ?: 0) + 1
-        seen[tab.hostId] = n
-        tab.id to if (counts.getValue(tab.hostId) > 1) "${tab.label} · $n" else tab.label
-    }
+private fun Tab.kindKey(): Pair<String?, String> = hostId to (this::class.simpleName ?: "")
+
+/** The host this tab has a working connection to, if any. */
+private fun Tab.connectedHost(): kotlinx.coroutines.flow.Flow<String?> = when (this) {
+    is SessionTab -> status.map { if (it is TabStatus.Open) hostId else null }
+    is FilesTab -> combine(browser.path, browser.error) { path, error -> if (hostId != null && path != null && error == null) hostId else null }
+    is EditorTab -> flowOf(null)
 }
 
 @OptIn(ExperimentalTime::class)
@@ -371,6 +395,9 @@ internal fun nowEpochSeconds(): Long = Clock.System.now().epochSeconds
 
 /** The local time as "14:32". */
 internal expect fun clockTime(): String
+
+/** A file's date as the panel shows it: "14:32" today, "29 ott 14:32" this year, "29 ott 2024" before. */
+expect fun formatFileTime(epochSeconds: Long): String
 
 internal fun describe(e: Throwable): String = when (e) {
     is SshException.ConnectFailed -> "Impossibile raggiungere ${e.host}:${e.port}" + (e.cause?.message?.let { ": $it" } ?: "")

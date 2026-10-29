@@ -26,6 +26,15 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
         withContext(Dispatchers.IO) { PickedFile(file.name, file.readBytes()) }
     }
 
+    override suspend fun pickLocalFiles(title: String): List<String> = withContext(Dispatchers.Main) {
+        val dialog = FileDialog(window(), title, FileDialog.LOAD).apply {
+            isMultipleMode = true
+            directory = home.path
+            isVisible = true
+        }
+        dialog.files.orEmpty().map { it.absolutePath.replace('\\', '/') }
+    }
+
     override fun readSshConfig(): String? = File(sshDir, "config").takeIf { it.isFile }?.readText()
 
     override fun resolveSshInclude(pattern: String): List<Pair<String, String>> {

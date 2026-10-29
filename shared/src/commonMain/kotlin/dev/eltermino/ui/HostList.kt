@@ -49,6 +49,7 @@ internal fun HostList(
     onConnect: (Host) -> Unit,
     onEdit: (Host) -> Unit,
     modifier: Modifier = Modifier,
+    onOpenFiles: (Host) -> Unit = {},
 ) {
     val workspace by state.services.workspace.workspace.collectAsState()
     val connected by state.sessions.connectedHostIds.collectAsState()
@@ -73,6 +74,7 @@ internal fun HostList(
                     subtitle = subtitle(workspace, host),
                     online = host.id in connected,
                     onConnect = { onConnect(host) },
+                    onOpenFiles = { onOpenFiles(host) },
                     onEdit = { onEdit(host) },
                     onDuplicate = { scope.launch { state.actions.saveHost(host.copy(id = newId(), label = "${host.label} (copia)", lastConnectedEpochSeconds = null)) } },
                     onToggleFavorite = { scope.launch { state.actions.saveHost(host.copy(favorite = !host.favorite)) } },
@@ -105,6 +107,7 @@ private fun HostRow(
     subtitle: String,
     online: Boolean,
     onConnect: () -> Unit,
+    onOpenFiles: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -124,7 +127,8 @@ private fun HostRow(
             Box {
                 IconButton(Icons.Default.MoreVert, "Azioni per ${host.label}", onClick = { menu = true })
                 Menu(expanded = menu, onDismiss = { menu = false }, alignEnd = true) {
-                    MenuItem("Connetti", onClick = { menu = false; onConnect() })
+                    MenuItem("Terminale", onClick = { menu = false; onConnect() })
+                    MenuItem("File (SFTP)", onClick = { menu = false; onOpenFiles() })
                     MenuItem("Modifica", onClick = { menu = false; onEdit() })
                     MenuItem("Duplica", onClick = { menu = false; onDuplicate() })
                     MenuItem(if (host.favorite) "Togli dai preferiti" else "Aggiungi ai preferiti", onClick = { menu = false; onToggleFavorite() })
