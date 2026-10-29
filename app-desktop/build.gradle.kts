@@ -23,8 +23,29 @@ compose.desktop {
         mainClass = "dev.eltermino.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "ElTermino"
-            packageVersion = "0.1.0"
+            packageName = "El Termino"
+            // macOS refuses versions that start with 0.
+            packageVersion = "1.0.0"
+            description = "Client SSH e SFTP"
+            vendor = "Woosheet"
+            // What suggestRuntimeModules finds, plus what is only loaded at run time:
+            // the EC and EdDSA providers for keys and key exchange, and the extra charsets.
+            modules(
+                "java.instrument", "java.management", "java.rmi", "java.security.jgss", "java.sql",
+                "jdk.security.auth", "jdk.unsupported", "jdk.crypto.ec", "jdk.charsets",
+            )
+            macOS {
+                bundleID = "dev.eltermino.desktop"
+                iconFile.set(project.file("packaging/icon.icns"))
+            }
+            windows {
+                iconFile.set(project.file("packaging/icon.ico"))
+            }
+            linux {
+                // Debian package names take no spaces or capitals.
+                packageName = "el-termino"
+                iconFile.set(project.file("packaging/icon.png"))
+            }
         }
     }
 }
