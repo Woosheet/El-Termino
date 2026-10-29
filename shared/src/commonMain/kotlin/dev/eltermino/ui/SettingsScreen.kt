@@ -1,5 +1,6 @@
 package dev.eltermino.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -26,6 +27,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.ui.components.AppIconPainter
+import dev.eltermino.ui.components.AppIconStyle
 import dev.eltermino.ui.components.Checkbox
 import dev.eltermino.ui.components.Divider
 import dev.eltermino.ui.components.Pressable
@@ -59,6 +62,16 @@ internal fun SettingsScreen(state: AppState, modifier: Modifier = Modifier, extr
                     }
                     repeat(3 - row.size) { Box(Modifier.weight(1f)) }
                 }
+            }
+        }
+        SettingsSection("Icona", "L'icona dell'app nel Dock, nella barra delle applicazioni e nella finestra.") {
+            Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                AppIconStyle.entries.forEach { style ->
+                    ThemeCard(style.label, selected = AppIconStyle.of(workspace.ui.appIcon) == style, onClick = { update { it.copy(appIcon = style.id) } }, modifier = Modifier.weight(1f)) {
+                        Image(AppIconPainter(style), contentDescription = null, modifier = Modifier.fillMaxSize())
+                    }
+                }
+                Box(Modifier.weight(1f))
             }
         }
         SettingsSection("Avvisi", "Un messaggio in basso a destra compare sempre. La notifica del sistema serve quando sei in un'altra finestra.") {

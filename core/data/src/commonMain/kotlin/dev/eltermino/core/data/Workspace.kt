@@ -153,6 +153,8 @@ data class UiSettings(
     val localBookmarks: List<String> = emptyList(),
     /** A theme id, or "system" to follow the OS: Carta by day, Notte in dark mode. */
     val theme: String = "system",
+    /** The app icon's `AppIconStyle` id, shown in the Dock, taskbar and window. */
+    val appIcon: String = "bigote",
     /** System notifications when a transfer finishes or fails. */
     val notifyTransfers: Boolean = true,
     /** Set once the first-run welcome has been answered. */

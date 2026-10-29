@@ -251,6 +251,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Avvisi a fine trasferimento, dentro l'app e come notifiche di sistema; conferma prima di chiudere con trasferimenti in corso.
   - File trascinati su un terminale caricati nella cartella della shell.
   - Controllo di design di spaziature, padding e stile su tutte le schermate.
+  - Icona dell'app a scelta in Impostazioni: El Bigote (quella del pacchetto) o Píxel. Sul desktop cambia finestra e Dock mentre l'app gira; su Android non c'è ancora un'icona del launcher.
   - Criterio da verificare sul tuo Mac: il lettore è provato su dati costruiti nel formato di Termius, non ancora su un Termius vero.
 
 ## Roadmap
