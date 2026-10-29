@@ -26,10 +26,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
 import dev.eltermino.core.data.Host
@@ -67,11 +69,17 @@ private val SidebarMax = 520.dp
 /** Host being edited: [host] null means a new one. */
 private class Editing(val host: Host?)
 
+/**
+ * Room for a title bar the window draws over the app, as on macOS: the bars at the top
+ * reach under it in their own colour, and keep their controls below it.
+ */
+private val LocalTitleBar = staticCompositionLocalOf { 0.dp }
+
 @Composable
-fun App(state: AppState, onExit: () -> Unit = {}) {
+fun App(state: AppState, onExit: () -> Unit = {}, titleBarHeight: Dp = 0.dp) {
     CartaTheme(currentTheme(state)) {
         val chipDrag = remember { ChipDrag() }
-        CompositionLocalProvider(LocalChipDrag provides chipDrag) { AppContent(state) }
+        CompositionLocalProvider(LocalChipDrag provides chipDrag, LocalTitleBar provides titleBarHeight) { AppContent(state) }
         ExitDialog(state, onExit)
     }
 }
@@ -149,7 +157,10 @@ private fun DesktopLayout(
     var sidebarWidth by remember { mutableStateOf(store.workspace.value.ui.sidebarWidthDp.dp) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
-            Column(Modifier.width(sidebarWidth).fillMaxHeight().background(Carta.colors.chrome).padding(horizontal = 12.dp, vertical = 12.dp)) {
+            Column(
+                Modifier.width(sidebarWidth).fillMaxHeight().background(Carta.colors.chrome)
+                    .padding(top = LocalTitleBar.current).padding(horizontal = 12.dp, vertical = 12.dp),
+            ) {
                 ProductMark(Modifier.padding(start = 4.dp, bottom = 12.dp))
                 Row(Modifier.padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Host", style = Carta.type.heading, modifier = Modifier.weight(1f).padding(start = 4.dp))
@@ -172,7 +183,7 @@ private fun DesktopLayout(
             )
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(
-                    Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(horizontal = 8.dp, vertical = 6.dp),
+                    Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(top = LocalTitleBar.current).padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (screen != Screen.Sessions) {
@@ -206,7 +217,7 @@ private fun PhoneLayout(
     Column(Modifier.fillMaxSize()) {
         if (showHosts) {
             Box(Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxSize().padding(12.dp)) {
+                Column(Modifier.fillMaxSize().padding(top = LocalTitleBar.current).padding(12.dp)) {
                     Row(Modifier.padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         ProductMark(Modifier.weight(1f).padding(start = 4.dp))
                         val tabs by state.sessions.tabs.collectAsState()
@@ -220,7 +231,10 @@ private fun PhoneLayout(
                 Fab(Icons.Default.Add, "Nuovo host", onClick = { onEdit(null) }, modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp))
             }
         } else {
-            Row(Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(top = LocalTitleBar.current).padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 IconButton(Icons.AutoMirrored.Filled.ArrowBack, "Host", onClick = onBackToHosts)
                 if (screen == Screen.Sessions) {
                     SessionTabs(state, onConnect, Modifier.weight(1f))

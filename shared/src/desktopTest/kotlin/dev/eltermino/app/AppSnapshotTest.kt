@@ -2,6 +2,7 @@ package dev.eltermino.app
 
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -35,8 +36,8 @@ class AppSnapshotTest {
         runBlocking { state.services.workspace.update { it.copy(ui = it.ui.copy(theme = "carta", welcomeDone = true)) } }
     }
 
-    private fun snapshot(state: AppState, name: String, width: Int = 2400, height: Int = 1520, settle: () -> Unit = {}) {
-        ImageComposeScene(width, height, Density(2f)) { App(state) }.use { scene ->
+    private fun snapshot(state: AppState, name: String, width: Int = 2400, height: Int = 1520, titleBar: Dp = 0.dp, settle: () -> Unit = {}) {
+        ImageComposeScene(width, height, Density(2f)) { App(state, titleBarHeight = titleBar) }.use { scene ->
             // Let flows, effects and terminal output reach the screen.
             repeat(6) {
                 scene.render(System.nanoTime())
@@ -397,5 +398,14 @@ class AppSnapshotTest {
     @Test
     fun emptyFirstRun() {
         snapshot(lightState(), "app-desktop-empty")
+    }
+
+    /** macOS draws its title bar over the app; the bars at the top reach under it. */
+    @Test
+    fun underTheMacTitleBar(): Unit = runBlocking {
+        val state = lightState()
+        seed(state)
+        state.services.workspace.update { it.copy(ui = it.ui.copy(theme = "notte")) }
+        snapshot(state, "app-desktop-title-bar", titleBar = 28.dp)
     }
 }
