@@ -64,4 +64,7 @@ tasks.named<Test>("desktopTest") {
     useJUnitPlatform()
     systemProperty("testenv.dir", testenvDir)
     systemProperty("org.slf4j.simpleLogger.defaultLogLevel", "warn")
+    // How long SessionSoakTest keeps its ten sessions busy: -PsoakSeconds=14400 for four hours.
+    systemProperty("soak.seconds", providers.gradleProperty("soakSeconds").getOrElse("20"))
+    testLogging.showStandardStreams = providers.gradleProperty("soakSeconds").isPresent
 }

@@ -3,6 +3,7 @@ package dev.eltermino.app
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.HostGroup
 import dev.eltermino.core.data.Identity
+import dev.eltermino.core.data.Snippet
 import dev.eltermino.core.data.SshKeyEntry
 import dev.eltermino.core.data.Workspace
 import dev.eltermino.core.data.newId
@@ -156,6 +157,13 @@ class WorkspaceActions(private val services: AppServices) {
             )
         }
     }
+
+    suspend fun saveSnippet(snippet: Snippet) = store.update { ws ->
+        if (ws.snippets.any { it.id == snippet.id }) ws.copy(snippets = ws.snippets.map { if (it.id == snippet.id) snippet else it })
+        else ws.copy(snippets = ws.snippets + snippet)
+    }
+
+    suspend fun deleteSnippet(id: String) = store.update { ws -> ws.copy(snippets = ws.snippets.filterNot { it.id == id }) }
 }
 
 internal fun Workspace.hostsUsing(identityId: String) = hosts.count { it.identityId == identityId }

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -27,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -110,8 +112,9 @@ private class BelowAnchor(private val gap: Int, private val alignEnd: Boolean) :
 fun Menu(
     expanded: Boolean,
     onDismiss: () -> Unit,
-    modifier: Modifier = Modifier,
     alignEnd: Boolean = false,
+    /** Fixed width, as for a [Picker]; by default the menu is as wide as its longest item. */
+    width: Dp? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     if (!expanded) return
@@ -124,8 +127,8 @@ fun Menu(
         properties = PopupProperties(focusable = true),
     ) {
         Column(
-            modifier
-                .widthIn(min = 180.dp)
+            // Without a bound, items that fill the width would stretch the popup across the window.
+            (if (width != null) Modifier.width(width) else Modifier.width(IntrinsicSize.Max).widthIn(min = 180.dp, max = 320.dp))
                 .shadow(10.dp, shape)
                 .background(colors.background, shape)
                 .border(1.dp, colors.line, shape)
@@ -136,16 +139,46 @@ fun Menu(
 }
 
 @Composable
-fun MenuItem(text: String, onClick: () -> Unit, danger: Boolean = false) {
-    Pressable(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
-        Text(
-            text,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-            color = if (danger) Carta.colors.danger else Carta.colors.text,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+fun MenuItem(
+    text: String,
+    onClick: () -> Unit,
+    danger: Boolean = false,
+    icon: ImageVector? = null,
+    /** Muted text at the end of the row, such as an address. */
+    detail: String? = null,
+    selected: Boolean = false,
+) {
+    val colors = Carta.colors
+    val tint = when {
+        danger -> colors.danger
+        selected -> colors.accent
+        else -> colors.text
     }
+    Pressable(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(6.dp),
+        background = if (selected) colors.accentBackground else Color.Transparent,
+    ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) Icon(icon, contentDescription = null, tint = if (danger || selected) tint else colors.textDim, size = 18.dp, modifier = Modifier.padding(end = 10.dp))
+            Text(text, modifier = Modifier.weight(1f, fill = false), color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (detail != null) {
+                Text(detail, modifier = Modifier.padding(start = 12.dp), style = Carta.type.small, color = colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/** A muted title over a group of menu items. */
+@Composable
+fun MenuLabel(text: String) {
+    Text(text, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 2.dp), style = Carta.type.label, color = Carta.colors.textDim)
+}
+
+@Composable
+fun MenuDivider() {
+    Divider(Modifier.padding(vertical = 4.dp))
 }
 
 /** A labelled drop-down: looks like a field, opens a [Menu] as wide as itself. */
@@ -178,7 +211,7 @@ fun <T> Picker(
                     Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = colors.textDim)
                 }
             }
-            Menu(expanded = open, onDismiss = { open = false }, modifier = Modifier.width(with(density) { widthPx.toDp() })) {
+            Menu(expanded = open, onDismiss = { open = false }, width = with(density) { widthPx.toDp() }) {
                 options.forEach { option ->
                     MenuItem(display(option), onClick = { open = false; onSelect(option) })
                 }

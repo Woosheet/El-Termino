@@ -25,15 +25,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
 import dev.eltermino.core.data.Host
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
+import dev.eltermino.ui.components.CartaIcons
 import dev.eltermino.ui.components.Divider
 import dev.eltermino.ui.components.Fab
 import dev.eltermino.ui.components.Icon
@@ -42,15 +45,22 @@ import dev.eltermino.ui.components.Menu
 import dev.eltermino.ui.components.MenuItem
 import dev.eltermino.ui.components.Pressable
 import dev.eltermino.ui.components.Text
+import dev.eltermino.ui.components.VerticalResizeHandle
 import dev.eltermino.ui.theme.Carta
 import dev.eltermino.ui.theme.CartaTheme
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 internal enum class Screen(val title: String) {
     Sessions("Sessioni"),
     Keys("Chiavi"),
     Identities("Identità"),
+    Snippets("Snippet"),
     Import("Importa"),
 }
+
+private val SidebarMin = 200.dp
+private val SidebarMax = 520.dp
 
 /** Host being edited: [host] null means a new one. */
 private class Editing(val host: Host?)
@@ -99,9 +109,12 @@ private fun DesktopLayout(
     onConnect: (Host) -> Unit,
     onEdit: (Host?) -> Unit,
 ) {
+    val store = state.services.workspace
+    val scope = rememberCoroutineScope()
+    var sidebarWidth by remember { mutableStateOf(store.workspace.value.ui.sidebarWidthDp.dp) }
     Column(Modifier.fillMaxSize()) {
         Row(Modifier.weight(1f).fillMaxWidth()) {
-            Column(Modifier.width(260.dp).fillMaxHeight().background(Carta.colors.chrome).padding(10.dp)) {
+            Column(Modifier.width(sidebarWidth).fillMaxHeight().background(Carta.colors.chrome).padding(10.dp)) {
                 Row(Modifier.padding(bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Host", style = Carta.type.title, modifier = Modifier.weight(1f).padding(start = 4.dp))
                     IconButton(Icons.Default.Add, "Nuovo host", onClick = { onEdit(null) }, tint = Carta.colors.accent)
@@ -110,9 +123,16 @@ private fun DesktopLayout(
                 SectionLabel("Strumenti")
                 ToolRow(Icons.Default.Lock, "Chiavi", screen == Screen.Keys) { onScreen(Screen.Keys) }
                 ToolRow(Icons.Default.Person, "Identità", screen == Screen.Identities) { onScreen(Screen.Identities) }
+                ToolRow(CartaIcons.Snippet, "Snippet", screen == Screen.Snippets) { onScreen(Screen.Snippets) }
                 ToolRow(Icons.Default.Share, "Importa", screen == Screen.Import) { onScreen(Screen.Import) }
             }
-            Divider(vertical = true)
+            VerticalResizeHandle(
+                onDrag = { delta -> sidebarWidth = (sidebarWidth + delta).coerceIn(SidebarMin, SidebarMax) },
+                onDragStopped = {
+                    val width = sidebarWidth.value.roundToInt()
+                    scope.launch { store.update { it.copy(ui = it.ui.copy(sidebarWidthDp = width)) } }
+                },
+            )
             Column(Modifier.weight(1f).fillMaxHeight()) {
                 Row(
                     Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(horizontal = 8.dp, vertical = 6.dp),
@@ -121,11 +141,12 @@ private fun DesktopLayout(
                     if (screen != Screen.Sessions) {
                         IconButton(Icons.AutoMirrored.Filled.ArrowBack, "Torna alle sessioni", onClick = { onScreen(Screen.Sessions) })
                     }
-                    SessionTabs(state, Modifier.weight(1f))
+                    SessionTabs(state, onConnect, Modifier.weight(1f))
+                    if (screen == Screen.Sessions) SessionTools(state, wide = true, onManageSnippets = { onScreen(Screen.Snippets) })
                 }
                 Divider()
                 // Tablets get the wide layout but still need Esc, Ctrl and the arrows on screen.
-                ScreenBody(state, screen, showExtraKeys = !state.services.platform.isDesktop, Modifier.weight(1f).fillMaxWidth())
+                ScreenBody(state, screen, showExtraKeys = !state.services.platform.isDesktop, split = true, Modifier.weight(1f).fillMaxWidth())
             }
         }
         Divider()
@@ -162,21 +183,26 @@ private fun PhoneLayout(
         } else {
             Row(Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(Icons.AutoMirrored.Filled.ArrowBack, "Host", onClick = onBackToHosts)
-                if (screen == Screen.Sessions) SessionTabs(state, Modifier.weight(1f))
-                else Text(screen.title, style = Carta.type.heading, modifier = Modifier.weight(1f))
+                if (screen == Screen.Sessions) {
+                    SessionTabs(state, onConnect, Modifier.weight(1f))
+                    SessionTools(state, wide = false, onManageSnippets = { onScreen(Screen.Snippets) })
+                } else {
+                    Text(screen.title, style = Carta.type.heading, modifier = Modifier.weight(1f))
+                }
             }
             Divider()
-            ScreenBody(state, screen, showExtraKeys = true, Modifier.weight(1f).fillMaxWidth())
+            ScreenBody(state, screen, showExtraKeys = true, split = false, Modifier.weight(1f).fillMaxWidth())
         }
     }
 }
 
 @Composable
-private fun ScreenBody(state: AppState, screen: Screen, showExtraKeys: Boolean, modifier: Modifier) {
+private fun ScreenBody(state: AppState, screen: Screen, showExtraKeys: Boolean, split: Boolean, modifier: Modifier) {
     when (screen) {
-        Screen.Sessions -> SessionContent(state, showExtraKeys, modifier)
+        Screen.Sessions -> SessionContent(state, showExtraKeys, split, modifier)
         Screen.Keys -> KeysScreen(state, modifier)
         Screen.Identities -> IdentitiesScreen(state, modifier)
+        Screen.Snippets -> SnippetsScreen(state, modifier)
         Screen.Import -> ImportScreen(state, modifier)
     }
 }
@@ -187,7 +213,7 @@ private fun ToolsMenu(onScreen: (Screen) -> Unit) {
     Box {
         IconButton(Icons.Default.MoreVert, "Strumenti", onClick = { open = true })
         Menu(expanded = open, onDismiss = { open = false }, alignEnd = true) {
-            listOf(Screen.Keys, Screen.Identities, Screen.Import).forEach { target ->
+            listOf(Screen.Keys, Screen.Identities, Screen.Snippets, Screen.Import).forEach { target ->
                 MenuItem(target.title, onClick = { open = false; onScreen(target) })
             }
         }
@@ -215,9 +241,11 @@ private fun ToolRow(icon: ImageVector, label: String, selected: Boolean, onClick
 private fun StatusBar(state: AppState) {
     val connected by state.sessions.connectedHostIds.collectAsState()
     val tabs by state.sessions.tabs.collectAsState()
+    val broadcast by state.sessions.broadcast.collectAsState()
     Row(
         Modifier.fillMaxWidth().background(Carta.colors.chrome).padding(horizontal = 12.dp, vertical = 5.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             when (connected.size) {
@@ -227,7 +255,13 @@ private fun StatusBar(state: AppState) {
             },
             style = Carta.type.label, color = Carta.colors.textDim,
         )
-        Text("Segreti nel vault cifrato", style = Carta.type.label, color = Carta.colors.textDim)
+        if (broadcast.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(CartaIcons.Broadcast, contentDescription = null, tint = Carta.colors.accent, size = 14.dp)
+                Text("Broadcast su ${broadcast.size} sessioni", style = Carta.type.label, color = Carta.colors.accent, modifier = Modifier.padding(start = 4.dp))
+            }
+        }
+        Text("Segreti nel vault cifrato", style = Carta.type.label, color = Carta.colors.textDim, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
     }
 }
 

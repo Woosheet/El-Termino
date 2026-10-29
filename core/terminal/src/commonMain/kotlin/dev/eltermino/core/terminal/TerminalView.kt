@@ -1,12 +1,14 @@
 package dev.eltermino.core.terminal
 
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -16,10 +18,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import kotlin.math.floor
 import com.johnan.terminal.core.ArrowDirection
 import com.johnan.terminal.core.SelectionState
 import com.johnan.terminal.core.TerminalScreenState
@@ -34,7 +39,8 @@ import com.johnan.terminal.ui.TerminalUiConfig
 /**
  * Draws [session] and sends keyboard input to it. The view sizes the terminal to fit its
  * bounds. Hold and drag selects text, which is copied on release; Cmd+C/V on macOS and
- * Ctrl+Shift+C/V elsewhere copy and paste without reaching the shell.
+ * Ctrl+Shift+C/V elsewhere copy and paste without reaching the shell. With several views
+ * on screen, only the [focused] one takes the keyboard.
  */
 @Composable
 fun TerminalView(
@@ -43,12 +49,14 @@ fun TerminalView(
     theme: TerminalTheme = TerminalTheme.CartaLight,
     fontSize: TextUnit = 14.sp,
     fontFamily: FontFamily = FontFamily.Monospace,
+    lineHeight: Float = 1.2f,
+    focused: Boolean = true,
 ) {
     val state by session.screenState.collectAsState()
     val colorScheme = remember(theme) { theme.toColorScheme() }
-    val uiConfig = remember(colorScheme, theme.cursor, fontSize, fontFamily) {
+    val uiConfig = remember(colorScheme, theme.cursor, fontSize, fontFamily, lineHeight) {
         TerminalUiConfig(
-            typography = TerminalTypographyConfig(fontSize = fontSize, fontFamily = fontFamily),
+            typography = TerminalTypographyConfig(fontSize = fontSize, fontFamily = fontFamily, lineHeightMultiplier = lineHeight),
             colorScheme = colorScheme,
             // The block is drawn over the glyph, so it has to stay translucent.
             cursor = TerminalCursorConfig(style = TerminalCursorStyle.BLOCK, overrideColor = theme.cursor.copy(alpha = 0.45f)),
@@ -58,6 +66,7 @@ fun TerminalView(
     val inputFocus = remember { FocusRequester() }
     val viewFocus = remember { FocusRequester() }
     val keyHandler = remember { TerminalKeyHandler(isMacOs) }
+    var cellHeightPx by remember { mutableFloatStateOf(0f) }
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
 
@@ -69,12 +78,13 @@ fun TerminalView(
 
     // The renderer drops its input field while a selection is shown; keep the keyboard on the view meanwhile.
     val selecting = selection !is SelectionState.None
-    LaunchedEffect(selecting) {
+    LaunchedEffect(selecting, focused) {
+        if (!focused) return@LaunchedEffect
         withFrameNanos { }
         runCatching { if (selecting) viewFocus.requestFocus() else inputFocus.requestFocus() }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier
             .onPreviewKeyEvent { event ->
                 keyHandler.onKeyEvent(event, inputFieldActive = !selecting) { action ->
@@ -96,12 +106,21 @@ fun TerminalView(
             .focusRequester(viewFocus)
             .focusable(),
     ) {
+        // The renderer fits whole rows but scrolls in its full height, so a leftover strip
+        // showed half a scrollback line at the top. Give it exactly the rows it uses.
+        val density = LocalDensity.current
+        val rendererHeight = if (cellHeightPx > 0f && maxHeight != Dp.Infinity) {
+            with(density) { (floor(maxHeight.toPx() / cellHeightPx) * cellHeightPx).toDp() }
+        } else {
+            maxHeight
+        }
         TerminalRenderer(
             terminalState = state,
             onInput = session::type,
             onArrowKey = { direction, alt -> session.sendKey(direction.toKey(), if (alt) KeyModifiers.Alt else KeyModifiers.None) },
             onLog = {},
-            modifier = Modifier.fillMaxSize(),
+            onCellMeasured = { _, height -> cellHeightPx = height },
+            modifier = Modifier.fillMaxWidth().height(rendererHeight),
             config = uiConfig,
             focusRequester = inputFocus,
             colorScheme = colorScheme,

@@ -14,11 +14,14 @@ data class Workspace(
     val identities: List<Identity> = emptyList(),
     val keys: List<SshKeyEntry> = emptyList(),
     val knownHosts: List<KnownHost> = emptyList(),
+    val snippets: List<Snippet> = emptyList(),
+    val ui: UiSettings = UiSettings(),
 ) {
     fun host(id: String?): Host? = id?.let { hosts.firstOrNull { h -> h.id == it } }
     fun group(id: String?): HostGroup? = id?.let { groups.firstOrNull { g -> g.id == it } }
     fun identity(id: String?): Identity? = id?.let { identities.firstOrNull { i -> i.id == it } }
     fun key(id: String?): SshKeyEntry? = id?.let { keys.firstOrNull { k -> k.id == it } }
+    fun snippet(id: String?): Snippet? = id?.let { snippets.firstOrNull { s -> s.id == it } }
 
     companion object {
         const val CURRENT_VERSION = 1
@@ -84,4 +87,20 @@ data class KnownHost(
     val fingerprintSha256: String,
     val publicKey: String,
     val addedAtEpochSeconds: Long,
+)
+
+/** A saved command. `{{name}}` placeholders are asked for each time it runs. */
+@Serializable
+data class Snippet(
+    val id: String,
+    val name: String,
+    val command: String,
+    /** Presses Enter after inserting the command; otherwise it waits on the prompt. */
+    val run: Boolean = true,
+)
+
+/** Layout choices the user makes by dragging, kept across restarts. */
+@Serializable
+data class UiSettings(
+    val sidebarWidthDp: Int = 260,
 )

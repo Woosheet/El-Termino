@@ -1,6 +1,6 @@
 # El Termino: piano di progetto
 
-Ultimo aggiornamento: 29 ottobre 2026
+Ultimo aggiornamento: 29 ottobre 2026 (Fase 2)
 
 ## Obiettivo
 
@@ -159,7 +159,19 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 ## Stato
 
 - Fase 0: completata il 29 ottobre 2026.
-- Fase 1: implementata il 29 ottobre 2026; il criterio "tutte le 48 macchine raggiungibili" va verificato con i tuoi host veri. Restano da provare a mano la digitazione nella finestra desktop, il primo uso del portachiavi di sistema e le chiavi PuTTY.
+- Fase 1: implementata il 29 ottobre 2026. Il criterio "tutte le 48 macchine raggiungibili" va verificato con i tuoi host veri. Restano da provare a mano:
+  - la digitazione nella finestra desktop;
+  - il primo uso del portachiavi di sistema;
+  - le chiavi PuTTY.
+- Fase 2: implementata il 29 ottobre 2026 ([decisione 0006](decisions/0006-sessions-and-reconnect.md)).
+  - Le schede di un host condividono una connessione.
+  - Split view a 1, 2 o 4 riquadri ridimensionabili.
+  - Riconnessione automatica nello stesso terminale.
+  - Broadcast su schede scelte o su un gruppo.
+  - Snippet con variabili `{{nome}}`, da lanciare nella sessione attiva, in più schede o su nuovi host.
+  - Foreground Service su Android.
+  - Il soak test con 10 sessioni gira per 20 secondi a ogni esecuzione dei test; la prova di ore va lanciata a parte con `-PsoakSeconds`.
+  - Da provare su un telefono vero: Doze a schermo spento e cambio di rete.
 
 ## Roadmap
 

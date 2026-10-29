@@ -3,7 +3,10 @@ package dev.eltermino.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.FocusInteraction
+import androidx.compose.foundation.interaction.HoverInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -16,8 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +74,23 @@ internal fun Pressable(
     val isHovered by interaction.collectIsHoveredAsState()
     val isPressed by interaction.collectIsPressedAsState()
     val isFocused by interaction.collectIsFocusedAsState()
+    // A click focuses too on desktop, but the ring is only meant for keyboard users.
+    var pointerDriven by remember { mutableStateOf(false) }
+    LaunchedEffect(interaction) {
+        var focused = false
+        interaction.interactions.collect { event ->
+            when (event) {
+                is PressInteraction.Press, is HoverInteraction.Enter -> pointerDriven = true
+                is HoverInteraction.Exit -> if (!focused) pointerDriven = false
+                is FocusInteraction.Focus -> focused = true
+                is FocusInteraction.Unfocus -> {
+                    focused = false
+                    pointerDriven = false
+                }
+            }
+        }
+    }
+    val showFocusRing = isFocused && !pointerDriven
     val fill = when {
         !enabled -> background
         isPressed -> pressed
@@ -80,7 +103,7 @@ internal fun Pressable(
             .background(fill, shape)
             .then(
                 when {
-                    isFocused -> Modifier.border(2.dp, Carta.colors.accent, shape)
+                    showFocusRing -> Modifier.border(2.dp, Carta.colors.accent, shape)
                     border != null -> Modifier.border(1.dp, border, shape)
                     else -> Modifier
                 },

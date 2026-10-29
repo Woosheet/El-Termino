@@ -1,14 +1,21 @@
 package dev.eltermino.android
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import dev.eltermino.ui.App
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -26,6 +33,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     private val app get() = application as ElTerminoApp
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,6 +42,20 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         app.platform.documentPicker = picker
         setContent { App(app.state) }
+        askForNotificationsWithFirstSession()
+    }
+
+    /**
+     * Android 13+ hides the session notification without this permission. The service
+     * runs either way; the notification is what lets you get back and close everything.
+     */
+    private fun askForNotificationsWithFirstSession() {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        lifecycleScope.launch {
+            app.state.sessions.tabs.first { it.isNotEmpty() }
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
     }
 
     override fun onDestroy() {

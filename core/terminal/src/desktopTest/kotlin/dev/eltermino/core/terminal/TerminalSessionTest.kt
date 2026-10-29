@@ -1,9 +1,13 @@
 package dev.eltermino.core.terminal
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import kotlin.test.Test
@@ -110,5 +114,51 @@ class TerminalSessionTest {
         session.paste("echo a\necho b\u001B[201~rm -rf x")
         eventually({ shell.writtenText().visible() }) { shell.writtenText().endsWith("\u001B[201~") }
         assertEquals("\u001B[200~echo a\recho brm -rf x\u001B[201~", shell.writtenText())
+    }
+
+    @Test
+    fun attachKeepsTheScreenAndTalksToTheNewShell() = runBlocking {
+        shell.emit("before the drop\r\n\u001B[?1049h\u001B[?1hfull screen app")
+        eventually { session.keyboardMode.applicationCursorKeys }
+        shell.endOutput()
+        eventually { session.closed.value }
+
+        val next = FakeShellChannel()
+        session.attach(next, notice = "-- reconnected --")
+        assertFalse(session.closed.value)
+        eventually({ "the old shell is closed" }) { shell.closed }
+        assertFalse(session.keyboardMode.applicationCursorKeys, "modes left by the old program are reset")
+        val screen = session.screenState.value.dump()
+        assertTrue("before the drop" in screen, screen)
+        assertTrue("-- reconnected --" in screen, screen)
+        assertFalse("full screen app" in screen, "back on the main screen: $screen")
+
+        session.type("ls\n")
+        eventually({ next.writtenText().visible() }) { next.writtenText() == "ls\r" }
+        next.emit("after")
+        eventually({ session.screenState.value.dump() }) { "after" in session.screenState.value.dump() }
+    }
+
+    @Test
+    fun inputIsMirroredAsEventsButReceivedInputIsNot() = runBlocking {
+        // Subscribes before anything is typed.
+        val events = async(start = CoroutineStart.UNDISPATCHED) { session.input.take(3).toList() }
+        session.type("ab")
+        session.sendKey(TerminalKey.Up)
+        session.receive(TerminalInput.Text("not mirrored"))
+        session.paste("p")
+        assertEquals(
+            listOf(TerminalInput.Text("ab"), TerminalInput.Key(TerminalKey.Up), TerminalInput.Paste("p")),
+            events.await(),
+        )
+        eventually({ shell.writtenText().visible() }) { shell.writtenText() == "ab\u001B[Anot mirroredp" }
+    }
+
+    @Test
+    fun receivedKeysUseTheReceiversMode() {
+        shell.emit("\u001B[?1h")
+        eventually { session.keyboardMode.applicationCursorKeys }
+        session.receive(TerminalInput.Key(TerminalKey.Up))
+        eventually({ shell.writtenText().visible() }) { shell.writtenText() == "\u001BOA" }
     }
 }

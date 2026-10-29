@@ -71,3 +71,67 @@ fun testServices(dir: File = Files.createTempDirectory("eltermino").toFile().app
         platform = TestPlatform(),
     )
 }
+
+/** Polls [condition] until it holds, failing with [message] after [timeoutMs]. */
+fun eventually(message: () -> String = { "condition not met" }, timeoutMs: Long = 20_000, condition: () -> Boolean) {
+    val deadline = System.currentTimeMillis() + timeoutMs
+    while (!condition()) {
+        if (System.currentTimeMillis() > deadline) throw AssertionError(message())
+        Thread.sleep(50)
+    }
+}
+
+/**
+ * A TCP relay to a testenv server that a test can break, like a network that drops:
+ * [cut] kills the open connections, and while [up] is false new ones are refused.
+ */
+class TestProxy(private val targetPort: Int) : AutoCloseable {
+    private val server = java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())
+    val port: Int = server.localPort
+
+    @Volatile
+    var up = true
+
+    private val sockets = java.util.Collections.synchronizedSet(mutableSetOf<java.net.Socket>())
+
+    init {
+        kotlin.concurrent.thread(isDaemon = true, name = "proxy-$port") {
+            while (!server.isClosed) {
+                val client = try { server.accept() } catch (_: java.io.IOException) { break }
+                if (!up) {
+                    client.close()
+                    continue
+                }
+                val upstream = try { java.net.Socket(TestEnv.HOST, targetPort) } catch (_: java.io.IOException) {
+                    client.close()
+                    continue
+                }
+                sockets += client
+                sockets += upstream
+                pipe(client, upstream)
+                pipe(upstream, client)
+            }
+        }
+    }
+
+    private fun pipe(from: java.net.Socket, to: java.net.Socket) = kotlin.concurrent.thread(isDaemon = true) {
+        try {
+            from.getInputStream().copyTo(to.getOutputStream())
+        } catch (_: java.io.IOException) {
+        } finally {
+            runCatching { from.close() }
+            runCatching { to.close() }
+            sockets -= from
+            sockets -= to
+        }
+    }
+
+    fun cut() {
+        synchronized(sockets) { sockets.toList() }.forEach { runCatching { it.close() } }
+    }
+
+    override fun close() {
+        server.close()
+        cut()
+    }
+}

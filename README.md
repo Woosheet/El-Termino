@@ -28,5 +28,10 @@ docker compose -f testenv/docker-compose.yml up -d --build
 ./gradlew :app-android:connectedDebugAndroidTest   # con un emulatore acceso
 ```
 
-- `:shared:desktopTest` prova il flusso di connessione completo (host key, password, OTP, chiavi, jump host, import) e salva gli snapshot dell'interfaccia in `shared/build/snapshots/`.
+- `:shared:desktopTest` prova il flusso di connessione completo e salva gli snapshot dell'interfaccia in `shared/build/snapshots/`. Copre host key, password, OTP, chiavi, jump host e import, ma anche connessioni condivise, riconnessione dopo una caduta di rete simulata, broadcast e snippet.
+- `SessionSoakTest` tiene 10 sessioni occupate per 20 secondi. Per la prova lunga della Fase 2:
+
+  ```bash
+  ./gradlew :shared:desktopTest --tests '*SessionSoakTest*' -PsoakSeconds=14400
+  ```
 - `spikes/` contiene le prove della Fase 0 (`./gradlew :spikes:mina:test` e simili).

@@ -5,6 +5,7 @@ import dev.eltermino.core.data.Identity
 import dev.eltermino.core.data.KnownHost
 import dev.eltermino.core.data.newId
 import dev.eltermino.core.data.trust
+import dev.eltermino.core.ssh.ConnectionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -19,6 +20,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNotSame
 import kotlin.test.assertTrue
 
 /**
@@ -91,8 +93,14 @@ class ConnectionFlowTest {
         val identity = assertNotNull(services.workspace.workspace.value.identity(saved?.identityId))
         assertNotNull(identity.passwordSecretId)
 
+        // Tabs on one host share a connection: close it so the second login is a real one.
+        val first = (sessions.tabs.value.single().status.value as TabStatus.Open).connection
+        sessions.closeAll()
+        withTimeout(10_000) { first.state.first { it is ConnectionState.Closed } }
         asked.clear()
-        connectAndWait(saved!!).assertWorks()
+        val second = connectAndWait(saved!!)
+        second.assertWorks()
+        assertNotSame(first, (second as TabStatus.Open).connection)
         assertEquals(emptyList(), asked, "second login needs no dialog")
     }
 

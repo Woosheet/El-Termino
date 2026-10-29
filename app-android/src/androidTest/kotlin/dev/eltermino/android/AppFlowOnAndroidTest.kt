@@ -9,6 +9,7 @@ import dev.eltermino.app.TabStatus
 import dev.eltermino.app.createAppServices
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.newId
+import dev.eltermino.core.ssh.ConnectionState
 import dev.eltermino.core.vault.AndroidKeystoreMasterKeyProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,9 @@ class AppFlowOnAndroidTest {
             assertEquals("ok", first.connection.exec("echo ok").stdout.decodeToString().trim())
             assertEquals(listOf("HostKey", "Secret"), asked)
 
+            // Tabs on one host share a connection: close it so the second login is a real one.
+            state.sessions.closeAll()
+            withTimeout(10_000) { first.connection.state.first { it is ConnectionState.Closed } }
             asked.clear()
             val second = connect()
             assertEquals("ok", second.connection.exec("echo ok").stdout.decodeToString().trim())

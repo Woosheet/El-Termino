@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -51,6 +52,8 @@ fun Field(
     error: String? = null,
     leadingIcon: ImageVector? = null,
     fieldModifier: Modifier = Modifier,
+    /** For commands and paths. */
+    monospace: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
@@ -72,7 +75,7 @@ fun Field(
             modifier = fieldModifier.fillMaxWidth(),
             singleLine = singleLine,
             minLines = if (singleLine) 1 else 4,
-            textStyle = Carta.type.body.copy(color = colors.text),
+            textStyle = Carta.type.body.copy(color = colors.text, fontFamily = if (monospace) Carta.monospace else Carta.type.body.fontFamily),
             cursorBrush = SolidColor(colors.accent),
             visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
             keyboardOptions = KeyboardOptions(
@@ -148,6 +151,23 @@ fun Checkbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String
                 }
             }
             Text(label, modifier = Modifier.padding(start = 8.dp))
+        }
+    }
+}
+
+/** One choice of a group: a ring that fills with accent when [selected]. */
+@Composable
+fun RadioOption(selected: Boolean, onClick: () -> Unit, label: String, modifier: Modifier = Modifier, detail: String? = null) {
+    val colors = Carta.colors
+    Pressable(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(6.dp), role = Role.RadioButton) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier.size(18.dp).border(if (selected) 5.dp else 1.dp, if (selected) colors.accent else colors.lineStrong, CircleShape),
+            )
+            Column(Modifier.padding(start = 8.dp)) {
+                Text(label)
+                if (detail != null) Text(detail, style = Carta.type.small, color = colors.textDim)
+            }
         }
     }
 }
