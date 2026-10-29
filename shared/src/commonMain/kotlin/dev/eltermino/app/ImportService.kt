@@ -13,7 +13,14 @@ import dev.eltermino.core.importer.SshConfigParser
 import dev.eltermino.core.importer.TermiusCsvParser
 import dev.eltermino.core.ssh.InvalidKeyException
 
-class ImportSummary(val hostsAdded: Int, val duplicatesSkipped: Int, val keysImported: Int, val notes: List<String>)
+class ImportSummary(
+    val hostsAdded: Int,
+    val duplicatesSkipped: Int,
+    val keysImported: Int,
+    val notes: List<String>,
+    /** Hosts already here without credentials that the import filled in. */
+    val hostsCompleted: Int = 0,
+)
 
 /** Reads foreign host lists and merges them into the workspace. */
 class ImportService(private val services: AppServices, private val actions: WorkspaceActions) {
@@ -24,27 +31,38 @@ class ImportService(private val services: AppServices, private val actions: Work
     fun parseTermiusCsv(text: String): ImportResult = TermiusCsvParser.parse(text)
 
     /** True when an equivalent host (same address, port and user) is already saved. */
-    fun isDuplicate(workspace: Workspace, imported: ImportedHost): Boolean = workspace.hosts.any { existing ->
-        existing.address.equals(imported.address, ignoreCase = true) &&
-            existing.port == (imported.port ?: 22) &&
-            (imported.username == null || workspace.usernameFor(existing) == imported.username)
-    }
+    fun isDuplicate(workspace: Workspace, imported: ImportedHost): Boolean =
+        workspace.hosts.any { existing -> sameMachine(existing, imported) && !canComplete(workspace, existing, imported) &&
+            (imported.username == null || workspace.usernameFor(existing) == null || workspace.usernameFor(existing) == imported.username) }
+
+    /** A saved host on the same address and port that has no credentials yet and gets some from [imported]. */
+    fun toComplete(workspace: Workspace, imported: ImportedHost): Host? =
+        workspace.hosts.firstOrNull { sameMachine(it, imported) && canComplete(workspace, it, imported) }
+
+    private fun sameMachine(existing: Host, imported: ImportedHost) =
+        existing.address.equals(imported.address, ignoreCase = true) && existing.port == (imported.port ?: 22)
+
+    private fun canComplete(workspace: Workspace, existing: Host, imported: ImportedHost) =
+        existing.identityId == null && workspace.usernameFor(existing) == null &&
+            (imported.username != null || imported.key != null || imported.password != null)
 
     suspend fun apply(selected: List<ImportedHost>): ImportSummary {
         val notes = mutableListOf<String>()
         val keysBefore = services.workspace.workspace.value.keys.size
         var duplicates = 0
+        var completed = 0
         val created = mutableMapOf<String, Host>()
         // Hosts sharing user and password in the source share one identity here.
         val passwordIdentities = mutableMapOf<Pair<String, String>, Identity>()
         val keyIdentities = mutableMapOf<Pair<String, String>, Identity>()
 
         for (imported in selected) {
-            if (isDuplicate(services.workspace.workspace.value, imported)) {
+            val incomplete = toComplete(services.workspace.workspace.value, imported)
+            if (incomplete == null && isDuplicate(services.workspace.workspace.value, imported)) {
                 duplicates++
                 continue
             }
-            val groupId = actions.ensureGroupPath(imported.groupPath)
+            val groupId = incomplete?.groupId ?: actions.ensureGroupPath(imported.groupPath)
             var identity: Identity? = null
             val username = imported.username
 
@@ -63,6 +81,18 @@ class ImportService(private val services: AppServices, private val actions: Work
                 }
             }
 
+            if (incomplete != null) {
+                // Already here from an earlier import: give it the credentials, keep the rest.
+                val host = incomplete.copy(
+                    groupId = incomplete.groupId ?: groupId,
+                    username = if (identity == null) username else null,
+                    identityId = identity?.id,
+                )
+                actions.saveHost(host)
+                created[imported.label.lowercase()] = host
+                completed++
+                continue
+            }
             val host = Host(
                 id = newId(),
                 label = imported.label,
@@ -83,7 +113,7 @@ class ImportService(private val services: AppServices, private val actions: Work
             if (imported.proxyJump.isNotEmpty()) linkJumpChain(host, imported.proxyJump, created)
         }
         val keysAdded = services.workspace.workspace.value.keys.size - keysBefore
-        return ImportSummary(created.size, duplicates, keysAdded, notes.distinct())
+        return ImportSummary(created.size - completed, duplicates, keysAdded, notes.distinct(), completed)
     }
 
     /**

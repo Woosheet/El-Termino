@@ -75,10 +75,40 @@ object TermiusLocalReader {
         return TermiusLocal.Found(TermiusMapper(stores, key).map(), details)
     }
 
-    /** Store names, record counts and field names: what's needed to fix the mapping, never values. */
+    /**
+     * Store names, record counts, and each field's name with the kinds of value it holds
+     * (testo, cifrato, numero, oggetto{chiavi}…): what's needed to fix the mapping, never a value.
+     */
     fun describe(stores: Map<String, List<Map<String, Any?>>>): String = stores.entries.joinToString("\n") { (name, records) ->
-        val fields = records.flatMap { it.keys }.distinct().sorted()
-        "$name: ${records.size} record · campi ${fields.joinToString(", ")}"
+        val fields = records.flatMap { it.entries }.groupBy({ it.key }, { kindOf(it.value) })
+            .toSortedMap()
+            .map { (field, kinds) -> "$field: ${kinds.distinct().sorted().joinToString("|")}" }
+        "$name: ${records.size} record\n  " + fields.joinToString("\n  ")
+    }
+
+    /** The structure of Termius's data in [dataDir], without the key: names and kinds only. */
+    fun structure(dataDir: File): String {
+        val databases = File(dataDir, "IndexedDB").listFiles().orEmpty().filter { it.isDirectory && it.name.endsWith(".leveldb") }
+        val stores = LinkedHashMap<String, MutableList<Map<String, Any?>>>()
+        for (database in databases) {
+            IndexedDb.read(database).forEach { (name, records) -> stores.getOrPut(name) { mutableListOf() } += records }
+        }
+        return "${databases.joinToString { it.name }}\n" + describe(stores)
+    }
+
+    private fun kindOf(value: Any?): String = when (value) {
+        null -> "vuoto"
+        is Boolean -> "sì/no"
+        is Number -> "numero"
+        is String -> when {
+            SecretBox.isSealed(value) -> "cifrato"
+            value.isEmpty() -> "testo vuoto"
+            else -> "testo"
+        }
+        is Map<*, *> -> "oggetto{${value.keys.joinToString(",")}}"
+        is List<*> -> "lista(${value.size})"
+        is ByteArray -> "byte"
+        else -> value::class.simpleName ?: "?"
     }
 
     private fun opens(stores: Map<String, List<Map<String, Any?>>>, key: ByteArray): Boolean {
@@ -132,26 +162,33 @@ internal object SecretBox {
 
 /**
  * From Termius's records to [ImportedHost]s. The model is the one of Termius's sync API:
- * hosts point to a group and an ssh config, which points to an identity, which points to
- * a key; groups nest and carry defaults. References are local ids, or the object itself.
+ * hosts point to a group and an ssh config; the config's identity is either in the config
+ * or, in recent versions, in the `ssh_config_identities` link table; the identity points to
+ * a key. Groups nest and carry defaults. References are `{local_id, id}` objects.
  */
 internal class TermiusMapper(stores: Map<String, List<Map<String, Any?>>>, private val key: ByteArray) {
     private fun normalized(name: String) = name.lowercase().filter { it.isLetter() }
 
-    private fun store(vararg hints: String, without: String? = null): List<Map<String, Any?>> =
+    private fun store(vararg hints: String, without: List<String> = emptyList()): List<Map<String, Any?>> =
         stores.entries.filter { (name, _) ->
             val n = normalized(name)
-            hints.any { it in n } && (without == null || without !in n)
+            hints.any { it == n || it in n } && without.none { it in n }
         }.flatMap { it.value }
 
     private val stores = stores
-    private val hosts = latest(store("host", without = "tag"))
-    private val groups = byId(store("group"))
-    private val configs = byId(store("sshconfig"))
-    private val identities = byId(store("identit"))
-    private val keys = byId(store("sshkey", "keycrypt"))
-    private val tags = byId(store("tag", without = "host"))
+    // Store names as Termius uses them (hosts, ssh_configs, ssh_identities, ssh_config_identities,
+    // keys, groups); the exclusions keep known_hosts and the link tables out of the wrong list.
+    private val hosts = latest(store("host", without = listOf("known", "tag", "history")))
+    private val groups = table(store("group"))
+    private val configs = table(store("sshconfig", without = listOf("identit")))
+    private val identities = table(store("identit", "credential", without = listOf("config")))
+    /** In recent Termius, a config's identity is linked here rather than in the config itself. */
+    private val configIdentityLinks = store("configidentit")
+    private val keys = table(storeNamed("keys") + store("sshkey", "keycrypt", "privatekey"))
+    private val tags = table(store("tag", without = listOf("host")))
     private val tagLinks = store("taghost")
+
+    private fun storeNamed(name: String) = stores.entries.filter { normalized(it.key) == name }.flatMap { it.value }
     private val warnings = mutableListOf<ImportWarning>()
 
     fun map(): ImportResult {
@@ -163,20 +200,26 @@ internal class TermiusMapper(stores: Map<String, List<Map<String, Any?>>>, priva
     private fun host(record: Map<String, Any?>): ImportedHost? {
         if (isDeleted(record)) return null
         val address = address(record["address"]) ?: return null
-        val group = ref(record["group"], groups)
-        val config = ref(record["ssh_config"], configs) ?: groupChain(group).firstNotNullOfOrNull { ref(it["ssh_config"], configs) }
-        val identity = ref(config?.get("identity"), identities)
-            ?: groupChain(group).firstNotNullOfOrNull { ref(ref(it["ssh_config"], configs)?.get("identity"), identities) }
-        val port = number(config?.get("port")) ?: groupChain(group).firstNotNullOfOrNull { number(ref(it["ssh_config"], configs)?.get("port")) }
-        val sshKey = ref(identity?.get("ssh_key"), keys)
+        val group = ref(field(record, GROUP), groups)
+        val chain = groupChain(group)
+        fun configOf(owner: Map<String, Any?>) = ref(field(owner, CONFIG), configs)
+        val config = configOf(record) ?: chain.firstNotNullOfOrNull { configOf(it) }
+        fun identityOf(owner: Map<String, Any?>?) = owner?.let { o ->
+            ref(field(o, IDENTITY), identities)
+                ?: configIdentityLinks.firstOrNull { refersTo(field(it, CONFIG), o) }?.let { ref(field(it, IDENTITY), identities) }
+        }
+        // The identity may hang off the host's config, the host itself, or a group's config.
+        val identity = identityOf(config) ?: identityOf(record) ?: chain.firstNotNullOfOrNull { identityOf(configOf(it)) ?: identityOf(it) }
+        val port = number(field(config, PORT)) ?: number(field(record, PORT)) ?: chain.firstNotNullOfOrNull { number(field(configOf(it), PORT)) }
+        val sshKey = ref(field(identity, KEY), keys) ?: ref(field(config, KEY), keys)
         val label = text(record["label"])?.takeIf { it.isNotBlank() } ?: address
-        val hostTags = tagLinks.filter { idOf(it["host"]) == idOf(record) }.mapNotNull { text(ref(it["tag"], tags)?.get("label")) }
+        val hostTags = tagLinks.filter { refersTo(it["host"], record) }.mapNotNull { text(ref(it["tag"], tags)?.get("label")) }
         return ImportedHost(
             label = label,
             address = address,
             port = port?.toInt()?.takeIf { it in 1..65535 },
-            username = text(identity?.get("username"))?.takeIf { it.isNotBlank() },
-            password = text(identity?.get("password"))?.takeIf { it.isNotEmpty() },
+            username = (text(field(identity, USERNAME)) ?: text(field(config, USERNAME)) ?: text(field(record, USERNAME)))?.takeIf { it.isNotBlank() },
+            password = (text(field(identity, PASSWORD)) ?: text(field(record, PASSWORD)))?.takeIf { it.isNotEmpty() },
             groupPath = groupChain(group).reversed().mapNotNull { text(it["label"]) },
             tags = hostTags,
             key = sshKey?.let { keyOf(it) },
@@ -198,7 +241,7 @@ internal class TermiusMapper(stores: Map<String, List<Map<String, Any?>>>, priva
         var current = group
         while (current != null && chain.none { it === current } && chain.size < 32) {
             chain += current
-            current = ref(current["parent_group"], groups)
+            current = ref(field(current, PARENT), groups)
         }
         return chain
     }
@@ -222,28 +265,75 @@ internal class TermiusMapper(stores: Map<String, List<Map<String, Any?>>>, priva
         else -> text(value)?.trim()?.takeIf { it.isNotEmpty() }
     }
 
-    private fun idOf(value: Any?): Any? = when (value) {
-        is Map<*, *> -> value["id"] ?: value["local_id"]
-        is Number -> value.toLong()
-        is String -> value
-        else -> null
-    }.let { if (it is Number) it.toLong() else it }
+    /** The first of [names] that [record] has, so a renamed field still maps. */
+    private fun field(record: Map<String, Any?>?, names: List<String>): Any? =
+        record?.let { r -> names.firstNotNullOfOrNull { r[it] } }
 
-    private fun ref(value: Any?, table: Map<Any, Map<String, Any?>>): Map<String, Any?>? {
-        @Suppress("UNCHECKED_CAST")
-        if (value is Map<*, *> && value.size > 2) return value as Map<String, Any?>
-        return idOf(value)?.let { table[it] }
+    private fun normalizeId(value: Any?): Any? = when (value) {
+        is Number -> value.toLong()
+        is String -> value.takeIf { it.isNotBlank() }
+        else -> null
     }
+
+    /**
+     * Records by their local id and, separately, by their sync id: the two number spaces
+     * overlap, so a reference `{local_id, id}` is looked up in each with its own number.
+     */
+    private class Table(val byLocal: Map<Any, Map<String, Any?>>, val byId: Map<Any, Map<String, Any?>>)
+
+    private fun table(records: List<Map<String, Any?>>): Table {
+        val current = latest(records)
+        return Table(
+            byLocal = current.mapNotNull { r -> LOCAL_IDS.firstNotNullOfOrNull { normalizeId(r[it]) }?.let { it to r } }.toMap(),
+            byId = current.mapNotNull { r -> REMOTE_IDS.firstNotNullOfOrNull { normalizeId(r[it]) }?.let { it to r } }.toMap(),
+        )
+    }
+
+    private fun ref(value: Any?, table: Table): Map<String, Any?>? = when (value) {
+        is Map<*, *> -> {
+            val local = LOCAL_IDS.firstNotNullOfOrNull { normalizeId(value[it]) }?.let(table.byLocal::get)
+            val remote = REMOTE_IDS.firstNotNullOfOrNull { normalizeId(value[it]) }?.let(table.byId::get)
+            @Suppress("UNCHECKED_CAST")
+            local ?: remote ?: (value as Map<String, Any?>).takeIf { m -> m.keys.any { it !in LOCAL_IDS && it !in REMOTE_IDS } }
+        }
+        // A bare number is a sync id in the API's model; fall back to a local id.
+        else -> normalizeId(value)?.let { table.byId[it] ?: table.byLocal[it] }
+    }
+
+    /** Whether reference [value] points at [record]. */
+    private fun refersTo(value: Any?, record: Map<String, Any?>): Boolean {
+        val local = LOCAL_IDS.firstNotNullOfOrNull { normalizeId(record[it]) }
+        val remote = REMOTE_IDS.firstNotNullOfOrNull { normalizeId(record[it]) }
+        return when (value) {
+            is Map<*, *> -> {
+                val refLocal = LOCAL_IDS.firstNotNullOfOrNull { normalizeId(value[it]) }
+                val refRemote = REMOTE_IDS.firstNotNullOfOrNull { normalizeId(value[it]) }
+                (refLocal != null && refLocal == local) || (refLocal == null && refRemote != null && refRemote == remote)
+            }
+            else -> normalizeId(value)?.let { it == remote || it == local } ?: false
+        }
+    }
+
+    /** Several versions of a record can survive; the most recently updated wins. */
+    private fun latest(records: List<Map<String, Any?>>): List<Map<String, Any?>> =
+        records.groupBy { r -> LOCAL_IDS.firstNotNullOfOrNull { normalizeId(r[it]) }?.let { "l$it" } ?: REMOTE_IDS.firstNotNullOfOrNull { normalizeId(r[it]) }?.let { "r$it" } ?: r }
+            .values.map { versions -> versions.maxBy { updated(it) } }
 
     private fun isDeleted(record: Map<String, Any?>) =
         record["is_deleted"] == true || record["deleted"] == true || (record["status"] as? String)?.equals("deleted", ignoreCase = true) == true
 
-    private fun byId(records: List<Map<String, Any?>>): Map<Any, Map<String, Any?>> =
-        latest(records).mapNotNull { record -> idOf(record)?.let { it to record } }.toMap()
-
-    /** Several versions of a record can survive; the most recently updated wins. */
-    private fun latest(records: List<Map<String, Any?>>): List<Map<String, Any?>> =
-        records.groupBy { idOf(it) ?: it }.values.map { versions -> versions.maxBy { updated(it) } }
+    private companion object {
+        val LOCAL_IDS = listOf("local_id", "localId")
+        val REMOTE_IDS = listOf("id", "remote_id", "remoteId", "uuid")
+        val GROUP = listOf("group", "group_id", "groupId")
+        val PARENT = listOf("parent_group", "parent_group_id", "parentGroup", "parent")
+        val CONFIG = listOf("ssh_config", "ssh_config_id", "sshConfig", "config")
+        val IDENTITY = listOf("identity", "identity_id", "ssh_identity", "sshIdentity")
+        val KEY = listOf("ssh_key", "ssh_key_id", "sshKey", "key")
+        val USERNAME = listOf("username", "user", "login")
+        val PASSWORD = listOf("password", "pass")
+        val PORT = listOf("port")
+    }
 
     private fun updated(record: Map<String, Any?>): Double = when (val value = record["updated_at"]) {
         is Number -> value.toDouble()

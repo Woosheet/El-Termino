@@ -32,7 +32,7 @@ import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
 import kotlinx.coroutines.launch
 
-private class Preview(val source: String, val result: ImportResult)
+private class Preview(val source: String, val result: ImportResult, val details: String? = null)
 
 @Composable
 internal fun ImportScreen(state: AppState, modifier: Modifier = Modifier) {
@@ -46,12 +46,12 @@ internal fun ImportScreen(state: AppState, modifier: Modifier = Modifier) {
     var busy by remember { mutableStateOf(false) }
     var termiusProblem by remember { mutableStateOf<TermiusScan.Unreadable?>(null) }
 
-    fun show(source: String, result: ImportResult) {
+    fun show(source: String, result: ImportResult, details: String? = null) {
         outcome = null
         termiusProblem = null
         selected.clear()
         result.hosts.forEachIndexed { index, host -> selected[index] = !service.isDuplicate(workspace, host) }
-        preview = Preview(source, result)
+        preview = Preview(source, result, details)
     }
 
     Column(modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
@@ -74,7 +74,7 @@ internal fun ImportScreen(state: AppState, modifier: Modifier = Modifier) {
                                 outcome = null
                                 termiusProblem = scan
                             }
-                            is TermiusScan.Found -> show("Termius", scan.result)
+                            is TermiusScan.Found -> show("Termius", scan.result, scan.details)
                         }
                         busy = false
                     }
@@ -119,6 +119,7 @@ internal fun ImportScreen(state: AppState, modifier: Modifier = Modifier) {
                             preview = null
                             outcome = buildString {
                                 append("Aggiunti ${summary.hostsAdded} host")
+                                if (summary.hostsCompleted > 0) append(", credenziali aggiunte a ${summary.hostsCompleted} host già presenti")
                                 if (summary.keysImported > 0) append(", ${summary.keysImported} chiavi")
                                 if (summary.duplicatesSkipped > 0) append(", ${summary.duplicatesSkipped} già presenti")
                                 summary.notes.forEach { append("\n· ").append(it) }
@@ -127,9 +128,10 @@ internal fun ImportScreen(state: AppState, modifier: Modifier = Modifier) {
                     },
                 )
             }
+            current.details?.let { details -> TechnicalDetails(details) }
             LazyColumn(Modifier.weight(1f)) {
                 items(hosts.indices.toList()) { index ->
-                    ImportRow(hosts[index], service.isDuplicate(workspace, hosts[index]), selected[index] == true) { selected[index] = it }
+                    ImportRow(hosts[index], service.isDuplicate(workspace, hosts[index]), service.toComplete(workspace, hosts[index]) != null, selected[index] == true) { selected[index] = it }
                     Divider()
                 }
                 if (current.result.warnings.isNotEmpty()) {
@@ -148,11 +150,12 @@ internal fun ImportScreen(state: AppState, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ImportRow(host: ImportedHost, duplicate: Boolean, checked: Boolean, onChecked: (Boolean) -> Unit) {
+private fun ImportRow(host: ImportedHost, duplicate: Boolean, completes: Boolean, checked: Boolean, onChecked: (Boolean) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked, onChecked, host.label)
             if (duplicate) { Gap(width = 6); Badge("già presente") }
+            if (completes) { Gap(width = 6); Badge("aggiunge le credenziali") }
         }
         val details = listOfNotNull(
             (host.username?.let { "$it@" } ?: "") + host.address + (host.port?.takeIf { it != 22 }?.let { ":$it" } ?: ""),
@@ -172,7 +175,6 @@ private fun ImportRow(host: ImportedHost, duplicate: Boolean, checked: Boolean, 
 /** Why Termius's data couldn't be read, what to do instead, and the names a fix needs. */
 @Composable
 private fun TermiusProblem(problem: TermiusScan.Unreadable) {
-    var details by remember { mutableStateOf(false) }
     Column(Modifier.padding(vertical = 12.dp)) {
         Text(problem.reason, style = Carta.type.bodyStrong)
         Gap(height = 4)
@@ -181,9 +183,20 @@ private fun TermiusProblem(problem: TermiusScan.Unreadable) {
             style = Carta.type.small,
             color = Carta.colors.textDim,
         )
-        Button(if (details) "Nascondi i dettagli tecnici" else "Dettagli tecnici", onClick = { details = !details }, kind = ButtonKind.Ghost)
-        if (details) {
-            Text(problem.details.ifBlank { "Nessun dettaglio" }, fontFamily = Carta.monospace, style = Carta.type.label, color = Carta.colors.textDim)
+        TechnicalDetails(problem.details)
+    }
+}
+
+/** Store and field names with the kinds of value they hold, never the values: to fix the mapping. */
+@Composable
+private fun TechnicalDetails(details: String) {
+    var open by remember { mutableStateOf(false) }
+    Column {
+        Button(if (open) "Nascondi i dettagli tecnici" else "Dettagli tecnici", onClick = { open = !open }, kind = ButtonKind.Ghost)
+        if (open) {
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Text(details.ifBlank { "Nessun dettaglio" }, fontFamily = Carta.monospace, style = Carta.type.label, color = Carta.colors.textDim)
+            }
         }
     }
 }

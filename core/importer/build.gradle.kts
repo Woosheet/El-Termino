@@ -35,4 +35,7 @@ kotlin {
 
 tasks.named<Test>("desktopTest") {
     useJUnitPlatform()
+    // -PtermiusStructure prints the structure of this computer's Termius data: names and kinds, no values.
+    systemProperty("termius.structure", providers.gradleProperty("termiusStructure").isPresent.toString())
+    if (providers.gradleProperty("termiusStructure").isPresent) testLogging.showStandardStreams = true
 }

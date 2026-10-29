@@ -109,6 +109,7 @@ internal fun WelcomeFlow(state: AppState, startAtTour: Boolean, onOpenImport: ()
                                 termius = TermiusStep.Imported(
                                     buildString {
                                         append(if (summary.hostsAdded == 1) "1 host importato" else "${summary.hostsAdded} host importati")
+                                        if (summary.hostsCompleted > 0) append(", credenziali aggiunte a ${summary.hostsCompleted} già presenti")
                                         if (summary.keysImported > 0) append(", ${summary.keysImported} chiavi nel vault")
                                         if (summary.duplicatesSkipped > 0) append(", ${summary.duplicatesSkipped} già presenti")
                                         append(".")

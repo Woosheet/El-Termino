@@ -116,6 +116,48 @@ class TermiusLocalReaderTest {
         assertTrue("segreta" !in found.details, "details never carry values")
     }
 
+    /** As a current Termius stores it: references are {local_id, id}, identities sit in a link table. */
+    @Test
+    fun readsTheCurrentTermiusLayout() {
+        val home = Files.createTempDirectory("termius").toFile().apply { deleteOnExit() }
+        val dir = File(home, "Library/Application Support/Termius/IndexedDB/file__0.indexeddb.leveldb").apply { mkdirs() }
+        fun ref(local: Int, id: Int) = mapOf("local_id" to local, "id" to id)
+        val log = Log()
+        log.batch(listOf(storeName(1, "hosts"), storeName(2, "ssh_configs"), storeName(3, "ssh_config_identities"), storeName(4, "ssh_identities"), storeName(5, "keys"), storeName(6, "known_hosts")))
+        log.batch(
+            listOf(
+                // Local and sync ids overlap on purpose: config local 7 is not identity id 7.
+                dataKey(1, 1) to record(mapOf("local_id" to 1, "id" to 501, "label" to seal("web-01"), "address" to seal("10.0.0.5"), "group" to null, "ssh_config" to ref(7, 901), "status" to "created", "updated_at" to "2026-10-01T10:00:00Z")),
+                dataKey(1, 2) to record(mapOf("local_id" to 2, "id" to 502, "label" to seal("db-01"), "address" to seal("10.0.0.6"), "ssh_config" to ref(8, 902), "status" to "created")),
+                dataKey(1, 3) to record(mapOf("local_id" to 3, "id" to 503, "label" to seal("vecchio"), "address" to seal("10.0.0.9"), "ssh_config" to ref(8, 902), "status" to "deleted")),
+                dataKey(2, 7) to record(mapOf("local_id" to 7, "id" to 901, "port" to 2222, "identity" to null)),
+                dataKey(2, 8) to record(mapOf("local_id" to 8, "id" to 902, "port" to null, "identity" to null)),
+                dataKey(3, 1) to record(mapOf("local_id" to 1, "id" to 7, "ssh_config" to ref(7, 901), "identity" to ref(4, 801))),
+                dataKey(3, 2) to record(mapOf("local_id" to 2, "id" to 8, "ssh_config" to ref(8, 902), "identity" to ref(5, 802))),
+                dataKey(4, 4) to record(mapOf("local_id" to 4, "id" to 801, "label" to seal("deploy"), "username" to seal("deploy"), "password" to seal("segreta"), "ssh_key" to null)),
+                dataKey(4, 5) to record(mapOf("local_id" to 5, "id" to 802, "label" to seal("postgres"), "username" to seal("postgres"), "password" to seal(""), "ssh_key" to ref(1, 701))),
+                dataKey(5, 1) to record(mapOf("local_id" to 1, "label" to seal("laptop"), "private_key" to seal("-----BEGIN OPENSSH PRIVATE KEY-----"), "passphrase" to seal(""), "public_key" to seal("ssh-ed25519 AAAA"))),
+                dataKey(6, 1) to record(mapOf("local_id" to 1, "id" to 1, "hostnames" to seal("10.0.0.5"), "key" to seal("ssh-ed25519 AAAA"))),
+            ),
+        )
+        File(dir, "000003.log").writeBytes(log.out.toByteArray())
+
+        val found = assertIs<TermiusLocal.Found>(TermiusLocalReader.read(TermiusLocalReader.dataDirs(home, os = "Mac OS X").single(), listOf(key)))
+        val hosts = found.result.hosts.associateBy { it.label }
+        assertEquals(setOf("web-01", "db-01"), hosts.keys, "deleted hosts and known_hosts stay out")
+        val web = hosts.getValue("web-01")
+        assertEquals("10.0.0.5", web.address)
+        assertEquals(2222, web.port)
+        assertEquals("deploy", web.username)
+        assertEquals("segreta", web.password)
+        assertEquals(null, web.key)
+        val db = hosts.getValue("db-01")
+        assertEquals("postgres", db.username)
+        assertEquals(null, db.password, "an empty password is no password")
+        assertEquals("laptop", db.key?.label)
+        assertEquals(null, db.key?.passphrase)
+    }
+
     @Test
     fun aWrongKeyIsReportedNotGuessed() {
         val data = TermiusLocalReader.dataDirs(termiusFolder(), os = "Mac OS X").single()
