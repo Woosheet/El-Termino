@@ -230,6 +230,8 @@ data class UiSettings(
     val appIcon: String = "bigote",
     /** System notifications when a transfer finishes or fails. */
     val notifyTransfers: Boolean = true,
+    /** Look for a new version at startup, in the installed app. */
+    val checkUpdates: Boolean = true,
     /** Set once the first-run welcome has been answered. */
     val welcomeDone: Boolean = false,
 )

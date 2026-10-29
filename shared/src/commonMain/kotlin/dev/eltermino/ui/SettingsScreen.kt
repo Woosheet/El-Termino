@@ -81,6 +81,7 @@ internal fun SettingsScreen(state: AppState, modifier: Modifier = Modifier, extr
                 "Notifica quando un trasferimento finisce o non riesce",
             )
         }
+        UpdatesSection(state, workspace.ui.checkUpdates) { on -> update { it.copy(checkUpdates = on) } }
         extra()
     }
 }

@@ -2,7 +2,9 @@ package dev.eltermino.desktop
 
 import dev.eltermino.app.PickedFile
 import com.github.javakeyring.Keyring
+import dev.eltermino.app.LATEST_RELEASE_URL
 import dev.eltermino.app.Platform
+import dev.eltermino.app.ReleaseAsset
 import dev.eltermino.app.TermiusScan
 import dev.eltermino.core.importer.termius.TermiusLocal
 import dev.eltermino.core.importer.termius.TermiusLocalReader
@@ -40,6 +42,38 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
     }
 
     override val isInForeground: Boolean get() = window()?.isActive == true
+
+    // jpackage's launcher sets the version; a run from Gradle has none and doesn't look for updates.
+    override val appVersion: String? = System.getProperty("jpackage.app-version")
+
+    /** The .app this process runs from, if any: its runtime sits inside it. */
+    private val bundle: File? = generateSequence(File(System.getProperty("java.home"))) { it.parentFile }
+        .firstOrNull { it.name.endsWith(".app") }
+
+    private val updater by lazy { bundle?.let { MacUpdater(it) } }
+
+    override val updateAssetSuffix: String? =
+        if (bundle == null) null else "-macos-${if (System.getProperty("os.arch") == "aarch64") "arm64" else "x64"}.dmg"
+
+    /** -Deltermino.releasesUrl points the check elsewhere, a local file for instance. */
+    override val releasesUrl: String = System.getProperty("eltermino.releasesUrl") ?: LATEST_RELEASE_URL
+
+    override suspend fun fetchText(url: String): String = withContext(Dispatchers.IO) {
+        connect(url, accept = "application/vnd.github+json").getInputStream().use { it.readBytes().decodeToString() }
+    }
+
+    override suspend fun installUpdate(asset: ReleaseAsset, version: String, progress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        val updater = updater ?: throw UpdateException("Si aggiorna da sola solo l'app installata")
+        updater.install(asset.url, version, asset.sizeBytes, progress)
+    }
+
+    override fun openUpdateOnExit() {
+        updater?.relaunchAfterExit()
+    }
+
+    override fun openUrl(url: String) {
+        runCatching { java.awt.Desktop.getDesktop().browse(java.net.URI(url)) }
+    }
 
     /** Notification Center on macOS, notify-send on Linux, the tray balloon on Windows. */
     override fun notify(title: String, message: String) {

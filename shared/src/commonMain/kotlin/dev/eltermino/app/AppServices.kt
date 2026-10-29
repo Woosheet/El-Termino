@@ -53,6 +53,31 @@ interface Platform {
 
     /** Reads a local path such as an `IdentityFile`, expanding `~`; null if unreadable. */
     fun readLocalFile(path: String): ByteArray?
+
+    /** This build's version; null for a development build, which doesn't look for updates. */
+    val appVersion: String? get() = null
+
+    /** How the name of the release file that installs the app here ends; null where it can't install itself. */
+    val updateAssetSuffix: String? get() = null
+
+    /** Where to ask for the latest release. */
+    val releasesUrl: String get() = LATEST_RELEASE_URL
+
+    /** The body of a GET request to [url]. */
+    suspend fun fetchText(url: String): String = throw UnsupportedOperationException("No network here")
+
+    /**
+     * Downloads [asset] and puts version [version] next to this app, reporting progress from
+     * 0 to 1; it takes over once the app closes. Throws with a message for the user.
+     */
+    suspend fun installUpdate(asset: ReleaseAsset, version: String, progress: (Float) -> Unit): Unit =
+        throw UnsupportedOperationException("This app doesn't install updates")
+
+    /** Has the version [installUpdate] put in place open as soon as this one has closed. */
+    fun openUpdateOnExit() {}
+
+    /** Opens [url] in the browser. */
+    fun openUrl(url: String) {}
 }
 
 class PickedFile(val name: String, val bytes: ByteArray)

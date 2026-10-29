@@ -30,7 +30,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
@@ -87,6 +86,7 @@ fun App(state: AppState, onExit: () -> Unit = {}, titleBarHeight: Dp = 0.dp) {
             LocalTitleBar provides titleBarHeight,
             LocalAppIcon provides AppIconStyle.of(workspace.ui.appIcon),
         ) { AppContent(state) }
+        UpdateDialog(state, onExit)
         ExitDialog(state, onExit)
     }
 }
@@ -351,7 +351,9 @@ private fun StatusBar(state: AppState) {
                 Text("Broadcast su ${broadcast.size} sessioni", style = Carta.type.label, color = Carta.colors.accent, modifier = Modifier.padding(start = 4.dp))
             }
         }
-        Text("Segreti nel vault cifrato", style = Carta.type.label, color = Carta.colors.textDim, modifier = Modifier.weight(1f), textAlign = TextAlign.End)
+        Box(Modifier.weight(1f))
+        UpdateBadge(state)
+        Text("Segreti nel vault cifrato", style = Carta.type.label, color = Carta.colors.textDim)
     }
 }
 

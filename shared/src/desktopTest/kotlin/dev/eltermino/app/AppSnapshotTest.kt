@@ -463,6 +463,42 @@ class AppSnapshotTest {
         snapshot(lightState(), "app-desktop-empty")
     }
 
+    /** A newer release found: the badge in the status bar, the dialog, and the settings. */
+    @Test
+    fun updateAvailable(): Unit = runBlocking {
+        val base = testServices()
+        val platform = object : Platform by TestPlatform() {
+            override val appVersion = "1.0.0"
+            override val updateAssetSuffix = "-macos-arm64.dmg"
+            override suspend fun fetchText(url: String) = """
+                {"tag_name":"v1.0.1","html_url":"https://github.com/Woosheet/El-Termino/releases/tag/v1.0.1",
+                 "body":"## What's Changed\n* Barra del titolo trasparente su macOS by @Woosheet\n* Il menu + non si chiude più con due SFTP aperti\n\n**Full Changelog**: https://github.com/Woosheet/El-Termino/compare/v1.0.0...v1.0.1",
+                 "assets":[{"name":"El-Termino-1.0.1-macos-arm64.dmg","size":129695638,"browser_download_url":"https://example.test/a.dmg"}]}
+            """.trimIndent()
+        }
+        val services = AppServices(base.workspace, base.vault, base.connector, base.keyTool, platform, base.localFiles)
+        services.workspace.update { it.copy(ui = it.ui.copy(theme = "carta", welcomeDone = true, checkUpdates = false)) }
+        val state = AppState(services)
+        seed(state)
+        state.updates.check()
+        withTimeout(5_000) { state.updates.state.first { it is UpdateState.Available } }
+        snapshot(state, "app-desktop-update-badge")
+        state.updates.show()
+        snapshot(state, "app-desktop-update-dialog")
+        state.updates.hide()
+        ImageComposeScene(2000, 2400, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(dev.eltermino.ui.theme.Carta.colors.background)) {
+                    dev.eltermino.ui.SettingsScreen(state, androidx.compose.ui.Modifier.fillMaxSize())
+                }
+            }
+        }.use { scene ->
+            repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+            val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
+            File("build/snapshots/settings-updates.png").apply { parentFile.mkdirs(); writeBytes(png) }
+        }
+    }
+
     /** macOS draws its title bar over the app; the bars at the top reach under it. */
     @Test
     fun underTheMacTitleBar(): Unit = runBlocking {

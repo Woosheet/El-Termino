@@ -1,0 +1,37 @@
+# On a tag like v1.2.3: builds the macOS DMG and publishes it as a GitHub Release, which
+# the installed apps find at startup and offer to install.
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    # Apple Silicon, like the Macs the DMG is for.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          # Not Homebrew's JDK: the app would need Homebrew's libraries on every Mac.
+          distribution: corretto
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Android platform, which the shared modules need to configure
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" > /dev/null
+      - name: DMG
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          ./gradlew :app-desktop:packageShareableDmg -PappVersion="$version"
+          # The app picks its file by this suffix.
+          cp "app-desktop/build/dmg/El Termino-$version.dmg" "El-Termino-$version-macos-arm64.dmg"
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" "El-Termino-$version-macos-arm64.dmg" --title "El Termino $version" --generate-notes

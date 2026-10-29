@@ -16,10 +16,20 @@ dependencies {
     implementation(libs.kotlinx.coroutines.swing)
     // Termius's local key lives in the system keychain, next to ours.
     implementation(libs.java.keyring)
+
+    testImplementation(kotlin("test"))
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
-// macOS refuses versions that start with 0.
-val appVersion = "1.0.0"
+tasks.test {
+    useJUnitPlatform()
+}
+
+// The release workflow passes the tag's version with -PappVersion; macOS refuses versions that start with 0.
+val appVersion = providers.gradleProperty("appVersion").getOrElse("1.0.0")
+require(Regex("[1-9][0-9]*\\.[0-9]+\\.[0-9]+").matches(appVersion)) { "appVersion must look like 1.2.3, got $appVersion" }
 
 compose.desktop {
     application {

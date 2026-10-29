@@ -27,6 +27,18 @@ JAVA_HOME=~/Library/Java/JavaVirtualMachines/corretto-21.0.13/Contents/Home ./gr
 
 Il file esce in `app-desktop/build/dmg/`, con l'app accanto al collegamento ad Applicazioni in cui trascinarla. Lo monta `app-desktop/packaging/make-dmg.sh` con `hdiutil`: il DMG di `packageDmg` dispone il contenuto pilotando il Finder e, senza quel permesso, esce senza il collegamento. Funziona sui Mac con Apple Silicon e non è firmato con un Developer ID, quindi chi lo scarica deve aprirlo la prima volta da Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque». MSI e DEB si creano allo stesso modo su Windows e Linux (`packageMsi`, `packageDeb`). L'icona si rigenera da `app-desktop/packaging/` con `java MakeIcons.java` e poi `iconutil -c icns icon.iconset`.
 
+## Versioni e aggiornamenti
+
+Una nuova versione si pubblica con un tag:
+
+```bash
+git tag v1.0.1 && git push origin v1.0.1
+```
+
+Il workflow [release.yml](.github/workflows/release.yml) crea il DMG con quella versione su un Mac Apple Silicon di GitHub e lo pubblica come Release, con il nome `El-Termino-<versione>-macos-arm64.dmg`. L'app installata cerca l'ultima Release all'avvio (si spegne nelle Impostazioni) e la propone nella barra in basso. Con «Aggiorna e riavvia» la scarica, controlla che dentro ci sia El Termino nella versione annunciata e con una firma valida, la mette accanto a quella in uso e la sostituisce appena l'app si chiude, poi la riapre. Una build lanciata da Gradle non ha versione e non cerca aggiornamenti.
+
+In locale il DMG prende la versione da `-PappVersion=1.2.3` (di base 1.0.0). Per provare un aggiornamento senza GitHub, si lancia l'app con `-Deltermino.releasesUrl=file:///…/latest.json`, un file con la stessa forma della risposta di GitHub.
+
 ## Test
 
 Molti test girano contro i server OpenSSH di `testenv/`:
