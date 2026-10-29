@@ -50,7 +50,7 @@ internal fun KeysScreen(state: AppState, modifier: Modifier = Modifier) {
     var deleting by remember { mutableStateOf<SshKeyEntry?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier.padding(16.dp)) {
+    Column(modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ScreenTitle("Chiavi", Modifier.weight(1f))
             Button("Importa da file", kind = ButtonKind.Secondary, onClick = {

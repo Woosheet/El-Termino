@@ -23,7 +23,7 @@ import dev.eltermino.ui.theme.Carta
 internal fun SectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text,
-        modifier = modifier.padding(start = 6.dp, top = 12.dp, bottom = 4.dp),
+        modifier = modifier.padding(start = 6.dp, top = 16.dp, bottom = 6.dp),
         style = Carta.type.label,
         color = Carta.colors.textDim,
     )
@@ -37,7 +37,7 @@ internal fun ScreenTitle(text: String, modifier: Modifier = Modifier) {
 /** One line of muted explanation under a screen title. */
 @Composable
 internal fun Hint(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier = modifier.padding(vertical = 8.dp), style = Carta.type.small, color = Carta.colors.textDim)
+    Text(text, modifier = modifier.padding(top = 4.dp, bottom = 16.dp), style = Carta.type.small, color = Carta.colors.textDim)
 }
 
 @Composable

@@ -151,4 +151,10 @@ data class UiSettings(
     val sidebarWidthDp: Int = 260,
     /** Folders saved in this device's file panel. */
     val localBookmarks: List<String> = emptyList(),
+    /** A theme id, or "system" to follow the OS: Carta by day, Notte in dark mode. */
+    val theme: String = "system",
+    /** System notifications when a transfer finishes or fails. */
+    val notifyTransfers: Boolean = true,
+    /** Set once the first-run welcome has been answered. */
+    val welcomeDone: Boolean = false,
 )

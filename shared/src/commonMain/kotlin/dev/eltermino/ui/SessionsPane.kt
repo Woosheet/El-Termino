@@ -44,6 +44,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
 import dev.eltermino.app.EditorTab
+import dev.eltermino.app.Endpoint
+import dev.eltermino.app.Location
+import dev.eltermino.app.childPath
+import kotlinx.coroutines.launch
 import dev.eltermino.app.FilesTab
 import dev.eltermino.app.SessionTab
 import dev.eltermino.app.Tab
@@ -51,6 +55,7 @@ import dev.eltermino.app.SplitLayout
 import dev.eltermino.app.TabStatus
 import dev.eltermino.app.titles
 import dev.eltermino.core.data.Host
+import dev.eltermino.core.terminal.ExtraKeysColors
 import dev.eltermino.core.terminal.TerminalExtraKeys
 import dev.eltermino.core.terminal.TerminalSession
 import dev.eltermino.core.terminal.TerminalView
@@ -139,7 +144,7 @@ internal fun SessionContent(state: AppState, showExtraKeys: Boolean, split: Bool
     val copier = remember { CopyFlow(state, scope) }
     CompositionLocalProvider(LocalFileDrag provides drag, LocalCopyFlow provides copier) {
         Column(modifier) {
-            Box(Modifier.weight(1f).fillMaxWidth().background(Carta.colors.terminalBackground)) {
+            Box(Modifier.weight(1f).fillMaxWidth().background(Carta.theme.terminal.background)) {
                 SplitPanes(state, tabs.isEmpty(), layout, showExtraKeys)
             }
             TransfersBar(state)
@@ -379,7 +384,7 @@ private fun TerminalTabBody(state: AppState, tab: SessionTab, showExtraKeys: Boo
             Gap(height = 12)
             Text("Connessione a ${tab.label}…", color = Carta.colors.textDim)
         }
-        is TabStatus.Open -> Terminal(status.terminal, showExtraKeys, focused)
+        is TabStatus.Open -> UploadDropZone(state, tab, status.terminal) { Terminal(status.terminal, showExtraKeys, focused) }
         is TabStatus.Reconnecting -> Column(Modifier.fillMaxSize()) {
             ReconnectingBar(state, tab, status)
             Divider()
@@ -440,6 +445,49 @@ private fun ReconnectingBar(state: AppState, tab: SessionTab, status: TabStatus.
     }
 }
 
+/**
+ * Files dropped on a terminal are uploaded to the shell's folder, read from the window
+ * title the shell sets ("dev@web-01: /var/www"), or to the home folder when it doesn't say.
+ */
+@Composable
+private fun UploadDropZone(state: AppState, tab: SessionTab, terminal: TerminalSession, content: @Composable () -> Unit) {
+    val copier = LocalCopyFlow.current
+    val scope = rememberCoroutineScope()
+    val title by terminal.title.collectAsState()
+    var hovering by remember { mutableStateOf(false) }
+    val folder = shellFolder(title)
+    Box(
+        Modifier.fillMaxSize().onFilesDropped(onHover = { hovering = it }) { paths ->
+            val local = state.services.localFiles ?: return@onFilesDropped
+            scope.launch {
+                val endpoint = Endpoint.Remote(tab.hostId)
+                val home = runCatching { state.transfers.home(endpoint) }.getOrNull() ?: return@launch
+                val dir = folder?.let { if (it == "~") home else if (it.startsWith("~/")) childPath(home, it.removePrefix("~/")) else it } ?: home
+                val files = paths.mapNotNull { runCatching { local.stat(it) }.getOrNull() }
+                copier?.copy(Endpoint.Local, files, Location(endpoint, dir), tab.label)
+            }
+        },
+    ) {
+        content()
+        if (hovering) {
+            Box(Modifier.matchParentSize().background(Carta.colors.accent.copy(alpha = 0.10f)).border(2.dp, Carta.colors.accent), contentAlignment = Alignment.Center) {
+                Text(
+                    "Rilascia per caricare in ${folder ?: "~"} su ${tab.label}",
+                    modifier = Modifier.background(Carta.colors.accent, RoundedCornerShape(6.dp)).padding(horizontal = 12.dp, vertical = 6.dp),
+                    style = Carta.type.small,
+                    color = Carta.colors.background,
+                )
+            }
+        }
+    }
+}
+
+/** "dev@web-01: /var/www" → "/var/www"; "~/app" stays relative to home. Null when the title doesn't tell. */
+internal fun shellFolder(title: String?): String? {
+    val match = Regex("""^[^@\s]+@[^:\s]+:\s*(.+)$""").find(title?.trim().orEmpty()) ?: return null
+    return match.groupValues[1].trim().takeIf { it.startsWith("/") || it.startsWith("~") }
+}
+
 @Composable
 internal fun statusColor(status: TabStatus) = when (status) {
     is TabStatus.Open -> Carta.colors.online
@@ -461,10 +509,18 @@ private fun Terminal(session: TerminalSession, showExtraKeys: Boolean, focused: 
     Column(Modifier.fillMaxSize()) {
         TerminalView(
             session,
-            Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            Modifier.weight(1f).fillMaxWidth().background(Carta.theme.terminal.background).padding(horizontal = 12.dp, vertical = 8.dp),
+            theme = Carta.theme.terminal,
             fontFamily = Carta.monospace,
             focused = focused,
         )
-        if (showExtraKeys) TerminalExtraKeys(session, Modifier.fillMaxWidth())
+        if (showExtraKeys) {
+            val colors = Carta.colors
+            TerminalExtraKeys(
+                session,
+                Modifier.fillMaxWidth(),
+                colors = ExtraKeysColors(colors.chrome, colors.background, colors.line, colors.text, colors.accentBackground, colors.accent),
+            )
+        }
     }
 }

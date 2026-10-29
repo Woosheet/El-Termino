@@ -26,6 +26,18 @@ interface Platform {
     /** Absolute paths of files chosen for upload, where the device has paths; empty otherwise. */
     suspend fun pickLocalFiles(title: String): List<String> = emptyList()
 
+    /** Whether a window of the app is the one the user is looking at. */
+    val isInForeground: Boolean get() = true
+
+    /** A system notification, for things the user may want to know from another window. */
+    fun notify(title: String, message: String) {}
+
+    /**
+     * Termius's own data on this computer, if Termius is installed here. Reading its key
+     * from the system keychain makes the system ask the user first.
+     */
+    suspend fun readTermius(): TermiusScan = TermiusScan.NotFound
+
     /** `~/.ssh/config`, or null where there's none (always on Android). */
     fun readSshConfig(): String?
 
@@ -40,3 +52,13 @@ interface Platform {
 }
 
 class PickedFile(val name: String, val bytes: ByteArray)
+
+/** What looking for Termius on this device found. */
+sealed interface TermiusScan {
+    data object NotFound : TermiusScan
+
+    /** Termius is here but its data can't be read; [details] lists store and field names only. */
+    data class Unreadable(val reason: String, val details: String) : TermiusScan
+
+    data class Found(val result: dev.eltermino.core.importer.ImportResult, val details: String) : TermiusScan
+}

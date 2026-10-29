@@ -26,7 +26,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -85,6 +84,7 @@ import dev.eltermino.ui.components.Pressable
 import dev.eltermino.ui.components.Spinner
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
+import dev.eltermino.ui.theme.tabular
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -390,7 +390,7 @@ private fun FilesToolbar(state: AppState, tab: FilesTab, path: String?, hidden: 
         }
         Box {
             val saved = path != null && path in bookmarks
-            IconButton(Icons.Default.Star, "Segnalibri", onClick = { bookmarkMenu = true }, tint = if (saved) colors.accent else colors.textDim, size = 28.dp, iconSize = 16.dp)
+            IconButton(CartaIcons.Star, "Segnalibri", onClick = { bookmarkMenu = true }, tint = if (saved) colors.accent else colors.textDim, size = 28.dp, iconSize = 16.dp)
             Menu(expanded = bookmarkMenu, onDismiss = { bookmarkMenu = false }, alignEnd = true) {
                 if (path != null) {
                     MenuItem(if (saved) "Togli questa cartella" else "Aggiungi questa cartella", onClick = {
@@ -488,7 +488,7 @@ private fun FileRow(
             .padding(start = 10.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Row(Modifier.weight(1f).padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.weight(1f).padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 when (entry.type) {
                     RemoteFile.Type.Directory -> CartaIcons.Folder
@@ -506,7 +506,7 @@ private fun FileRow(
         Text(
             if (entry.isDirectory) "" else formatBytes(entry.size),
             modifier = Modifier.width(92.dp),
-            style = Carta.type.small,
+            style = Carta.type.small.tabular(),
             color = colors.textDim,
             textAlign = androidx.compose.ui.text.style.TextAlign.End,
             maxLines = 1,
@@ -515,7 +515,7 @@ private fun FileRow(
             Text(
                 formatFileTime(entry.modifiedEpochSeconds),
                 modifier = Modifier.width(124.dp),
-                style = Carta.type.small,
+                style = Carta.type.small.tabular(),
                 color = colors.textDim,
                 textAlign = androidx.compose.ui.text.style.TextAlign.End,
                 maxLines = 1,

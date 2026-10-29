@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -30,6 +29,7 @@ import dev.eltermino.core.data.groupPath
 import dev.eltermino.core.data.newId
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
+import dev.eltermino.ui.components.CartaIcons
 import dev.eltermino.ui.components.Dialog
 import dev.eltermino.ui.components.Icon
 import dev.eltermino.ui.components.IconButton
@@ -120,7 +120,7 @@ private fun HostRow(
             Column(Modifier.weight(1f).padding(horizontal = 8.dp, vertical = 5.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(host.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (host.favorite) Icon(Icons.Default.Star, contentDescription = "Preferito", tint = Carta.colors.accent, size = 12.dp, modifier = Modifier.padding(start = 4.dp))
+                    if (host.favorite) Icon(CartaIcons.Star, contentDescription = "Preferito", tint = Carta.colors.textDim, size = 12.dp, modifier = Modifier.padding(start = 4.dp))
                 }
                 Text(subtitle, style = Carta.type.caption, color = Carta.colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

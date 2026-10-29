@@ -35,7 +35,7 @@ kotlin {
             api(project(":core:data"))
             api(project(":core:vault"))
             api(project(":core:terminal"))
-            implementation(project(":core:importer"))
+            api(project(":core:importer"))
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.ui)

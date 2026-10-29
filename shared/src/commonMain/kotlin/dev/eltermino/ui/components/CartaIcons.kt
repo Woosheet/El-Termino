@@ -119,6 +119,59 @@ object CartaIcons {
         }
     }
 
+    val Key: ImageVector by lazy {
+        lineIcon("Key") {
+            circle(8.5f, 15.5f, 4f)
+            moveTo(11.5f, 12.5f); lineTo(19.5f, 4.5f)
+            moveTo(17f, 7f); lineTo(19.5f, 9.5f)
+            moveTo(14.5f, 9.5f); lineTo(16.5f, 11.5f)
+        }
+    }
+
+    val User: ImageVector by lazy {
+        lineIcon("User") {
+            circle(12f, 8.5f, 3.5f)
+            moveTo(5f, 20f); quadTo(5f, 14f, 12f, 14f); quadTo(19f, 14f, 19f, 20f)
+        }
+    }
+
+    /** An arrow into a tray: things coming in. */
+    val Import: ImageVector by lazy {
+        lineIcon("Import") {
+            moveTo(12f, 4f); lineTo(12f, 14f); moveTo(8f, 10f); lineTo(12f, 14f); lineTo(16f, 10f)
+            moveTo(4.5f, 15f); lineTo(4.5f, 19.5f); lineTo(19.5f, 19.5f); lineTo(19.5f, 15f)
+        }
+    }
+
+    /** Three sliders: settings. */
+    val Settings: ImageVector by lazy {
+        lineIcon("Settings") {
+            moveTo(4f, 7f); lineTo(13f, 7f); moveTo(17f, 7f); lineTo(20f, 7f); circle(15f, 7f, 2f)
+            moveTo(4f, 12f); lineTo(7f, 12f); moveTo(11f, 12f); lineTo(20f, 12f); circle(9f, 12f, 2f)
+            moveTo(4f, 17f); lineTo(12f, 17f); moveTo(16f, 17f); lineTo(20f, 17f); circle(14f, 17f, 2f)
+        }
+    }
+
+    val Star: ImageVector by lazy {
+        lineIcon("Star") {
+            val points = (0 until 10).map { i ->
+                val radius = if (i % 2 == 0) 8.5f else 3.8f
+                val angle = -kotlin.math.PI / 2 + i * kotlin.math.PI / 5
+                (12f + radius * kotlin.math.cos(angle).toFloat()) to (12.8f + radius * kotlin.math.sin(angle).toFloat())
+            }
+            moveTo(points[0].first, points[0].second)
+            points.drop(1).forEach { (x, y) -> lineTo(x, y) }
+            close()
+        }
+    }
+
+    private fun PathBuilder.circle(cx: Float, cy: Float, r: Float) {
+        moveTo(cx - r, cy)
+        arcTo(r, r, 0f, false, true, cx + r, cy)
+        arcTo(r, r, 0f, false, true, cx - r, cy)
+        close()
+    }
+
     private fun PathBuilder.frame() = roundRect(4f, 5f, 20f, 19f)
 
     private fun PathBuilder.roundRect(left: Float, top: Float, right: Float, bottom: Float, radius: Float = 2f) {

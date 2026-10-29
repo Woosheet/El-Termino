@@ -158,6 +158,13 @@ class TransferManager(
         releaseIdle()
     }
 
+    /** Where browsing starts on [endpoint]: the login folder of a host, or the home folder here. */
+    suspend fun home(endpoint: Endpoint): String = try {
+        fileSystem(endpoint).home()
+    } finally {
+        releaseIdle()
+    }
+
     /** Queues [files], all from [source], to go into [targetDir]. */
     fun enqueue(source: Endpoint, files: List<RemoteFile>, targetDir: Location, policy: ConflictPolicy): List<Transfer> {
         val added = files.map { file ->

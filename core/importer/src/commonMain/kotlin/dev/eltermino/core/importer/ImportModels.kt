@@ -24,11 +24,18 @@ data class ImportedHost(
     /** Hops to go through, outermost first, as with OpenSSH `ProxyJump`. */
     val proxyJump: List<JumpTarget> = emptyList(),
     val notes: String? = null,
+    /** A private key carried in the source itself, as Termius's local data does. */
+    val key: ImportedKey? = null,
 ) {
     override fun toString(): String =
         "ImportedHost(label=$label, address=$address, port=$port, username=$username, " +
             "password=${if (password == null) "null" else "***"}, groupPath=$groupPath, tags=$tags, " +
-            "identityFiles=$identityFiles, certificateFiles=$certificateFiles, proxyJump=$proxyJump, notes=$notes)"
+            "identityFiles=$identityFiles, certificateFiles=$certificateFiles, proxyJump=$proxyJump, notes=$notes, key=$key)"
+}
+
+/** A private key's contents, with its passphrase if the source keeps one. Never printed. */
+class ImportedKey(val label: String, val privateKey: String, val passphrase: String? = null) {
+    override fun toString() = "ImportedKey(label=$label, ***)"
 }
 
 data class JumpTarget(

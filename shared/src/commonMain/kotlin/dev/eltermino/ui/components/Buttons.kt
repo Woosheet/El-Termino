@@ -49,7 +49,8 @@ private class ButtonColors(val background: Color, val hover: Color, val pressed:
 private fun CartaColors.forKind(kind: ButtonKind) = when (kind) {
     ButtonKind.Primary -> ButtonColors(accent, accentHover, accentPressed, background, null)
     ButtonKind.Secondary -> ButtonColors(background, hover, pressed, text, lineStrong)
-    ButtonKind.Ghost -> ButtonColors(Color.Transparent, accentBackground, accentBackground, accent, null)
+    // Secondary actions stay in ink: the accent is for the one primary action and for data.
+    ButtonKind.Ghost -> ButtonColors(Color.Transparent, hover, pressed, text, null)
     ButtonKind.Danger -> ButtonColors(danger, danger.copy(alpha = 0.9f), danger.copy(alpha = 0.8f), background, null)
 }
 
@@ -62,7 +63,7 @@ internal fun Pressable(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    shape: Shape = RoundedCornerShape(8.dp),
+    shape: Shape = RoundedCornerShape(6.dp),
     background: Color = Color.Transparent,
     hover: Color = Carta.colors.hover,
     pressed: Color = Carta.colors.pressed,
@@ -129,14 +130,14 @@ fun Button(
     val content = if (enabled) colors.content else colors.content.copy(alpha = 0.45f)
     Pressable(
         onClick = onClick,
-        modifier = modifier.defaultMinSize(minHeight = 36.dp),
+        modifier = modifier.defaultMinSize(minHeight = 32.dp),
         enabled = enabled,
         background = if (enabled) colors.background else colors.background.copy(alpha = colors.background.alpha * 0.45f),
         hover = colors.hover,
         pressed = colors.pressed,
         border = colors.border,
     ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             CompositionLocalProvider(LocalContentColor provides content, LocalTextStyle provides Carta.type.bodyStrong) {
                 if (icon != null) {
                     Icon(icon, contentDescription = null, size = 16.dp, modifier = Modifier.padding(end = 6.dp))

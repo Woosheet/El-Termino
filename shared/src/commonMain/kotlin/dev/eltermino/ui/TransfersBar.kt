@@ -42,6 +42,7 @@ import dev.eltermino.ui.components.MenuLabel
 import dev.eltermino.ui.components.ProgressBar
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
+import dev.eltermino.ui.theme.tabular
 
 /** The queue, under the sessions: one row per transfer, collapsible to a single line. */
 @Composable
@@ -139,7 +140,7 @@ private fun TransferRow(state: AppState, transfer: Transfer) {
                     else -> colors.accent
                 },
             )
-            Text(detail(status, progress), style = Carta.type.caption, color = if (status is TransferState.Failed) colors.danger else colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(detail(status, progress), style = Carta.type.caption.tabular(), color = if (status is TransferState.Failed) colors.danger else colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         when (status) {
             TransferState.Queued, TransferState.Running, is TransferState.Waiting ->

@@ -61,7 +61,7 @@ internal fun SnippetsScreen(state: AppState, modifier: Modifier = Modifier) {
     var deleting by remember { mutableStateOf<Snippet?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(modifier.padding(16.dp)) {
+    Column(modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ScreenTitle("Snippet", Modifier.weight(1f))
             Button("Nuovo snippet", onClick = { editing = Snippet(newId(), "", "") })
@@ -107,7 +107,7 @@ internal fun SnippetsScreen(state: AppState, modifier: Modifier = Modifier) {
 private fun SnippetRow(snippet: Snippet, onRun: () -> Unit, onEdit: () -> Unit, onDuplicate: () -> Unit, onDelete: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Pressable(onClick = onRun, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(6.dp)) {
-        Row(Modifier.fillMaxWidth().padding(start = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(snippet.name, style = Carta.type.bodyStrong, maxLines = 1, overflow = TextOverflow.Ellipsis)

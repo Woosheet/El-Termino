@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.app.TermiusScan
 import dev.eltermino.app.ImportService
 import dev.eltermino.core.importer.ImportResult
 import dev.eltermino.core.importer.ImportedHost
@@ -43,21 +44,43 @@ internal fun ImportScreen(state: AppState, modifier: Modifier = Modifier) {
     val selected = remember { mutableStateMapOf<Int, Boolean>() }
     var outcome by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var termiusProblem by remember { mutableStateOf<TermiusScan.Unreadable?>(null) }
 
     fun show(source: String, result: ImportResult) {
         outcome = null
+        termiusProblem = null
         selected.clear()
         result.hosts.forEachIndexed { index, host -> selected[index] = !service.isDuplicate(workspace, host) }
         preview = Preview(source, result)
     }
 
-    Column(modifier.padding(16.dp)) {
+    Column(modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
         ScreenTitle("Importa host")
         Hint(
-            "Termius non ha un export ufficiale: se hai un CSV dei tuoi host (dal modello CSV di Termius o da un tool di export), sceglilo qui. " +
-                "Password e chiavi finiscono nel vault, mai in chiaro.",
+            "Sul computer dove usi Termius, El Termino legge i suoi host, gruppi, identità e chiavi direttamente; il sistema ti chiede il permesso di aprire la chiave di Termius. " +
+                "Altrimenti scegli un CSV o un file ssh config. Password e chiavi finiscono nel vault, mai in chiaro.",
         )
         Row {
+            if (platform.isDesktop) {
+                Button("Da Termius su questo computer", enabled = !busy, onClick = {
+                    busy = true
+                    scope.launch {
+                        when (val scan = platform.readTermius()) {
+                            TermiusScan.NotFound -> {
+                                outcome = "Non trovo Termius su questo computer. Se lo usi altrove, esporta un CSV da lì."
+                                termiusProblem = null
+                            }
+                            is TermiusScan.Unreadable -> {
+                                outcome = null
+                                termiusProblem = scan
+                            }
+                            is TermiusScan.Found -> show("Termius", scan.result)
+                        }
+                        busy = false
+                    }
+                })
+                Gap(width = 8)
+            }
             if (platform.isDesktop) {
                 Button("Leggi ~/.ssh/config", kind = ButtonKind.Secondary, onClick = {
                     val text = platform.readSshConfig()
@@ -77,7 +100,8 @@ internal fun ImportScreen(state: AppState, modifier: Modifier = Modifier) {
                 }
             })
         }
-        outcome?.let { Text(it, color = Carta.colors.accent, modifier = Modifier.padding(vertical = 8.dp)) }
+        outcome?.let { Text(it, modifier = Modifier.padding(vertical = 12.dp)) }
+        termiusProblem?.let { problem -> TermiusProblem(problem) }
 
         preview?.let { current ->
             val hosts = current.result.hosts
@@ -134,7 +158,7 @@ private fun ImportRow(host: ImportedHost, duplicate: Boolean, checked: Boolean, 
             (host.username?.let { "$it@" } ?: "") + host.address + (host.port?.takeIf { it != 22 }?.let { ":$it" } ?: ""),
             host.groupPath.takeIf { it.isNotEmpty() }?.joinToString(" / "),
             host.proxyJump.takeIf { it.isNotEmpty() }?.joinToString(" → ", prefix = "via ") { it.host },
-            host.identityFiles.firstOrNull()?.let { "chiave $it" },
+            host.key?.let { "chiave ${it.label}" } ?: host.identityFiles.firstOrNull()?.let { "chiave $it" },
             if (host.password != null) "password" else null,
         )
         Text(
@@ -142,5 +166,24 @@ private fun ImportRow(host: ImportedHost, duplicate: Boolean, checked: Boolean, 
             modifier = Modifier.padding(start = 30.dp, bottom = 4.dp),
             style = Carta.type.label, color = Carta.colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/** Why Termius's data couldn't be read, what to do instead, and the names a fix needs. */
+@Composable
+private fun TermiusProblem(problem: TermiusScan.Unreadable) {
+    var details by remember { mutableStateOf(false) }
+    Column(Modifier.padding(vertical = 12.dp)) {
+        Text(problem.reason, style = Carta.type.bodyStrong)
+        Gap(height = 4)
+        Text(
+            "Puoi esportare gli host da Termius in CSV con uno degli strumenti della community e sceglierlo con \"CSV di Termius\", oppure importare ~/.ssh/config.",
+            style = Carta.type.small,
+            color = Carta.colors.textDim,
+        )
+        Button(if (details) "Nascondi i dettagli tecnici" else "Dettagli tecnici", onClick = { details = !details }, kind = ButtonKind.Ghost)
+        if (details) {
+            Text(problem.details.ifBlank { "Nessun dettaglio" }, fontFamily = Carta.monospace, style = Carta.type.label, color = Carta.colors.textDim)
+        }
     }
 }

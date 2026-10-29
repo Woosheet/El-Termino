@@ -39,7 +39,7 @@ internal fun IdentitiesScreen(state: AppState, modifier: Modifier = Modifier) {
     var deleting by remember { mutableStateOf<Identity?>(null) }
     val scope = rememberCoroutineScope()
 
-    Column(modifier.padding(16.dp)) {
+    Column(modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ScreenTitle("Identità", Modifier.weight(1f))
             Button("Nuova identità", onClick = { editing = Identity(newId(), "", "") to true })

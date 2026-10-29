@@ -2,6 +2,7 @@ package dev.eltermino.app
 
 import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
@@ -29,6 +30,11 @@ import kotlin.test.assertIs
  * server, to check layout and theme by eye.
  */
 class AppSnapshotTest {
+    /** Snapshots compare against each other, so they don't follow this Mac's light or dark mode. */
+    private fun lightState() = AppState(testServices()).also { state ->
+        runBlocking { state.services.workspace.update { it.copy(ui = it.ui.copy(theme = "carta", welcomeDone = true)) } }
+    }
+
     private fun snapshot(state: AppState, name: String, width: Int = 2400, height: Int = 1520, settle: () -> Unit = {}) {
         ImageComposeScene(width, height, Density(2f)) { App(state) }.use { scene ->
             // Let flows, effects and terminal output reach the screen.
@@ -63,7 +69,7 @@ class AppSnapshotTest {
 
     @Test
     fun desktopWithLiveSession(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         val web = seed(state)
         val answering = CoroutineScope(Dispatchers.Default)
         // Trusts host keys so the session opens without a person at the keyboard.
@@ -83,7 +89,7 @@ class AppSnapshotTest {
 
     @Test
     fun desktopHostKeyPrompt(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         val web = seed(state)
         state.sessions.connect(web)
         withTimeout(30_000) { state.sessions.prompter.prompt.filterNotNull().first() }
@@ -93,14 +99,14 @@ class AppSnapshotTest {
 
     @Test
     fun phoneHostList(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         seed(state)
         snapshot(state, "app-phone-hosts", width = 780, height = 1600)
     }
 
     @Test
     fun hostEditorWithErrors(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         seed(state)
         val db = state.services.workspace.workspace.value.hosts.first { it.label == "db-01" }
         ImageComposeScene(1400, 1700, Density(2f)) {
@@ -149,7 +155,7 @@ class AppSnapshotTest {
 
     @Test
     fun splitViewWithBroadcast(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         val web = seed(state)
         val workspace = state.services.workspace.workspace.value
         val bastion = workspace.hosts.first { it.label == "bastion" }
@@ -173,7 +179,7 @@ class AppSnapshotTest {
     @Test
     fun reconnectingBanner(): Unit = TestProxy(TestEnv.BASIC_PORT).use { proxy ->
         runBlocking {
-            val state = AppState(testServices())
+            val state = lightState()
             seed(state)
             val identity = state.services.workspace.workspace.value.identities.first()
             val host = Host(newId(), "web-proxy", TestEnv.HOST, proxy.port, identityId = identity.id)
@@ -194,7 +200,7 @@ class AppSnapshotTest {
 
     @Test
     fun snippetsScreenAndRunDialog(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         seed(state)
         val restart = Snippet(newId(), "Riavvia un servizio", "sudo systemctl restart {{servizio}}")
         listOf(
@@ -220,8 +226,8 @@ class AppSnapshotTest {
 
     @Test
     fun filePanelsSideBySideWithATransfer(): Unit = runBlocking {
-        val services = testServices()
-        val state = AppState(services)
+        val state = lightState()
+        val services = state.services
         val web = seed(state)
         val answering = CoroutineScope(Dispatchers.Default)
         answering.answerHostKeys(state)
@@ -255,7 +261,7 @@ class AppSnapshotTest {
 
     @Test
     fun remoteEditorWithYaml(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         val web = seed(state)
         val answering = CoroutineScope(Dispatchers.Default)
         answering.answerHostKeys(state)
@@ -274,7 +280,7 @@ class AppSnapshotTest {
 
     @Test
     fun tabGroupsAndASplitTab(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         val web = seed(state)
         val workspace = state.services.workspace.workspace.value
         val bastion = workspace.hosts.first { it.label == "bastion" }
@@ -305,7 +311,7 @@ class AppSnapshotTest {
 
     @Test
     fun workspacesDialogAndRestoreOffer(): Unit = runBlocking {
-        val state = AppState(testServices())
+        val state = lightState()
         val web = seed(state)
         val bastion = state.services.workspace.workspace.value.hosts.first { it.label == "bastion" }
         fun pane(kind: String, host: Host?, path: String? = null) = dev.eltermino.core.data.SavedPane(kind, host?.id, path)
@@ -331,8 +337,65 @@ class AppSnapshotTest {
         }
     }
 
+    private suspend fun themedSession(themeId: String, name: String) {
+        val state = lightState()
+        val web = seed(state)
+        state.services.workspace.update { it.copy(ui = it.ui.copy(theme = themeId)) }
+        val answering = CoroutineScope(Dispatchers.Default)
+        answering.answerHostKeys(state)
+        val tab = state.sessions.connect(web)
+        val files = state.sessions.openFiles(web, "/etc")
+        state.sessions.merge(state.sessions.bar.value.frameOf(files.id)!!.id, state.sessions.bar.value.frameOf(tab.id)!!.id, Side.Right)
+        state.sessions.select(tab.id)
+        tab.awaitOpen().terminal.sendText("ls --color=always -la /etc | head -8; printf '\\e[31mrosso \\e[32mverde \\e[33mgiallo \\e[34mblu \\e[35mmagenta \\e[36mciano\\e[0m\\n'\r")
+        withTimeout(30_000) { files.browser.path.first { it == "/etc" } }
+        snapshot(state, name, width = 2800, height = 1500)
+        answering.cancel()
+        state.sessions.closeAll()
+    }
+
+    @Test
+    fun nightTheme(): Unit = runBlocking { themedSession("notte", "theme-notte") }
+
+    @Test
+    fun otherThemes(): Unit = runBlocking {
+        themedSession("tokyo-night", "theme-tokyo-night")
+        themedSession("solarized-chiaro", "theme-solarized")
+    }
+
+    @Test
+    fun settingsScreen(): Unit = runBlocking {
+        val state = lightState()
+        state.services.workspace.update { it.copy(ui = it.ui.copy(theme = "notte")) }
+        ImageComposeScene(2000, 1500, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme(dev.eltermino.ui.theme.Themes.Notte) {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(dev.eltermino.ui.theme.Carta.colors.background)) {
+                    dev.eltermino.ui.SettingsScreen(state, androidx.compose.ui.Modifier.fillMaxSize())
+                }
+            }
+        }.use { scene ->
+            repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+            val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
+            File("build/snapshots/settings.png").apply { parentFile.mkdirs(); writeBytes(png) }
+        }
+    }
+
+    @Test
+    fun welcomeAndTour() {
+        val state = lightState()
+        listOf(false to "welcome", true to "tour").forEach { (tour, name) ->
+            ImageComposeScene(1500, 1300, Density(2f)) {
+                dev.eltermino.ui.theme.CartaTheme { dev.eltermino.ui.WelcomeFlow(state, startAtTour = tour, onOpenImport = {}) {} }
+            }.use { scene ->
+                repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+                val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
+                File("build/snapshots/$name.png").apply { parentFile.mkdirs(); writeBytes(png) }
+            }
+        }
+    }
+
     @Test
     fun emptyFirstRun() {
-        snapshot(AppState(testServices()), "app-desktop-empty")
+        snapshot(lightState(), "app-desktop-empty")
     }
 }

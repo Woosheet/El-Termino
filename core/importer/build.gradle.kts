@@ -14,6 +14,12 @@ kotlin {
     jvm("desktop")
 
     sourceSets {
+        // Reading Termius's local data: only Termius for desktop keeps it where we can read it.
+        named("desktopMain").configure {
+            dependencies {
+                implementation(libs.bouncycastle.prov)
+            }
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
         }

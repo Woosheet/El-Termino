@@ -1,7 +1,11 @@
 package dev.eltermino.desktop
 
 import dev.eltermino.app.PickedFile
+import com.github.javakeyring.Keyring
 import dev.eltermino.app.Platform
+import dev.eltermino.app.TermiusScan
+import dev.eltermino.core.importer.termius.TermiusLocal
+import dev.eltermino.core.importer.termius.TermiusLocalReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.awt.FileDialog
@@ -33,6 +37,68 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
             isVisible = true
         }
         dialog.files.orEmpty().map { it.absolutePath.replace('\\', '/') }
+    }
+
+    override val isInForeground: Boolean get() = window()?.isActive == true
+
+    /** Notification Center on macOS, notify-send on Linux, the tray balloon on Windows. */
+    override fun notify(title: String, message: String) {
+        val os = System.getProperty("os.name").lowercase()
+        runCatching {
+            when {
+                "mac" in os -> {
+                    fun quoted(text: String) = "\"" + text.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+                    ProcessBuilder("osascript", "-e", "display notification ${quoted(message)} with title ${quoted(title)}").start()
+                }
+                "win" in os -> trayIcon()?.displayMessage(title, message, java.awt.TrayIcon.MessageType.INFO)
+                else -> ProcessBuilder("notify-send", "--app-name=El Termino", title, message).start()
+            }
+        }
+    }
+
+    private var tray: java.awt.TrayIcon? = null
+
+    private fun trayIcon(): java.awt.TrayIcon? {
+        if (!java.awt.SystemTray.isSupported()) return null
+        return tray ?: java.awt.TrayIcon(java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB), "El Termino").also {
+            it.isImageAutoSize = true
+            java.awt.SystemTray.getSystemTray().add(it)
+            tray = it
+        }
+    }
+
+    override suspend fun readTermius(): TermiusScan = withContext(Dispatchers.IO) {
+        val dirs = TermiusLocalReader.dataDirs()
+        if (dirs.isEmpty()) return@withContext TermiusScan.NotFound
+        val keys = termiusKeys()
+        var last: TermiusScan = TermiusScan.NotFound
+        for (dir in dirs) {
+            when (val found = TermiusLocalReader.read(dir, keys)) {
+                is TermiusLocal.Found -> return@withContext TermiusScan.Found(found.result, found.details)
+                is TermiusLocal.Unreadable -> last = TermiusScan.Unreadable(found.reason, found.details)
+                TermiusLocal.NotFound -> Unit
+            }
+        }
+        last
+    }
+
+    /** Every "localKey" Termius left in the keychain: the website and App Store builds each keep one. */
+    private fun termiusKeys(): List<ByteArray> {
+        val keyring = runCatching { Keyring.create() }.getOrNull() ?: return emptyList()
+        return keyring.use { ring ->
+            listOf("Termius", "Termius (MAS)", "termius-app").mapNotNull { service ->
+                runCatching { ring.getPassword(service, "localKey") }.getOrNull()?.let(::decodeKey)
+            }
+        }
+    }
+
+    private fun decodeKey(text: String): ByteArray? {
+        val trimmed = text.trim()
+        runCatching { java.util.Base64.getDecoder().decode(trimmed) }.getOrNull()?.takeIf { it.size == 32 }?.let { return it }
+        if (trimmed.length == 64 && trimmed.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) {
+            return ByteArray(32) { trimmed.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
+        }
+        return trimmed.toByteArray().takeIf { it.size == 32 }
     }
 
     override fun readSshConfig(): String? = File(sshDir, "config").takeIf { it.isFile }?.readText()

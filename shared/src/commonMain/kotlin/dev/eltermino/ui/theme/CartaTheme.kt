@@ -15,8 +15,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 /**
- * Design tokens of the "Carta" style. Components read these instead of raw colors,
- * so a dark variant only needs a second [CartaColors] instance.
+ * Design tokens of the "Carta" style. Components read these instead of raw colors, so a
+ * theme is just another [CartaColors] instance; see [Themes].
  */
 @Immutable
 data class CartaColors(
@@ -82,17 +82,27 @@ val CartaLight = CartaColors(
     groupSoft = listOf(Color(0xFFE6F1FB), Color(0xFFEAF3DE), Color(0xFFEEEDFE), Color(0xFFFAECE7), Color(0xFFFAEEDA), Color(0xFFFBEAF0), Color(0xFFF1EFE8)),
 )
 
-/** The few text sizes the app uses; components pick from these, never ad-hoc sizes. */
+/**
+ * The few text sizes the app uses (12, 13, 14, 16, 18, 22); components pick from these,
+ * never ad-hoc sizes.
+ */
 @Immutable
 data class CartaTypography(
     val body: TextStyle,
     val bodyStrong: TextStyle,
     val small: TextStyle,
     val caption: TextStyle,
+    /** A screen's title: the one h1 of a tool screen. */
     val title: TextStyle,
+    /** Dialog titles and the product's name. */
+    val dialogTitle: TextStyle,
+    /** Section and card titles. */
     val heading: TextStyle,
     val label: TextStyle,
 )
+
+/** Figures that line up digit for digit, for numbers in columns and anything that updates. */
+fun TextStyle.tabular(): TextStyle = copy(fontFeatureSettings = "tnum")
 
 private val Sans = FontFamily.Default
 
@@ -100,14 +110,16 @@ val CartaType = CartaTypography(
     body = TextStyle(fontFamily = Sans, fontSize = 14.sp, lineHeight = 20.sp),
     bodyStrong = TextStyle(fontFamily = Sans, fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
     small = TextStyle(fontFamily = Sans, fontSize = 13.sp, lineHeight = 18.sp),
-    caption = TextStyle(fontFamily = Sans, fontSize = 11.sp, lineHeight = 15.sp),
-    title = TextStyle(fontFamily = Sans, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium),
+    caption = TextStyle(fontFamily = Sans, fontSize = 12.sp, lineHeight = 16.sp),
+    title = TextStyle(fontFamily = Sans, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold),
+    dialogTitle = TextStyle(fontFamily = Sans, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
     heading = TextStyle(fontFamily = Sans, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
     label = TextStyle(fontFamily = Sans, fontSize = 12.sp, lineHeight = 16.sp),
 )
 
 private val LocalCartaColors = staticCompositionLocalOf { CartaLight }
 private val LocalCartaType = staticCompositionLocalOf { CartaType }
+private val LocalAppTheme = staticCompositionLocalOf { Themes.Carta }
 
 /** Text style and color inherited by [dev.eltermino.ui.components.Text] and icons. */
 val LocalTextStyle = compositionLocalOf { CartaType.body }
@@ -120,13 +132,19 @@ object Carta {
     val type: CartaTypography
         @Composable @ReadOnlyComposable get() = LocalCartaType.current
 
+    /** The whole theme, for the terminal's colours and light or dark system chrome. */
+    val theme: AppTheme
+        @Composable @ReadOnlyComposable get() = LocalAppTheme.current
+
     // Replaced by a bundled JetBrains Mono once compose resources are set up.
     val monospace: FontFamily = FontFamily.Monospace
 }
 
 @Composable
-fun CartaTheme(colors: CartaColors = CartaLight, content: @Composable () -> Unit) {
+fun CartaTheme(theme: AppTheme = Themes.Carta, content: @Composable () -> Unit) {
+    val colors = theme.colors
     CompositionLocalProvider(
+        LocalAppTheme provides theme,
         LocalCartaColors provides colors,
         LocalCartaType provides CartaType,
         LocalTextStyle provides CartaType.body,

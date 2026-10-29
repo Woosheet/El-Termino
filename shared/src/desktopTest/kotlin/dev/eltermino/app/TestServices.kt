@@ -53,9 +53,19 @@ object TestEnv {
     }
 }
 
-/** Reads absolute paths only, like a desktop with no ~/.ssh of interest. */
+/** Reads absolute paths only, like a desktop with no ~/.ssh of interest. Records notifications. */
 class TestPlatform : Platform {
     override val isDesktop = true
+
+    @Volatile
+    var foreground = true
+    val notifications: MutableList<Pair<String, String>> = java.util.Collections.synchronizedList(mutableListOf())
+
+    override val isInForeground: Boolean get() = foreground
+
+    override fun notify(title: String, message: String) {
+        notifications += title to message
+    }
     override suspend fun pickFile(title: String): PickedFile? = null
     override fun readSshConfig(): String? = null
     override fun resolveSshInclude(pattern: String): List<Pair<String, String>> = emptyList()
@@ -66,6 +76,7 @@ class TestPlatform : Platform {
 fun testServices(
     dir: File = Files.createTempDirectory("eltermino").toFile().apply { deleteOnExit() },
     key: ByteArray = Random.nextBytes(32),
+    platform: TestPlatform = TestPlatform(),
 ): AppServices {
     val local = File(dir, "local").apply { mkdirs() }
     return AppServices(
@@ -73,7 +84,7 @@ fun testServices(
         vault = EncryptedFileVault(File(dir, "vault.bin"), MasterKeyProvider { key.copyOf() }),
         connector = MinaSshConnector(MinaConfig()),
         keyTool = MinaKeyTool(),
-        platform = TestPlatform(),
+        platform = platform,
         localFiles = LocalFileSystem(local),
     )
 }

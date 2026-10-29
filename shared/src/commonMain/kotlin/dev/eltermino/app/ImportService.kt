@@ -6,6 +6,7 @@ import dev.eltermino.core.data.Workspace
 import dev.eltermino.core.data.newId
 import dev.eltermino.core.importer.ImportResult
 import dev.eltermino.core.importer.ImportedHost
+import dev.eltermino.core.importer.ImportedKey
 import dev.eltermino.core.importer.IncludedFile
 import dev.eltermino.core.importer.JumpTarget
 import dev.eltermino.core.importer.SshConfigParser
@@ -47,7 +48,8 @@ class ImportService(private val services: AppServices, private val actions: Work
             var identity: Identity? = null
             val username = imported.username
 
-            val keyId = imported.identityFiles.firstNotNullOfOrNull { path -> importKeyFile(path, notes) }
+            val keyId = imported.key?.let { importCarriedKey(it, notes) }
+                ?: imported.identityFiles.firstNotNullOfOrNull { path -> importKeyFile(path, notes) }
             val password = imported.password
             if (username != null && keyId != null) {
                 identity = keyIdentities.getOrPut(username to keyId) {
@@ -113,6 +115,20 @@ class ImportService(private val services: AppServices, private val actions: Work
         actions.saveHost(host)
         created[hop.host.lowercase()] = host
         return host
+    }
+
+    private suspend fun importCarriedKey(key: ImportedKey, notes: MutableList<String>): String? {
+        val bytes = key.privateKey.encodeToByteArray()
+        val passphrase = key.passphrase?.encodeToByteArray()
+        return try {
+            actions.importKey(key.label, bytes, passphrase, savePassphrase = passphrase != null).id
+        } catch (e: InvalidKeyException) {
+            notes += "Chiave ${key.label} non importata: ${e.message}"
+            null
+        } finally {
+            bytes.fill(0)
+            passphrase?.fill(0)
+        }
     }
 
     private suspend fun importKeyFile(path: String, notes: MutableList<String>): String? {

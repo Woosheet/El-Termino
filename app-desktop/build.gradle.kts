@@ -14,6 +14,8 @@ dependencies {
     implementation(project(":shared"))
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
+    // Termius's local key lives in the system keychain, next to ours.
+    implementation(libs.java.keyring)
 }
 
 compose.desktop {

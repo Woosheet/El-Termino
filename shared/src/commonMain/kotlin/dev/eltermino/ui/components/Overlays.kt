@@ -65,7 +65,7 @@ fun Dialog(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = Carta.colors
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(12.dp)
     val toneColor = if (tone == DialogTone.Danger) colors.danger else colors.text
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
@@ -81,7 +81,7 @@ fun Dialog(
                 Icon(icon, contentDescription = null, tint = toneColor, size = 26.dp)
                 Spacer(Modifier.height(12.dp))
             }
-            Text(title, style = Carta.type.title, color = toneColor)
+            Text(title, style = Carta.type.dialogTitle, color = toneColor)
             Spacer(Modifier.height(12.dp))
             CompositionLocalProvider(LocalTextStyle provides Carta.type.body, LocalContentColor provides colors.text) {
                 Column(content = content)
@@ -119,7 +119,7 @@ fun Menu(
 ) {
     if (!expanded) return
     val colors = Carta.colors
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(8.dp)
     val gap = with(LocalDensity.current) { 4.dp.roundToPx() }
     Popup(
         popupPositionProvider = remember(alignEnd, gap) { BelowAnchor(gap, alignEnd) },
@@ -149,19 +149,15 @@ fun MenuItem(
     selected: Boolean = false,
 ) {
     val colors = Carta.colors
-    val tint = when {
-        danger -> colors.danger
-        selected -> colors.accent
-        else -> colors.text
-    }
+    val tint = if (danger) colors.danger else colors.text
     Pressable(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(6.dp),
-        background = if (selected) colors.accentBackground else Color.Transparent,
+        shape = RoundedCornerShape(4.dp),
+        background = if (selected) colors.hover else Color.Transparent,
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) Icon(icon, contentDescription = null, tint = if (danger || selected) tint else colors.textDim, size = 18.dp, modifier = Modifier.padding(end = 10.dp))
+            if (icon != null) Icon(icon, contentDescription = null, tint = if (danger) tint else colors.textDim, size = 16.dp, modifier = Modifier.padding(end = 10.dp))
             Text(text, modifier = Modifier.weight(1f, fill = false), color = tint, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (detail != null) {
                 Text(detail, modifier = Modifier.padding(start = 12.dp), style = Carta.type.small, color = colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)

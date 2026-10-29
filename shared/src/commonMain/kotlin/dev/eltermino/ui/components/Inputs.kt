@@ -63,9 +63,9 @@ fun Field(
         focused -> colors.accent
         else -> colors.line
     }
-    val shape = RoundedCornerShape(8.dp)
+    val shape = RoundedCornerShape(6.dp)
 
-    Column(modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+    Column(modifier.fillMaxWidth().padding(bottom = 12.dp)) {
         if (label != null) {
             Text(label, style = Carta.type.label, color = if (error != null) colors.danger else colors.textDim, modifier = Modifier.padding(bottom = 4.dp))
         }

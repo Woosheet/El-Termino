@@ -1,6 +1,6 @@
 # El Termino: piano di progetto
 
-Ultimo aggiornamento: 29 ottobre 2026 (Fase 4, nuova Fase 6)
+Ultimo aggiornamento: 29 ottobre 2026 (Fase 6)
 
 ## Obiettivo
 
@@ -231,6 +231,13 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Gruppi di schede con nome e colore, comprimibili; raggruppa per host; dal gruppo broadcast, snippet, "Apri in griglia" e chiudi.
   - Spazi di lavoro salvati per nome, anche di un solo gruppo; l'ultima sessione è offerta di nuovo all'avvio.
   - Criterio raggiunto: `TabLayoutFlowTest` salva due gruppi e una scheda divisa, riavvia l'app e li ritrova uguali, con le sessioni ricollegate.
+- Fase 6: implementata il 29 ottobre 2026 ([decisione 0009](decisions/0009-first-run-themes-and-termius.md)).
+  - Benvenuto con "Usi Termius?" e import diretto dai dati locali di Termius (LevelDB e V8, campi decifrati con la chiave del portachiavi), tutorial in sei passi.
+  - Temi Carta, Notte (blu notte), Nord, Solarized chiaro, Dracula e Tokyo Night, per app e terminale, scelti in Impostazioni o dal sistema.
+  - Avvisi a fine trasferimento, dentro l'app e come notifiche di sistema; conferma prima di chiudere con trasferimenti in corso.
+  - File trascinati su un terminale caricati nella cartella della shell.
+  - Controllo di design di spaziature, padding e stile su tutte le schermate.
+  - Criterio da verificare sul tuo Mac: il lettore è provato su dati costruiti nel formato di Termius, non ancora su un Termius vero.
 
 ## Roadmap
 
@@ -263,6 +270,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 
 ## Da verificare
 
+- [ ] La lettura diretta dei dati di Termius sul tuo Mac (Importa → "Da Termius su questo computer"). Se non riesce, i "Dettagli tecnici" elencano solo nomi di store e campi, utili per adattare il lettore.
 - [ ] Quale export offre il Termius installato. Termius non documenta un formato di export; l'importer CSV usa le colonne dei tool di export della community (`Groups,Label,Tags,Hostname/IP,Protocol,Port,Username,Password`). Serve un file di esempio con dati finti.
 - [x] Esito dello spike sulla libreria SSH: Apache MINA SSHD ([decisione 0001](decisions/0001-ssh-library.md))
 - [x] Esito dello spike sul terminale: kmp-terminal-emulator dietro `core/terminal` ([decisione 0002](decisions/0002-terminal-emulator.md))
