@@ -445,9 +445,7 @@ private fun NewTabMenu(state: AppState, onConnect: (Host) -> Unit) {
                 })
             }
             MenuDivider()
-            val recent = workspace.hosts
-                .sortedWith(compareByDescending<Host> { it.lastConnectedEpochSeconds ?: 0 }.thenByDescending { it.favorite })
-                .take(8)
+            val recent = recentHosts(workspace.hosts)
             if (recent.isEmpty()) {
                 MenuLabel("Nessun host: aggiungine uno dalla barra laterale")
             } else {
@@ -537,3 +535,9 @@ internal fun SnippetPickerDialog(state: AppState, onPick: (Snippet?) -> Unit) {
         }
     }
 }
+
+/** The hosts under "Apri una sessione su": the most recently connected first, then favourites. */
+internal fun recentHosts(hosts: List<Host>, limit: Int = 8): List<Host> =
+    // 0L, not 0: the selector returns Comparable<*>, so a bare 0 boxes as an Integer, and
+    // comparing it with a host's Long timestamp throws ClassCastException.
+    hosts.sortedWith(compareByDescending<Host> { it.lastConnectedEpochSeconds ?: 0L }.thenByDescending { it.favorite }).take(limit)
