@@ -93,6 +93,12 @@ class BackupFlowTest {
     }
 
     @Test
+    fun mergeBringsTrustedCas() {
+        val ca = dev.eltermino.core.data.TrustedCa("c", "CA", "ssh-ed25519 A", "SHA256:a", listOf("*"))
+        assertEquals(listOf(ca), Workspace().mergedWith(Workspace(trustedCas = listOf(ca))).trustedCas)
+    }
+
+    @Test
     fun mergeKeepsLocalOnlyItems() {
         val merged = Workspace(hosts = listOf(host("a"))).mergedWith(Workspace(hosts = listOf(host("b"))))
         assertEquals(setOf("a", "b"), merged.hosts.map { it.id }.toSet())

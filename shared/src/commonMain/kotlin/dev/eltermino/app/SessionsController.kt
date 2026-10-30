@@ -704,6 +704,7 @@ expect fun formatFileTime(epochSeconds: Long): String
 internal fun describe(e: Throwable): String = when (e) {
     is SshException.ConnectFailed -> "Impossibile raggiungere ${e.host}:${e.port}" + (e.cause?.message?.let { ": $it" } ?: "")
     is SshException.HostKeyRejected -> "Chiave dell'host ${e.host} rifiutata, connessione interrotta"
+    is SshException.HostTrustRefused -> "${e.host}: ${e.reason}. Se è corretto, cambia l'elenco delle CA fidate nelle Impostazioni."
     is SshException.AuthFailed -> "Autenticazione non riuscita come ${e.username} su ${e.host}"
     is SshException.ChannelFailed -> e.message ?: "Errore del canale SSH"
     is VaultException -> "Vault: ${e.message}"

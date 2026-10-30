@@ -14,6 +14,8 @@ data class Workspace(
     val identities: List<Identity> = emptyList(),
     val keys: List<SshKeyEntry> = emptyList(),
     val knownHosts: List<KnownHost> = emptyList(),
+    /** Authorities whose certificates vouch for the hosts they cover. */
+    val trustedCas: List<TrustedCa> = emptyList(),
     val snippets: List<Snippet> = emptyList(),
     /** Saved HTTP requests, sent from a host through its SSH connection. */
     val httpCollections: List<HttpCollection> = emptyList(),
@@ -119,6 +121,18 @@ data class KnownHost(
 )
 
 /** A saved command. `{{name}}` placeholders are asked for each time it runs. */
+/** Like an `@cert-authority` line of `known_hosts`. */
+@Serializable
+data class TrustedCa(
+    val id: String,
+    val label: String,
+    /** In `authorized_keys` form. */
+    val publicKey: String,
+    val fingerprintSha256: String,
+    /** Patterns as in `known_hosts`: `*.example.com`, `[10.0.0.1]:2222`, `!excluded.example.com`. */
+    val patterns: List<String>,
+)
+
 @Serializable
 data class Snippet(
     val id: String,

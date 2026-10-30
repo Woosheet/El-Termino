@@ -25,6 +25,7 @@ fun Workspace.mergedWith(backup: Workspace): Workspace = copy(
     identities = mergeById(identities, backup.identities) { it.id },
     keys = mergeById(keys, backup.keys) { it.id },
     knownHosts = knownHosts + backup.knownHosts.filter { pin -> knownHosts.none { it.sameSlot(pin) } },
+    trustedCas = mergeById(trustedCas, backup.trustedCas) { it.id },
     snippets = mergeById(snippets, backup.snippets) { it.id },
     httpCollections = mergeById(httpCollections, backup.httpCollections) { it.id },
     savedLayouts = mergeById(savedLayouts, backup.savedLayouts) { it.id },

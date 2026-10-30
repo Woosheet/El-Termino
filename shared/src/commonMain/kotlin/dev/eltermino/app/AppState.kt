@@ -22,6 +22,11 @@ class AppState(val services: AppServices) {
 
     init {
         // Old recordings go at startup, as long as the user asked to keep them.
+        scope.launch {
+            sessions.connections.keyRenewals.collect { host ->
+                notifier.post("Chiave dell'host rinnovata", "$host ha una chiave nuova, garantita da una CA fidata")
+            }
+        }
         scope.launch { services.recordings?.prune(services.workspace.workspace.value.ui.recordingDays, nowEpochSeconds()) }
     }
 

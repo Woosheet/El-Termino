@@ -45,6 +45,11 @@ class TransferNotifier(
         mutableNotice.value = null
     }
 
+    /** Something the user should see that isn't about a transfer. */
+    fun post(title: String, message: String) {
+        mutableNotice.value = Notice(++counter, title, message, failed = false)
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun watch() {
         transfers.transfers

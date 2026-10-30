@@ -2,10 +2,10 @@ package dev.eltermino.app
 
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.KnownHost
-import dev.eltermino.core.data.KnownHostStatus
-import dev.eltermino.core.data.knownHostStatus
 import dev.eltermino.core.data.trust
+import dev.eltermino.core.ssh.HostKeyFingerprint
 import dev.eltermino.core.ssh.HostKeyVerifier
+import dev.eltermino.core.ssh.SshException
 import dev.eltermino.core.ssh.SecretResolver
 import dev.eltermino.core.ssh.SshConnection
 import dev.eltermino.core.vault.VaultException
@@ -30,6 +30,11 @@ class Connections(
     /** The id of every host just logged in to, reconnections included. */
     val logins: kotlinx.coroutines.flow.SharedFlow<String> = mutableLogins
 
+    private val mutableKeyRenewals = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
+
+    /** Hosts whose key changed under a valid certificate of a trusted CA, as it happens at renewal. */
+    val keyRenewals: kotlinx.coroutines.flow.SharedFlow<String> = mutableKeyRenewals
+
     /** A share of [host]'s link, logging in if nobody has it open yet. Release it when done. */
     suspend fun acquire(host: Host): LinkLease = links.acquire(host)
 
@@ -53,18 +58,26 @@ class Connections(
 
     private fun hostKeyVerifier() = HostKeyVerifier { host, port, fingerprint ->
         val workspace = services.workspace.workspace.value
-        when (val status = workspace.knownHostStatus(host, port, fingerprint.keyType, fingerprint.sha256)) {
-            KnownHostStatus.Trusted -> true
-            else -> {
-                val previous = (status as? KnownHostStatus.Changed)?.previous
+        when (val trust = workspace.hostTrust(host, port, fingerprint, nowEpochSeconds())) {
+            HostTrust.Accepted -> true
+            is HostTrust.Refused -> throw SshException.HostTrustRefused(host, port, trust.reason)
+            is HostTrust.AcceptedRenewed -> {
+                remember(host, port, fingerprint)
+                mutableKeyRenewals.tryEmit(host)
+                true
+            }
+            HostTrust.AskFirstUse, is HostTrust.AskChanged -> {
+                val previous = (trust as? HostTrust.AskChanged)?.previous
                 val accepted = prompter.ask(PendingPrompt.HostKey(host, port, fingerprint, previous)) == true
-                if (accepted) {
-                    services.workspace.update {
-                        it.trust(KnownHost(host, port, fingerprint.keyType, fingerprint.sha256, fingerprint.publicKey, nowEpochSeconds()))
-                    }
-                }
+                if (accepted) remember(host, port, fingerprint)
                 accepted
             }
+        }
+    }
+
+    private suspend fun remember(host: String, port: Int, fingerprint: HostKeyFingerprint) {
+        services.workspace.update {
+            it.trust(KnownHost(host, port, fingerprint.keyType, fingerprint.sha256, fingerprint.publicKey, nowEpochSeconds()))
         }
     }
 

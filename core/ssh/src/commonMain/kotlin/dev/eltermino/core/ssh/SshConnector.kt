@@ -26,6 +26,10 @@ sealed class SshException(message: String, cause: Throwable? = null) : Exception
     class HostKeyRejected(val host: String, val port: Int, val fingerprint: HostKeyFingerprint) :
         SshException("Host key of $host:$port was rejected (${fingerprint.sha256})")
 
+    /** The host doesn't meet a trusted CA's rules. [reason] is for the user. */
+    class HostTrustRefused(val host: String, val port: Int, val reason: String) :
+        SshException("Host $host:$port refused: $reason")
+
     class AuthFailed(val host: String, val username: String, cause: Throwable? = null) :
         SshException("Authentication as $username on $host failed", cause)
 
