@@ -46,6 +46,18 @@ class EncryptedFileVault(
         write(entries)
     }
 
+    override suspend fun snapshot(): Map<String, ByteArray> = withEntries { entries ->
+        entries.mapValues { it.value.copyOf() }
+    }
+
+    override suspend fun restore(entries: Map<String, ByteArray>, replace: Boolean) = withEntries { current ->
+        val next = (if (replace) entries else current + entries).mapValues { it.value.copyOf() }
+        write(next)
+        current.values.forEach { it.fill(0) }
+        current.clear()
+        current.putAll(next)
+    }
+
     private suspend fun <T> withEntries(block: (MutableMap<String, ByteArray>) -> T): T = mutex.withLock {
         withContext(Dispatchers.IO) {
             val entries = cache ?: read().also { cache = it }

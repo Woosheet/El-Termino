@@ -9,6 +9,15 @@ interface Vault {
     suspend fun get(id: String): ByteArray?
 
     suspend fun remove(id: String)
+
+    /** Copies of every secret, by id, which the caller may wipe. */
+    suspend fun snapshot(): Map<String, ByteArray>
+
+    /**
+     * Saves [entries] under their own ids in one atomic write, on top of what's there, or
+     * instead of it with [replace].
+     */
+    suspend fun restore(entries: Map<String, ByteArray>, replace: Boolean)
 }
 
 /**
