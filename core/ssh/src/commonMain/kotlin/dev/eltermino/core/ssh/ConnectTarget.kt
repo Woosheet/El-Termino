@@ -43,6 +43,8 @@ data class HostKeyFingerprint(
     val sha256: String,
     /** The key in `authorized_keys` form, so a known-hosts store can keep it. */
     val publicKey: String,
+    /** Set when the server presented a certificate. Nothing about it has been judged yet. */
+    val certificate: HostCertificateInfo? = null,
 )
 
 fun interface HostKeyVerifier {

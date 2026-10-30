@@ -19,6 +19,8 @@ import org.apache.sshd.client.config.hosts.HostConfigEntryResolver
 import org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.client.session.ClientSession.ClientSessionEvent
+import org.apache.sshd.common.BaseBuilder
+import org.apache.sshd.common.NamedFactory
 import org.apache.sshd.common.config.keys.OpenSshCertificate
 import org.apache.sshd.common.config.keys.PublicKeyEntry
 import org.apache.sshd.common.keyprovider.KeyIdentityProvider
@@ -41,9 +43,7 @@ class MinaSshConnector(private val config: MinaConfig = MinaConfig()) : SshConne
             // The default rejects what a remote forward sends back. The server can only use the
             // ports we asked it to listen on, each tied to the address we gave.
             forwardingFilter = org.apache.sshd.server.forward.AcceptAllForwardingFilter.INSTANCE
-            // A certificate whose principals don't match the name we dialled is treated
-            // like a plain key, as OpenSSH does without a trusted CA.
-            CoreModuleProperties.ABORT_ON_INVALID_CERTIFICATE.set(this, false)
+            keyExchangeFactories = NamedFactory.setUpTransformedFactories(false, BaseBuilder.DEFAULT_KEX_PREFERENCE, keepCertificates)
             CoreModuleProperties.IDLE_TIMEOUT.set(this, java.time.Duration.ZERO)
             CoreModuleProperties.NIO2_READ_TIMEOUT.set(this, java.time.Duration.ZERO)
             if (config.keepAliveInterval.isPositive()) {
