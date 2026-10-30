@@ -41,5 +41,6 @@ I percorsi usano sempre `/`, anche su Windows (`C:/Users/…`). Le voci sono `Re
 ## Conseguenze
 
 - **Proprietario del file:** il rename sostituisce il file con uno nuovo. Il proprietario diventa l'utente SSH e i link fisici all'originale si staccano. Per i file di sistema modificati con sudo serve ancora il terminale.
-- **Android:** il pannello locale mostra la cartella dell'app, perché lo Storage Access Framework non dà percorsi veri. Caricare dal telefono e salvare fuori dall'app con il selettore di sistema restano da fare.
-- **Da fare:** "Apri con editor esterno" sul desktop (scarica, apri, ricarica a ogni salvataggio) e il trascinamento dall'app verso il Finder.
+- **Android:** il pannello locale mostra la cartella dell'app, perché lo Storage Access Framework non dà percorsi veri. Caricare dal telefono e salvare fuori dall'app passano dal selettore di sistema: `DocumentFileSystem` tratta gli indirizzi `content://` come percorsi, nella stessa coda.
+- **Editor esterno (desktop):** una copia privata, aperta con l'app di sistema. Una scheda segue i salvataggi leggendo data, dimensione e identità del file ogni secondo, così vede anche chi salva con un rename, e li carica col salvataggio di `RemoteEditor`. Chiuderla carica l'ultimo salvataggio e cancella la copia.
+- **Trascinamento verso il sistema:** dall'icona della riga, perché la riga trascina già tra i pannelli. Solo file, fino a 200 MB in tutto. Il download avviene al rilascio e blocca la finestra finché non finisce.

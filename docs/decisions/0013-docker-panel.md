@@ -17,8 +17,10 @@ Data: 30 ottobre 2026. Stato: accettata.
 
 **Test.** Nei server di test c'è un finto comando `docker` (`testenv/fake-docker`): su `basic` tre container il cui stato cambia davvero, sugli altri host il permesso negato. Docker dentro Docker sarebbe stato più fedele ma molto più pesante da far girare.
 
+## Aggiunti dopo
+
+Rimozione di container fermi, immagini, volumi e reti (non `bridge`, `host`, `none`), sezioni lette solo se aperte, e Compose (`docker compose ls -a`, up, down, restart). Ogni rimozione e `compose down` chiede conferma.
+
 ## Restano fuori
 
-- Docker Compose, immagini, volumi e reti.
-- Rimuovere container.
 - Docker Desktop su macOS e Windows come host (il comando è lo stesso, ma non è provato).

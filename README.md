@@ -27,7 +27,7 @@ Su Windows, Linux e Android per ora si compila dal sorgente, come spiegato sotto
 
 ## A che punto è
 
-Le fasi da 0 a 6 e la 8 del [piano](docs/PLAN.md) sono fatte: terminali, file, schede e gruppi, richieste HTTP, primo avvio con Termius, temi e avvisi, port forwarding, monitor delle risorse, Docker e registrazione delle sessioni. Le prossime sono l'autenticazione avanzata (agent, certificati host, biometria, backup cifrato) e Mosh. Le scelte tecniche sono in [docs/decisions/](docs/decisions/).
+Le fasi da 0 a 8 del [piano](docs/PLAN.md) sono fatte: terminali, file, schede e gruppi, richieste HTTP, primo avvio con Termius, temi e avvisi, autenticazione avanzata (agent, certificati host, biometria, backup cifrato), port forwarding, monitor delle risorse, Docker e registrazione delle sessioni. Resta Mosh. Le scelte tecniche sono in [docs/decisions/](docs/decisions/).
 
 ## Sviluppo
 

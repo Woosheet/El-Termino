@@ -37,6 +37,8 @@ dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.biometric)
+    // Biometric brings 1.2.5, too old for ActivityResult contracts in a FragmentActivity.
+    implementation(libs.androidx.fragment)
     implementation(libs.kotlinx.coroutines.android)
 
     // Phase 0 spike: does MINA SSHD run on ART? Needs the testenv servers on the host.
