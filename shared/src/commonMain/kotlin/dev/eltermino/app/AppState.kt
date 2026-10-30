@@ -3,6 +3,7 @@ package dev.eltermino.app
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -10,6 +11,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * Lives as long as the process, not the window or activity, so open sessions survive
  * an Android rotation or a recomposition.
  */
+private const val LOCK_CHECK_MILLIS = 5_000L
+
 class AppState(val services: AppServices) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val actions = WorkspaceActions(services)
@@ -19,8 +22,16 @@ class AppState(val services: AppServices) {
     val forwards = PortForwards(services, sessions.connections, scope)
     val notifier = TransferNotifier(scope, services, transfers)
     val updates = UpdateChecker(scope, services)
+    val lock = AppLock(services.platform, { services.workspace.workspace.value.ui }, { nowEpochSeconds() * 1000 })
 
     init {
+        scope.launch {
+            if (lock.biometricsMissing) notifier.post("Blocco non attivo", "Su questo dispositivo la biometria non è disponibile")
+            while (true) {
+                lock.tick()
+                delay(LOCK_CHECK_MILLIS)
+            }
+        }
         // Old recordings go at startup, as long as the user asked to keep them.
         scope.launch {
             sessions.connections.keyRenewals.collect { host ->

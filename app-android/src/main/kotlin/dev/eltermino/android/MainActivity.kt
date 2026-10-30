@@ -6,12 +6,15 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.graphics.Color
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
+import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.LaunchedEffect
 import dev.eltermino.ui.App
@@ -22,7 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     private var pendingPick: CompletableDeferred<Uri?>? = null
     private val openDocument = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         pendingPick?.complete(uri)
@@ -33,6 +36,27 @@ class MainActivity : ComponentActivity() {
             pendingPick?.complete(null)
             val result = CompletableDeferred<Uri?>().also { pendingPick = it }
             openDocument.launch(arrayOf("*/*"))
+            result.await()
+        }
+    }
+
+    private val biometricPrompt: suspend (String) -> Boolean = { reason ->
+        withContext(Dispatchers.Main) {
+            val result = CompletableDeferred<Boolean>()
+            val callback = object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(authentication: BiometricPrompt.AuthenticationResult) {
+                    result.complete(true)
+                }
+
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    result.complete(false)
+                }
+            }
+            val info = BiometricPrompt.PromptInfo.Builder()
+                .setTitle(reason)
+                .setAllowedAuthenticators(BIOMETRIC_WEAK or DEVICE_CREDENTIAL)
+                .build()
+            BiometricPrompt(this@MainActivity, ContextCompat.getMainExecutor(this@MainActivity), callback).authenticate(info)
             result.await()
         }
     }
@@ -60,6 +84,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         app.platform.documentPicker = picker
         app.platform.documentCreator = creator
+        app.platform.biometricPrompt = biometricPrompt
         setContent {
             // Light or dark status bar icons, to match the theme rather than the system.
             val dark = currentTheme(app.state).dark
@@ -88,6 +113,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         if (app.platform.documentPicker === picker) app.platform.documentPicker = null
         if (app.platform.documentCreator === creator) app.platform.documentCreator = null
+        if (app.platform.biometricPrompt === biometricPrompt) app.platform.biometricPrompt = null
         pendingPick?.complete(null)
         pendingCreate?.complete(null)
         super.onDestroy()

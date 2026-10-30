@@ -556,6 +556,18 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun lockScreen() {
+        val state = lightState()
+        ImageComposeScene(1200, 800, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme { dev.eltermino.ui.LockScreen(state.lock) }
+        }.use { scene ->
+            repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
+            val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
+            File("build/snapshots/lock.png").apply { parentFile.mkdirs(); writeBytes(png) }
+        }
+    }
+
+    @Test
     fun settingsScreen(): Unit = runBlocking {
         val state = lightState()
         state.services.workspace.update { it.copy(ui = it.ui.copy(theme = "notte")) }

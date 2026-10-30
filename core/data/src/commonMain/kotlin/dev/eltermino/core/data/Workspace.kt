@@ -278,4 +278,7 @@ data class UiSettings(
     val recordSessions: Boolean = false,
     /** Recordings older than this many days are deleted at startup; 0 keeps them. */
     val recordingDays: Int = 30,
+    /** The app opens, and reopens after [lockAfterMinutes] away, only with the fingerprint. */
+    val biometricLock: Boolean = false,
+    val lockAfterMinutes: Int = 5,
 )

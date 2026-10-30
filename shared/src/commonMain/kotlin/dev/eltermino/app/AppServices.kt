@@ -91,6 +91,12 @@ interface Platform {
     /** Opens [url] in the browser. */
     fun openUrl(url: String) {}
 
+    /** Whether [authenticate] can ask for a fingerprint or the system password here. */
+    val biometricAvailable: Boolean get() = false
+
+    /** Asks the system who's there; true when it's the owner. */
+    suspend fun authenticate(reason: String): Boolean = false
+
     /** Lets the user save [bytes] under a name of their choice; false when cancelled or unsupported. */
     suspend fun saveFile(suggestedName: String, bytes: ByteArray): Boolean = false
 }

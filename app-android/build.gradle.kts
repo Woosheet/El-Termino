@@ -35,6 +35,7 @@ android {
 dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.biometric)
     implementation(libs.kotlinx.coroutines.android)
 
     // Phase 0 spike: does MINA SSHD run on ART? Needs the testenv servers on the host.

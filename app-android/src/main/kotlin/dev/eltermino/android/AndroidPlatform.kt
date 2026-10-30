@@ -1,5 +1,8 @@
 package dev.eltermino.android
 
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -18,6 +21,14 @@ class AndroidPlatform(private val context: Context) : Platform {
     /** Set by the visible activity, which owns the document picker. */
     @Volatile
     var documentPicker: (suspend () -> Uri?)? = null
+
+    /** Set by the visible activity, which owns the system's prompt. */
+    var biometricPrompt: (suspend (String) -> Boolean)? = null
+
+    override val biometricAvailable: Boolean
+        get() = BiometricManager.from(context).canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+
+    override suspend fun authenticate(reason: String): Boolean = biometricPrompt?.invoke(reason) == true
 
     /** Set by the visible activity too: where to create a document, named as suggested. */
     @Volatile

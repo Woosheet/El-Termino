@@ -274,6 +274,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Master password dove manca il portachiavi fatta ([decisione 0004](decisions/0004-workspace-and-vault.md)). Provata da `PasswordMasterKeyProviderTest`; la finestra all'avvio va provata su un Linux senza Secret Service.
   - CA per i certificati host fatta ([decisione 0016](decisions/0016-host-certificate-authorities.md)): elenco nelle Impostazioni, import da `known_hosts`, blocco netto se il certificato non è valido. Provata da `HostCaTrustTest` e `ConnectionFlowTest`, anche con un server dal certificato scaduto.
   - SSH agent e forwarding fatti ([decisione 0017](decisions/0017-ssh-agent.md)): spunta nell'identità, forwarding per host spento di default. Provati da `AgentLoginTest` contro un `ssh-agent` vero; su Windows vanno provati a mano.
+  - Blocco biometrico fatto ([decisione 0018](decisions/0018-biometric-lock.md)): impronta o password del dispositivo all'avvio e dopo un'assenza. Blocca l'interfaccia, non il vault. Logica provata da `AppLockTest`; Touch ID e BiometricPrompt vanno provati a mano.
 
 ## Roadmap
 

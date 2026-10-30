@@ -96,8 +96,13 @@ fun App(state: AppState, onExit: () -> Unit = {}, titleBarHeight: Dp = 0.dp) {
             LocalTitleBar provides titleBarHeight,
             LocalAppIcon provides AppIconStyle.of(workspace.ui.appIcon),
         ) { AppContent(state) }
-        UpdateDialog(state, onExit)
-        ExitDialog(state, onExit)
+        val locked by state.lock.locked.collectAsState()
+        if (locked) {
+            LockScreen(state.lock)
+        } else {
+            UpdateDialog(state, onExit)
+            ExitDialog(state, onExit)
+        }
     }
 }
 
@@ -226,7 +231,9 @@ private fun AppContent(state: AppState) {
         if (!settings.ui.welcomeDone || tour) {
             WelcomeFlow(state, startAtTour = tour, onOpenImport = { screen = Screen.Import; showHostsOnPhone = false }) { tour = false }
         }
-        PromptDialogs(state.sessions.prompter)
+        // A waiting prompt stays pending: it shows up once the app is unlocked.
+        val locked by state.lock.locked.collectAsState()
+        if (!locked) PromptDialogs(state.sessions.prompter)
     }
 }
 

@@ -56,6 +56,31 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
 
     override val isInForeground: Boolean get() = window()?.isActive == true
 
+    // Put in the app by the build on macOS; see native/touchid.swift. Packaging drops its
+    // executable bit, and an installed app shouldn't change, so it runs from a private copy.
+    private val touchId: File? by lazy {
+        System.getProperty("compose.application.resources.dir")?.let { File(it, "touchid") }?.takeIf { it.isFile }?.let { packaged ->
+            File.createTempFile("touchid", null).apply {
+                deleteOnExit()
+                packaged.copyTo(this, overwrite = true)
+                setExecutable(true, true)
+            }
+        }
+    }
+
+    override val biometricAvailable: Boolean by lazy {
+        runTouchId("check")
+    }
+
+    override suspend fun authenticate(reason: String): Boolean = withContext(Dispatchers.IO) {
+        runTouchId("unlock", reason)
+    }
+
+    private fun runTouchId(vararg arguments: String): Boolean {
+        val program = touchId ?: return false
+        return runCatching { ProcessBuilder(program.path, *arguments).start().waitFor() == 0 }.getOrDefault(false)
+    }
+
     // jpackage's launcher sets the version; a run from Gradle has none and doesn't look for updates.
     override val appVersion: String? = System.getProperty("jpackage.app-version")
 
