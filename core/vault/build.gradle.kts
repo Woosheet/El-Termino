@@ -30,6 +30,11 @@ kotlin {
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)
         }
+        named("jvmSharedMain").configure {
+            dependencies {
+                implementation(libs.bouncycastle.prov)
+            }
+        }
         named("desktopMain").configure {
             dependencies {
                 implementation(libs.java.keyring)
