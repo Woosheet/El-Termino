@@ -267,7 +267,8 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 - Fase 8: in corso dal 30 ottobre 2026.
   - Port forwarding fatto ([decisione 0011](decisions/0011-port-forwarding.md)): regole locali, remote e dinamiche (SOCKS) salvate per host, avvio a mano o automatico alla connessione, riaperte dopo una riconnessione. Provato contro i server di test da `PortForwardFlowTest`.
   - Monitor risorse fatto ([decisione 0012](decisions/0012-resource-monitor.md)): scheda "Risorse" dal menu dell'host con CPU, carico, memoria e swap, rete e dischi, letti da `/proc` e `df` ogni 3 secondi solo con la scheda aperta. Provato da `MonitorFlowTest`.
-  - Restano: pannello Docker, registrazione sessioni.
+  - Pannello Docker fatto ([decisione 0013](decisions/0013-docker-panel.md)): scheda "Docker" dal menu dell'host con i container, CPU e memoria, avvio, stop e riavvio; log e shell nel container si aprono in un terminale nuovo. Provato da `DockerFlowTest` contro un finto `docker` nei server di test.
+  - Resta: registrazione sessioni.
 
 ## Roadmap
 

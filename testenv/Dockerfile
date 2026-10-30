@@ -13,7 +13,8 @@ RUN apt-get update \
 ENV LANG=en_US.UTF-8
 
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY fake-docker /usr/local/bin/docker
+RUN chmod +x /entrypoint.sh /usr/local/bin/docker
 
 EXPOSE 22
 ENTRYPOINT ["/entrypoint.sh"]

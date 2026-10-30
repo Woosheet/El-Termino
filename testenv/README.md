@@ -32,3 +32,8 @@ Ogni host ha anche un piccolo servizio HTTP su `127.0.0.1:8080`, raggiungibile s
 - `/cgi-bin/echo` risponde con metodo, query e corpo ricevuti.
 
 Sugli host c'è anche `curl`, per "Esegui con curl sul server".
+
+Al posto di Docker c'è un finto comando `docker` (`fake-docker`), per il pannello Docker:
+
+- su `basic` conosce tre container, `web` e `db` attivi e `job` fermo; `start`, `stop` e `restart` cambiano davvero il loro stato, che resta in `/tmp/fake-docker`. Rispondono anche `ps`, `stats`, `logs` (con `-f`) ed `exec`;
+- sugli altri host risponde come per un utente che non è nel gruppo `docker`.

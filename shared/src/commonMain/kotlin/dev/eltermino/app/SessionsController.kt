@@ -298,6 +298,34 @@ class SessionsController(
         return tab
     }
 
+    /** The containers on [host], with their state and usage. */
+    fun openDocker(host: Host): DockerTab = add(createDocker(host))
+
+    private fun createDocker(host: Host): DockerTab {
+        val tab = register(DockerTab(newId(), host.id, host.label))
+        tab.job = scope.launch {
+            val lease = connections.acquire(host)
+            tab.mutableLease.value = lease
+            try {
+                watchDocker(tab, lease)
+            } finally {
+                withContext(NonCancellable) { lease.release() }
+            }
+        }
+        return tab
+    }
+
+    fun dockerAction(tab: DockerTab, container: DockerContainer, action: DockerAction) {
+        val lease = tab.lease.value ?: return
+        scope.launch { runDockerAction(tab, lease, container, action) }
+    }
+
+    /** Opens a terminal on the tab's host following [container]'s log. */
+    fun dockerLogs(tab: DockerTab, container: DockerContainer) = runSnippet(dockerLogsCommand(container), true, SnippetTarget.Hosts(listOf(tab.hostId)))
+
+    /** Opens a terminal on the tab's host with a shell inside [container]. */
+    fun dockerShell(tab: DockerTab, container: DockerContainer) = runSnippet(dockerShellCommand(container), true, SnippetTarget.Hosts(listOf(tab.hostId)))
+
     private fun createTerminal(host: Host): SessionTab {
         val tab = register(SessionTab(newId(), host.id, host.label))
         start(tab)
@@ -359,6 +387,7 @@ class SessionsController(
             is EditorTab -> SavedPane("editor", tab.hostId, tab.path)
             is RequestsTab -> SavedPane("requests", tab.hostId)
             is MonitorTab -> SavedPane("monitor", tab.hostId)
+            is DockerTab -> SavedPane("docker", tab.hostId)
         }
         return SavedLayout(
             id = newId(),
@@ -396,6 +425,7 @@ class SessionsController(
             "editor" -> pane.path?.let { createEditor(host?.let { Endpoint.Remote(it.id) } ?: Endpoint.Local, it) }
             "requests" -> host?.let(::createRequests)
             "monitor" -> host?.let(::createMonitor)
+            "docker" -> host?.let(::createDocker)
             else -> null
         }
     }
@@ -444,6 +474,7 @@ class SessionsController(
             is EditorTab -> scope.launch { tab.release?.invoke() }
             is RequestsTab -> tab.job?.cancel()
             is MonitorTab -> tab.job?.cancel()
+            is DockerTab -> tab.job?.cancel()
         }
         mutableTabs.update { it - tab }
         updateBar { it.remove(tab.id) }
@@ -613,6 +644,7 @@ private fun Tab.connectedHost(): kotlinx.coroutines.flow.Flow<String?> = when (t
     is EditorTab -> flowOf(null)
     is RequestsTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
     is MonitorTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
+    is DockerTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
 }
 
 @OptIn(ExperimentalTime::class)

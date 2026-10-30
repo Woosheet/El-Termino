@@ -53,6 +53,7 @@ internal fun HostList(
     onOpenFiles: (Host) -> Unit = {},
     onOpenRequests: (Host) -> Unit = {},
     onOpenMonitor: (Host) -> Unit = {},
+    onOpenDocker: (Host) -> Unit = {},
 ) {
     val workspace by state.services.workspace.workspace.collectAsState()
     val connected by state.sessions.connectedHostIds.collectAsState()
@@ -83,6 +84,7 @@ internal fun HostList(
                     onOpenFiles = { onOpenFiles(host) },
                     onOpenRequests = { onOpenRequests(host) },
                     onOpenMonitor = { onOpenMonitor(host) },
+                    onOpenDocker = { onOpenDocker(host) },
                     onForwards = { forwarding = host.id },
                     onEdit = { onEdit(host) },
                     onDuplicate = { scope.launch { state.actions.saveHost(host.copy(id = newId(), label = "${host.label} (copia)", lastConnectedEpochSeconds = null)) } },
@@ -123,6 +125,7 @@ private fun HostRow(
     onOpenFiles: () -> Unit,
     onOpenRequests: () -> Unit,
     onOpenMonitor: () -> Unit,
+    onOpenDocker: () -> Unit,
     onForwards: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
@@ -148,6 +151,7 @@ private fun HostRow(
                     MenuItem("File (SFTP)", onClick = { menu = false; onOpenFiles() })
                     MenuItem("Richieste HTTP", onClick = { menu = false; onOpenRequests() })
                     MenuItem("Risorse", onClick = { menu = false; onOpenMonitor() })
+                    MenuItem("Docker", onClick = { menu = false; onOpenDocker() })
                     MenuItem("Port forwarding…", onClick = { menu = false; onForwards() })
                     MenuItem("Modifica", onClick = { menu = false; onEdit() })
                     MenuItem("Duplica", onClick = { menu = false; onDuplicate() })

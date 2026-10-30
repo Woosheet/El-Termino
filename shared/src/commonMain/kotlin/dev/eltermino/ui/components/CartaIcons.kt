@@ -125,6 +125,15 @@ object CartaIcons {
         }
     }
 
+    /** A crate with a handle, for the Docker tab. */
+    val Container: ImageVector by lazy {
+        lineIcon("Container") {
+            moveTo(3.5f, 9f); lineTo(20.5f, 9f); lineTo(20.5f, 20f); lineTo(3.5f, 20f); close()
+            moveTo(7.5f, 9f); lineTo(7.5f, 5f); lineTo(16.5f, 5f); lineTo(16.5f, 9f)
+            moveTo(9f, 13.5f); lineTo(15f, 13.5f)
+        }
+    }
+
     val Pause: ImageVector by lazy {
         lineIcon("Pause") { moveTo(9f, 6f); lineTo(9f, 18f); moveTo(15f, 6f); lineTo(15f, 18f) }
     }

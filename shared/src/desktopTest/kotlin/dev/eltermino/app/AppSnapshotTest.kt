@@ -239,6 +239,19 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun dockerTab(): Unit = runBlocking {
+        val state = lightState()
+        state.scope.launch {
+            state.sessions.prompter.prompt.filterNotNull().collect { if (it is PendingPrompt.HostKey) it.answer(true) else it.cancel() }
+        }
+        val web = seed(state)
+        val tab = state.sessions.openDocker(web)
+        withTimeout(60_000) { tab.containers.filterNotNull().first() }
+        snapshot(state, "app-desktop-docker")
+        state.sessions.close(tab)
+    }
+
+    @Test
     fun phoneHostList(): Unit = runBlocking {
         val state = lightState()
         seed(state)

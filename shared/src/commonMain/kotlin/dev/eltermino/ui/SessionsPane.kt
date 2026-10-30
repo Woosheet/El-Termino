@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
 import dev.eltermino.app.EditorTab
+import dev.eltermino.app.DockerTab
 import dev.eltermino.app.MonitorTab
 import dev.eltermino.app.RequestsTab
 import dev.eltermino.app.Endpoint
@@ -361,6 +362,7 @@ private fun TabBody(state: AppState, tab: Tab, showExtraKeys: Boolean, focused: 
         is EditorTab -> EditorPane(state, tab, focused)
         is RequestsTab -> RequestsPane(state, tab, focused)
         is MonitorTab -> MonitorPane(tab)
+        is DockerTab -> DockerPane(state, tab)
     }
 }
 
@@ -379,6 +381,7 @@ internal fun TabMark(tab: Tab) {
         }
         is RequestsTab -> RequestsTabMark()
         is MonitorTab -> MonitorTabMark()
+        is DockerTab -> DockerTabMark()
     }
 }
 
