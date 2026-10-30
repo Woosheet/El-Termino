@@ -150,6 +150,8 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
 
     override fun readSshConfig(): String? = File(sshDir, "config").takeIf { it.isFile }?.readText()
 
+    override fun readKnownHosts(): String? = File(sshDir, "known_hosts").takeIf { it.isFile }?.readText()
+
     override fun resolveSshInclude(pattern: String): List<Pair<String, String>> {
         val path = when {
             pattern.startsWith("~/") -> File(home, pattern.removePrefix("~/"))

@@ -54,6 +54,9 @@ interface Platform {
     /** `~/.ssh/config`, or null where there's none (always on Android). */
     fun readSshConfig(): String?
 
+    /** `~/.ssh/known_hosts`, or null where there's none (always on Android). */
+    fun readKnownHosts(): String? = null
+
     /**
      * Resolves an `Include` pattern relative to `~/.ssh`, globs included, as
      * (path, contents) pairs.

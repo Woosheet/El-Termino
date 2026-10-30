@@ -272,6 +272,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 - Fase 7: in corso.
   - Backup cifrato fatto ([decisione 0015](decisions/0015-encrypted-backup.md)): un file con workspace e segreti, password con Argon2id, ripristino con anteprima, "Unisci" o "Sostituisci tutto", copia di sicurezza prima di cambiare i dati. Provato da `BackupFlowTest`.
   - Master password dove manca il portachiavi fatta ([decisione 0004](decisions/0004-workspace-and-vault.md)). Provata da `PasswordMasterKeyProviderTest`; la finestra all'avvio va provata su un Linux senza Secret Service.
+  - CA per i certificati host fatta ([decisione 0016](decisions/0016-host-certificate-authorities.md)): elenco nelle Impostazioni, import da `known_hosts`, blocco netto se il certificato non è valido. Provata da `HostCaTrustTest` e `ConnectionFlowTest`, anche con un server dal certificato scaduto.
 
 ## Roadmap
 
