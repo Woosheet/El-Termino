@@ -31,6 +31,7 @@ import dev.eltermino.app.AppCommand
 import dev.eltermino.app.AppState
 import dev.eltermino.app.Shortcuts
 import dev.eltermino.app.createAppServices
+import dev.eltermino.core.ssh.agent.openSystemAgent
 import dev.eltermino.core.vault.EncryptedFileVault
 import dev.eltermino.core.vault.KeychainMasterKeyProvider
 import dev.eltermino.core.vault.MasterKeyProvider
@@ -101,6 +102,7 @@ fun main() {
         masterKey = chooseMasterKey(DesktopPlatform.dataDir()),
         platform = DesktopPlatform { frame },
         localFilesRoot = java.io.File(System.getProperty("user.home")),
+        sshAgent = ::openSystemAgent,
     )
     val state = AppState(services)
     if (isMac && java.awt.Desktop.isDesktopSupported()) {

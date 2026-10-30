@@ -45,7 +45,7 @@ class Connections(
         try {
             val workspace = services.workspace.workspace.value
             val host = workspace.host(hostId) ?: throw HostMissingException()
-            val target = ConnectionPlanner(workspace, prompter, actions, lazySecrets, afterSuccess).plan(host)
+            val target = ConnectionPlanner(workspace, prompter, actions, lazySecrets, afterSuccess, services.connector.supportsAgent).plan(host)
             val connection = services.connector.connect(target, hostKeyVerifier(), secretResolver(lazySecrets))
             afterSuccess.forEach { save -> runCatching { save() } }
             markConnected(hostId)

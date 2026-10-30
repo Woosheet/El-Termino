@@ -96,6 +96,7 @@ internal fun IdentityEditorDialog(state: AppState, initial: Identity, isNew: Boo
     var password by remember { mutableStateOf("") }
     var removePassword by remember { mutableStateOf(false) }
     var keyId by remember { mutableStateOf(initial.keyId) }
+    var useAgent by remember { mutableStateOf(initial.useAgent) }
     var submitted by remember { mutableStateOf(false) }
 
     Dialog(
@@ -113,7 +114,7 @@ internal fun IdentityEditorDialog(state: AppState, initial: Identity, isNew: Boo
                         else -> null
                     }
                     val saved = state.actions.saveIdentity(
-                        initial.copy(label = label.trim().ifBlank { username }, username = username, keyId = keyId),
+                        initial.copy(label = label.trim().ifBlank { username }, username = username, keyId = keyId, useAgent = useAgent),
                         newPassword,
                     )
                     onDismiss(saved)
@@ -128,6 +129,7 @@ internal fun IdentityEditorDialog(state: AppState, initial: Identity, isNew: Boo
             placeholder = if (initial.passwordSecretId != null) "Salvata: lascia vuoto per non cambiarla" else "Facoltativa",
         )
         if (initial.passwordSecretId != null) Checkbox(removePassword, { removePassword = it }, "Cancella la password salvata")
+        if (state.services.connector.supportsAgent) Checkbox(useAgent, { useAgent = it }, "Usa l'SSH agent di questo computer, prima di chiave e password")
         Picker(
             label = "Chiave",
             options = listOf<String?>(null) + workspace.keys.map { it.id },

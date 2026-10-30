@@ -1,5 +1,6 @@
 package dev.eltermino.core.ssh.mina
 
+import dev.eltermino.core.ssh.AgentUnavailableException
 import dev.eltermino.core.ssh.AuthMethod
 import dev.eltermino.core.ssh.ConnectTarget
 import dev.eltermino.core.ssh.HostKeyVerifier
@@ -8,6 +9,8 @@ import dev.eltermino.core.ssh.SecretResolver
 import dev.eltermino.core.ssh.SshConnection
 import dev.eltermino.core.ssh.SshConnector
 import dev.eltermino.core.ssh.SshException
+import dev.eltermino.core.ssh.agent.AgentTransport
+import dev.eltermino.core.ssh.agent.SocketAgent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
@@ -31,7 +34,13 @@ import java.util.EnumSet
 import kotlin.time.Duration
 import kotlin.time.toJavaDuration
 
-class MinaSshConnector(private val config: MinaConfig = MinaConfig()) : SshConnector {
+class MinaSshConnector(
+    private val config: MinaConfig = MinaConfig(),
+    /** Reaches this device's SSH agent; null where there can be none, as on Android. */
+    private val agent: (() -> AgentTransport?)? = null,
+) : SshConnector {
+    override val supportsAgent: Boolean get() = agent != null
+
     private val client: SshClient by lazy {
         SshClient.setUpDefaultClient().apply {
             // Nothing from ~/.ssh: every host, key and setting comes from the app.
@@ -50,6 +59,7 @@ class MinaSshConnector(private val config: MinaConfig = MinaConfig()) : SshConne
                 CoreModuleProperties.HEARTBEAT_INTERVAL.set(this, config.keepAliveInterval.toJavaDuration())
                 CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(this, config.keepAliveMaxMissed)
             }
+            this@MinaSshConnector.agent?.let { agentFactory = MinaAgentFactory(it) }
             start()
         }
     }
@@ -62,7 +72,7 @@ class MinaSshConnector(private val config: MinaConfig = MinaConfig()) : SshConne
         // target.jumpHosts is the whole chain; a hop's own jumpHosts are not followed.
         val hops = target.jumpHosts.map { it.copy(jumpHosts = emptyList()) } + target
         hops.forEach { hop ->
-            if (hop.auth.any { it is AuthMethod.Agent }) {
+            if (agent == null && hop.auth.any { it is AuthMethod.Agent }) {
                 throw SshException.AuthFailed(
                     hop.host, hop.username,
                     UnsupportedOperationException("SSH agent authentication isn't supported yet"),
@@ -150,7 +160,10 @@ class MinaSshConnector(private val config: MinaConfig = MinaConfig()) : SshConne
                     responder = method.responder
                     methods += "keyboard-interactive"
                 }
-                AuthMethod.Agent -> Unit
+                AuthMethod.Agent -> {
+                    session.setAttribute(USE_AGENT, true)
+                    methods += "publickey"
+                }
             }
         }
         // A stored password can also answer a keyboard-interactive password prompt.
@@ -166,7 +179,15 @@ class MinaSshConnector(private val config: MinaConfig = MinaConfig()) : SshConne
         } catch (e: TimeoutCancellationException) {
             throw SshException.AuthFailed(hop.host, hop.username, e)
         }
-        if (!result.isSuccess) throw SshException.AuthFailed(hop.host, hop.username, result.exception)
+        if (!result.isSuccess) throw SshException.AuthFailed(hop.host, hop.username, agentProblem(hop) ?: result.exception)
+    }
+
+    private fun agentProblem(hop: ConnectTarget): AgentUnavailableException? {
+        val open = agent?.takeIf { hop.auth.any { it is AuthMethod.Agent } } ?: return null
+        val transport = open() ?: return AgentUnavailableException(running = false)
+        transport.close()
+        val empty = runCatching { SocketAgent(open).identities.none() }.getOrDefault(true)
+        return if (empty) AgentUnavailableException(running = true) else null
     }
 
     private suspend fun resolveKeyPair(method: AuthMethod.PublicKey, secrets: SecretResolver, hop: ConnectTarget): KeyPair {

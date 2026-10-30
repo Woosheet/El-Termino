@@ -2,6 +2,7 @@ package dev.eltermino.app
 
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.newId
+import dev.eltermino.core.ssh.AgentUnavailableException
 import dev.eltermino.core.ssh.ConnectionState
 import dev.eltermino.core.ssh.PtyConfig
 import dev.eltermino.core.ssh.SshConnection
@@ -705,7 +706,11 @@ internal fun describe(e: Throwable): String = when (e) {
     is SshException.ConnectFailed -> "Impossibile raggiungere ${e.host}:${e.port}" + (e.cause?.message?.let { ": $it" } ?: "")
     is SshException.HostKeyRejected -> "Chiave dell'host ${e.host} rifiutata, connessione interrotta"
     is SshException.HostTrustRefused -> "${e.host}: ${e.reason}. Se è corretto, cambia l'elenco delle CA fidate nelle Impostazioni."
-    is SshException.AuthFailed -> "Autenticazione non riuscita come ${e.username} su ${e.host}"
+    is SshException.AuthFailed -> "Autenticazione non riuscita come ${e.username} su ${e.host}" + when ((e.cause as? AgentUnavailableException)?.running) {
+        true -> ": l'SSH agent non ha chiavi"
+        false -> ": nessun SSH agent attivo"
+        null -> ""
+    }
     is SshException.ChannelFailed -> e.message ?: "Errore del canale SSH"
     is VaultException -> "Vault: ${e.message}"
     else -> e.message ?: e::class.simpleName ?: "Errore sconosciuto"

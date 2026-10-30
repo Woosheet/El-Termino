@@ -2,7 +2,6 @@ package dev.eltermino.core.ssh.agent
 
 import dev.eltermino.core.ssh.mina.TestServers
 import org.apache.sshd.common.SshException
-import org.junit.jupiter.api.Assumptions.assumeTrue
 import java.io.File
 import java.io.IOException
 import java.net.StandardProtocolFamily
@@ -30,15 +29,7 @@ class AgentClientTest {
     }
 
     private fun startRealAgent(vararg keys: String) {
-        val agent = runCatching { ProcessBuilder("ssh-agent", "-D", "-a", socket.path).redirectErrorStream(true).start() }.getOrNull()
-        assumeTrue(agent != null, "ssh-agent isn't installed")
-        process = agent
-        repeat(100) { if (!socket.exists()) Thread.sleep(20) }
-        keys.forEach { key ->
-            val add = ProcessBuilder("ssh-add", TestServers.keyFile(key).path).redirectErrorStream(true)
-            add.environment()["SSH_AUTH_SOCK"] = socket.path
-            assertEquals(0, add.start().waitFor())
-        }
+        process = startTestAgent(socket, *keys)
     }
 
     /** Answers every request with [reply], sent as it is. */
@@ -99,4 +90,17 @@ class AgentClientTest {
         fakeAgent(byteArrayOf(0x7f, 0, 0, 0))
         assertFailsWith<IOException> { agent().identities.count() }
     }
+}
+
+/** A real `ssh-agent` on [socket] holding [keys]. Skips the test where it isn't installed. */
+fun startTestAgent(socket: File, vararg keys: String): Process {
+    val agent = runCatching { ProcessBuilder("ssh-agent", "-D", "-a", socket.path).redirectErrorStream(true).start() }.getOrNull()
+    org.junit.jupiter.api.Assumptions.assumeTrue(agent != null, "ssh-agent isn't installed")
+    repeat(100) { if (!socket.exists()) Thread.sleep(20) }
+    keys.forEach { key ->
+        val add = ProcessBuilder("ssh-add", TestServers.keyFile(key).path).redirectErrorStream(true)
+        add.environment()["SSH_AUTH_SOCK"] = socket.path
+        check(add.start().waitFor() == 0) { "ssh-add failed" }
+    }
+    return agent!!
 }

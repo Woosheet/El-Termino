@@ -92,6 +92,8 @@ data class Identity(
     val username: String,
     val passwordSecretId: String? = null,
     val keyId: String? = null,
+    /** Try this device's SSH agent first, before the key and the password. */
+    val useAgent: Boolean = false,
 )
 
 @Serializable
