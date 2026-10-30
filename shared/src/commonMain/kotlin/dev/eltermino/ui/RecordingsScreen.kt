@@ -112,20 +112,22 @@ internal fun ReplayPane(tab: ReplayTab, showExtraKeys: Boolean) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Bottom,
         ) {
+            // The picker's label stands above the row; its field and these share a bottom edge.
+            val onFieldLine = Modifier.padding(bottom = 12.dp)
             when {
-                finished -> Button("Ricomincia", onClick = tab::restart, kind = ButtonKind.Secondary)
-                playing -> Button("Pausa", onClick = { tab.playing.value = false }, kind = ButtonKind.Secondary)
-                else -> Button("Riprendi", onClick = { tab.playing.value = true }, kind = ButtonKind.Secondary)
+                finished -> Button("Ricomincia", onClick = tab::restart, kind = ButtonKind.Secondary, modifier = onFieldLine, minHeight = 38.dp)
+                playing -> Button("Pausa", onClick = { tab.playing.value = false }, kind = ButtonKind.Secondary, modifier = onFieldLine, minHeight = 38.dp)
+                else -> Button("Riprendi", onClick = { tab.playing.value = true }, kind = ButtonKind.Secondary, modifier = onFieldLine, minHeight = 38.dp)
             }
-            if (!finished) Button("Ricomincia", onClick = tab::restart, kind = ButtonKind.Ghost)
+            if (!finished) Button("Ricomincia", onClick = tab::restart, kind = ButtonKind.Ghost, modifier = onFieldLine, minHeight = 38.dp)
             Picker("Velocità", listOf(1f, 2f, 4f, 8f), speed, { "${it.toInt()}×" }, { tab.speed.value = it }, Modifier.width(90.dp))
             Text(
                 "${formatClock(position)} di ${formatClock(tab.cast.durationSeconds)}",
                 style = Carta.type.small,
                 color = Carta.colors.textDim,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).padding(bottom = 21.dp),
             )
         }
         Divider()

@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -37,7 +39,9 @@ import dev.eltermino.app.formatBytes
 import dev.eltermino.ui.components.HoppingSombrero
 import dev.eltermino.ui.components.Icon
 import dev.eltermino.ui.components.ProgressBar
+import androidx.compose.ui.text.style.TextAlign
 import dev.eltermino.ui.components.Text
+import dev.eltermino.ui.theme.tabular
 import dev.eltermino.ui.theme.Carta
 
 /** CPU, memory, network and disks of a host, read every few seconds while the tab is open. */
@@ -73,8 +77,8 @@ internal fun MonitorPane(tab: MonitorTab) {
             val columns = if (maxWidth >= 760.dp) 2 else 1
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 cards.chunked(columns).forEach { row ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        row.forEach { card -> card(Modifier.weight(1f)) }
+                    Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        row.forEach { card -> card(Modifier.weight(1f).fillMaxHeight()) }
                     }
                 }
             }
@@ -89,15 +93,15 @@ private fun ProcessesCard(processes: List<ProcessInfo>) {
     Column(Modifier.fillMaxWidth().padding(top = 12.dp).border(1.dp, colors.line, RoundedCornerShape(10.dp)).padding(14.dp)) {
         Text("Processi più pesanti", style = Carta.type.label, color = colors.textDim)
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("CPU", style = Carta.type.small, color = colors.textDim, modifier = Modifier.width(48.dp))
-            Text("MEM", style = Carta.type.small, color = colors.textDim, modifier = Modifier.width(48.dp))
-            Text("UTENTE", style = Carta.type.small, color = colors.textDim, modifier = Modifier.width(84.dp))
-            Text("COMANDO", style = Carta.type.small, color = colors.textDim)
+            Text("CPU", style = Carta.type.small, color = colors.textDim, textAlign = TextAlign.End, modifier = Modifier.width(60.dp))
+            Text("Memoria", style = Carta.type.small, color = colors.textDim, textAlign = TextAlign.End, modifier = Modifier.width(60.dp))
+            Text("Utente", style = Carta.type.small, color = colors.textDim, modifier = Modifier.width(84.dp))
+            Text("Comando", style = Carta.type.small, color = colors.textDim)
         }
         processes.forEach { process ->
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(decimal(process.cpuPercent) + "%", style = Carta.type.small, modifier = Modifier.width(48.dp))
-                Text(decimal(process.memPercent) + "%", style = Carta.type.small, modifier = Modifier.width(48.dp))
+                Text(decimal(process.cpuPercent) + "%", style = Carta.type.small.tabular(), textAlign = TextAlign.End, modifier = Modifier.width(60.dp))
+                Text(decimal(process.memPercent) + "%", style = Carta.type.small.tabular(), textAlign = TextAlign.End, modifier = Modifier.width(60.dp))
                 Text(process.user, style = Carta.type.small, color = colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(84.dp))
                 Text(process.command, style = Carta.type.small, fontFamily = Carta.monospace, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             }

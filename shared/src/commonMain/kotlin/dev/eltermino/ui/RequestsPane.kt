@@ -302,13 +302,13 @@ private fun RequestEditor(state: AppState, tab: RequestsTab, collection: HttpCol
     val url: @Composable (Modifier) -> Unit = {
         Field("Indirizzo, come lo vede ${tab.label}", draft.url, { u -> draft = draft.copy(url = u) }, it, monospace = true, placeholder = "http://localhost:8080/health")
     }
-    val sendButton: @Composable (Modifier) -> Unit = { Button(if (busy) "Invio…" else "Invia", onClick = ::send, enabled = !busy, icon = CartaIcons.Request, modifier = it) }
+    val sendButton: @Composable (Modifier) -> Unit = { Button(if (busy) "Invio…" else "Invia", onClick = ::send, enabled = !busy, icon = CartaIcons.Request, modifier = it, minHeight = 38.dp) }
     if (compact) {
         url(Modifier.fillMaxWidth())
         Row(verticalAlignment = Alignment.Bottom) {
             method(Modifier.width(140.dp).padding(end = 8.dp))
             Box(Modifier.weight(1f))
-            sendButton(Modifier.padding(bottom = 10.dp))
+            sendButton(Modifier.padding(bottom = 12.dp))
         }
     } else {
         Row(verticalAlignment = Alignment.Bottom) {
@@ -317,17 +317,20 @@ private fun RequestEditor(state: AppState, tab: RequestsTab, collection: HttpCol
             sendButton(Modifier.padding(start = 8.dp, bottom = 12.dp))
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(draft.followRedirects, { draft = draft.copy(followRedirects = it) }, "Segui i redirect")
-        Hint(if (draft.viaCurl) "curl segue anche quelli verso altri host" else "Solo sullo stesso host e porta, gli unici che il tunnel raggiunge")
-        Checkbox(draft.viaCurl, { draft = draft.copy(viaCurl = it) }, "Esegui con curl sul server")
-        if (!compact) Text(
-            if (draft.viaCurl) "Usa DNS, proxy e certificati della macchina" else "Passa dal tunnel SSH, senza installare niente sul server",
-            style = Carta.type.small,
-            color = Carta.colors.textDim,
-            modifier = Modifier.padding(start = 8.dp),
-        )
-    }
+    RequestOption(
+        draft.followRedirects,
+        { draft = draft.copy(followRedirects = it) },
+        "Segui i redirect",
+        if (draft.viaCurl) "curl segue anche quelli verso altri host" else "Solo sullo stesso host e porta, gli unici che il tunnel raggiunge",
+        compact,
+    )
+    RequestOption(
+        draft.viaCurl,
+        { draft = draft.copy(viaCurl = it) },
+        "Esegui con curl sul server",
+        if (draft.viaCurl) "Usa DNS, proxy e certificati della macchina" else "Passa dal tunnel SSH, senza installare niente sul server",
+        compact,
+    )
     notice?.let { Text(it, style = Carta.type.small, color = Carta.colors.textDim, modifier = Modifier.padding(top = 4.dp)) }
 
     val enabledHeaders = draft.headers.count { it.enabled }
@@ -350,6 +353,21 @@ private fun RequestEditor(state: AppState, tab: RequestsTab, collection: HttpCol
             }
         }
         else -> ChecksEditor(draft.checks) { draft = draft.copy(checks = it) }
+    }
+}
+
+/** A choice about how the request travels, with what it means beside it, or under it on a phone. */
+@Composable
+private fun RequestOption(checked: Boolean, onChange: (Boolean) -> Unit, label: String, hint: String, compact: Boolean) {
+    val colors = Carta.colors
+    if (compact) {
+        Checkbox(checked, onChange, label)
+        Text(hint, style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(start = 30.dp, bottom = 4.dp))
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked, onChange, label)
+            Text(hint, style = Carta.type.small, color = colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(start = 8.dp))
+        }
     }
 }
 

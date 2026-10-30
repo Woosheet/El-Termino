@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -191,7 +192,7 @@ fun <T> Picker(
     var open by remember { mutableStateOf(false) }
     var widthPx by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
-    Column(modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+    Column(modifier.fillMaxWidth().padding(bottom = 12.dp)) {
         Text(label, style = Carta.type.label, color = colors.textDim, modifier = Modifier.padding(bottom = 4.dp))
         Box(Modifier.fillMaxWidth().onSizeChanged { widthPx = it.width }) {
             Pressable(
@@ -202,7 +203,8 @@ fun <T> Picker(
                 pressed = colors.hover,
                 border = colors.line,
             ) {
-                Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 6.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // As tall as a Field, so the two line up in a form.
+                Row(Modifier.fillMaxWidth().defaultMinSize(minHeight = 38.dp).padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(display(selected), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = colors.textDim)
                 }

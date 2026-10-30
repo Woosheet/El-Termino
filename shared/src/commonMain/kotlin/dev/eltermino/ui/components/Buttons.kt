@@ -125,19 +125,21 @@ fun Button(
     kind: ButtonKind = ButtonKind.Primary,
     enabled: Boolean = true,
     icon: ImageVector? = null,
+    /** 38.dp beside a Field or a Picker, so the row shares one height. */
+    minHeight: Dp = 32.dp,
 ) {
     val colors = Carta.colors.forKind(kind)
     val content = if (enabled) colors.content else colors.content.copy(alpha = 0.45f)
     Pressable(
         onClick = onClick,
-        modifier = modifier.defaultMinSize(minHeight = 32.dp),
+        modifier = modifier.defaultMinSize(minHeight = minHeight),
         enabled = enabled,
         background = if (enabled) colors.background else colors.background.copy(alpha = colors.background.alpha * 0.45f),
         hover = colors.hover,
         pressed = colors.pressed,
         border = colors.border,
     ) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.defaultMinSize(minHeight = minHeight).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             CompositionLocalProvider(LocalContentColor provides content, LocalTextStyle provides Carta.type.bodyStrong) {
                 if (icon != null) {
                     Icon(icon, contentDescription = null, size = 16.dp, modifier = Modifier.padding(end = 6.dp))

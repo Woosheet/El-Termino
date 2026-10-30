@@ -2,6 +2,7 @@ package dev.eltermino.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +35,7 @@ import dev.eltermino.ui.components.HoppingSombrero
 import dev.eltermino.ui.components.Icon
 import dev.eltermino.ui.components.StatusDot
 import dev.eltermino.ui.components.Text
+import dev.eltermino.ui.theme.tabular
 import dev.eltermino.ui.theme.Carta
 
 /** The containers on a host: state, usage, and what to do with each. */
@@ -185,24 +187,30 @@ private fun ContainerRow(
                 }
             }
             if (container.cpu != null) Column(Modifier.width(if (compact) 120.dp else 170.dp).padding(start = 8.dp), horizontalAlignment = Alignment.End) {
-                Text("CPU ${container.cpu}", style = Carta.type.small)
-                container.memory?.let { Text(it, style = Carta.type.caption, color = colors.textDim, maxLines = 1) }
+                Text("CPU ${container.cpu.replace('.', ',')}", style = Carta.type.small.tabular())
+                container.memory?.let { Text(it.replace('.', ','), style = Carta.type.caption.tabular(), color = colors.textDim, maxLines = 1) }
             }
         }
     }
+    // On a wide screen each action has its place, so Log stays in one column down the list.
+    val slot: @Composable (@Composable () -> Unit) -> Unit = { action ->
+        if (compact) action() else Box(Modifier.width(80.dp), contentAlignment = Alignment.Center) { action() }
+    }
     val actions: @Composable () -> Unit = {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (busy) {
-                HoppingSombrero(height = 20.dp)
-            } else if (container.running) {
-                Button("Ferma", onClick = { onAction(DockerAction.Stop) }, kind = ButtonKind.Ghost)
-                Button("Riavvia", onClick = { onAction(DockerAction.Restart) }, kind = ButtonKind.Ghost)
-            } else {
-                Button("Avvia", onClick = { onAction(DockerAction.Start) }, kind = ButtonKind.Ghost)
+        Row(horizontalArrangement = Arrangement.spacedBy(if (compact) 4.dp else 0.dp), verticalAlignment = Alignment.CenterVertically) {
+            slot {
+                when {
+                    busy -> HoppingSombrero(height = 20.dp)
+                    container.running -> Button("Ferma", onClick = { onAction(DockerAction.Stop) }, kind = ButtonKind.Ghost)
+                    else -> Button("Avvia", onClick = { onAction(DockerAction.Start) }, kind = ButtonKind.Ghost)
+                }
             }
-            Button("Log", onClick = onLogs, kind = ButtonKind.Ghost)
-            if (container.running) Button("Shell", onClick = onShell, kind = ButtonKind.Ghost)
-            if (container.removable && !busy) Button("Rimuovi", onClick = onRemove, kind = ButtonKind.Ghost)
+            slot { if (container.running && !busy) Button("Riavvia", onClick = { onAction(DockerAction.Restart) }, kind = ButtonKind.Ghost) }
+            slot { Button("Log", onClick = onLogs, kind = ButtonKind.Ghost) }
+            slot {
+                if (container.running) Button("Shell", onClick = onShell, kind = ButtonKind.Ghost)
+                else if (container.removable && !busy) Button("Rimuovi", onClick = onRemove, kind = ButtonKind.Ghost)
+            }
         }
     }
     if (compact) {

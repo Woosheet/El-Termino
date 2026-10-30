@@ -44,6 +44,7 @@ import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.eltermino.app.AppCommand
 import dev.eltermino.app.AppState
 import dev.eltermino.app.EditorTab
 import dev.eltermino.app.DockerTab
@@ -171,9 +172,17 @@ private fun SplitPanes(state: AppState, empty: Boolean, layout: SplitLayout, sho
             val last = workspace.lastSession
             EmptyState(
                 "Nessuna sessione aperta",
-                if (last != null) "Scegli un host, oppure riprendi da dove eri rimasto: ${summary(last, workspace)}." else "Scegli un host per aprire un terminale o i suoi file.",
+                when {
+                    last != null -> "Scegli un host, oppure riprendi da dove eri rimasto: ${summary(last, workspace)}."
+                    workspace.hosts.isEmpty() -> "Aggiungi un host per aprire un terminale o i suoi file."
+                    else -> "Scegli un host per aprire un terminale o i suoi file."
+                },
                 Modifier.align(Alignment.Center),
-                action = last?.let { { Button("Riapri l'ultima sessione", onClick = { state.sessions.restore(it) }, icon = CartaIcons.Layers) } },
+                action = when {
+                    last != null -> { { Button("Riapri l'ultima sessione", onClick = { state.sessions.restore(last) }, icon = CartaIcons.Layers) } }
+                    workspace.hosts.isEmpty() -> { { Button("Nuovo host", onClick = { state.run(AppCommand.NewHost) }) } }
+                    else -> null
+                },
             )
             return@Box
         }

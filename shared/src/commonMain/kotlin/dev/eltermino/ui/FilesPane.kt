@@ -514,7 +514,8 @@ private fun FilesToolbar(state: AppState, tab: FilesTab, path: String?, hidden: 
 
 @Composable
 private fun HeaderRow(sort: FileSort, showDate: Boolean, showPermissions: Boolean, onSort: (FileSortColumn) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 36.dp), verticalAlignment = Alignment.CenterVertically) {
+    // Ends where the rows' figures end: their padding and the menu button.
+    Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 30.dp), verticalAlignment = Alignment.CenterVertically) {
         HeaderCell("Nome", FileSortColumn.Name, sort, Modifier.weight(1f).padding(start = 22.dp), onSort)
         HeaderCell("Dimensione", FileSortColumn.Size, sort, Modifier.width(92.dp), onSort, end = true)
         if (showDate) HeaderCell("Modificato", FileSortColumn.Modified, sort, Modifier.width(124.dp), onSort, end = true)
@@ -668,7 +669,7 @@ private fun Footer(count: Int, selected: List<RemoteFile>, targets: List<FilesTa
     ) {
         val size = selected.filterNot { it.isDirectory }.sumOf { it.size }
         Text(
-            if (selected.isEmpty()) "$count elementi" else "${selected.size} di $count selezionati" + (if (size > 0) " · ${formatBytes(size)}" else ""),
+            if (selected.isEmpty()) (if (count == 1) "1 elemento" else "$count elementi") else "${selected.size} di $count selezionati" + (if (size > 0) " · ${formatBytes(size)}" else ""),
             style = Carta.type.label,
             color = Carta.colors.textDim,
             modifier = Modifier.weight(1f).padding(vertical = 8.dp),
