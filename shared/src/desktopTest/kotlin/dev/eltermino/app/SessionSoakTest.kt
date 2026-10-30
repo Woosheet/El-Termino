@@ -54,16 +54,29 @@ class SessionSoakTest {
             lastText = text
         }
 
-        open.forEachIndexed { i, it ->
-            it.terminal.sendChar('c'.code, dev.eltermino.core.terminal.KeyModifiers.Ctrl)
-            it.terminal.type("echo done-$i\n")
+        fun interrupt(i: Int) {
+            open[i].terminal.sendChar('c'.code, dev.eltermino.core.terminal.KeyModifiers.Ctrl)
+            open[i].terminal.type("echo done-$i\n")
         }
+        open.indices.forEach(::interrupt)
+        var retries = 0
         open.forEachIndexed { i, it ->
+            // Bash can lose a Ctrl+C that lands between two commands of the loop, with any SSH
+            // client and more often under load. The next one also drops the queued echo, so both go again.
+            var nextTry = System.currentTimeMillis() + 2_000
             eventually({
                 "tab $i at ${System.currentTimeMillis()} (${tab(tabs, i)}): " + it.terminal.snapshotText().trimEnd().takeLast(300)
-            }) { "done-$i" in it.terminal.snapshotText().substringAfterLast("echo done-$i") }
+            }) {
+                val answered = "done-$i" in it.terminal.snapshotText().substringAfterLast("echo done-$i")
+                if (!answered && System.currentTimeMillis() > nextTry) {
+                    retries++
+                    nextTry += 2_000
+                    interrupt(i)
+                }
+                answered
+            }
         }
-        println("soak: ${tabs.size} sessions for ${seconds}s on 3 connections; threads ${threadsAtStart} -> ${Thread.activeCount()}")
+        println("soak: ${tabs.size} sessions for ${seconds}s on 3 connections; threads ${threadsAtStart} -> ${Thread.activeCount()}; Ctrl+C repeated $retries times")
         sessions.closeAll()
         Thread.sleep(300)
         scope.cancel()
