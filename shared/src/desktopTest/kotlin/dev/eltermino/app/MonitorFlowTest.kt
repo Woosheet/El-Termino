@@ -15,6 +15,27 @@ import kotlin.test.assertTrue
 /** A Resources tab reads a testenv host over its link, and stops when the tab closes. */
 class MonitorFlowTest {
     @Test
+    fun processesFromRealHost() {
+        val state = AppState(testServices())
+        state.scope.launch {
+            state.sessions.prompter.prompt.filterNotNull().collect { if (it is PendingPrompt.HostKey) it.answer(true) else it.cancel() }
+        }
+        try {
+            runBlocking {
+                val host = state.actions.testHost("basic", TestEnv.BASIC_PORT, state.actions.keyIdentity())
+                val tab = state.sessions.openMonitor(host)
+                val sample = withTimeout(60_000) { tab.samples.first { it.isNotEmpty() } }.last()
+                assertTrue(sample.processes.isNotEmpty(), "ps on a Debian host")
+                assertTrue(sample.processes.size <= 10)
+                assertTrue(sample.processes.all { it.pid > 0 && it.user.isNotEmpty() && it.command.isNotEmpty() }, sample.processes.toString())
+                state.sessions.close(tab)
+            }
+        } finally {
+            state.scope.cancel()
+        }
+    }
+
+    @Test
     fun aResourcesTabReadsTheHostUntilItCloses() {
         val state = AppState(testServices())
         state.scope.launch {
