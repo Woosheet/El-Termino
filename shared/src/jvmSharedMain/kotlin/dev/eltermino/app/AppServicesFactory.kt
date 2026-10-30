@@ -18,4 +18,5 @@ fun createAppServices(dataDir: File, masterKey: MasterKeyProvider, platform: Pla
     keyTool = MinaKeyTool(),
     platform = platform,
     localFiles = localFilesRoot?.let(::LocalFileSystem),
+    recordings = FileRecordingStore(File(dataDir, "recordings")),
 )

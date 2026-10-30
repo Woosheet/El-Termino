@@ -86,6 +86,7 @@ fun testServices(
         keyTool = MinaKeyTool(),
         platform = platform,
         localFiles = LocalFileSystem(local),
+        recordings = FileRecordingStore(File(dir, "recordings")),
     )
 }
 

@@ -3,6 +3,7 @@ package dev.eltermino.app
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
@@ -18,6 +19,11 @@ class AppState(val services: AppServices) {
     val forwards = PortForwards(services, sessions.connections, scope)
     val notifier = TransferNotifier(scope, services, transfers)
     val updates = UpdateChecker(scope, services)
+
+    init {
+        // Old recordings go at startup, as long as the user asked to keep them.
+        scope.launch { services.recordings?.prune(services.workspace.workspace.value.ui.recordingDays, nowEpochSeconds()) }
+    }
 
     private val mutableCommands = kotlinx.coroutines.flow.MutableSharedFlow<AppCommand>(extraBufferCapacity = 16)
 

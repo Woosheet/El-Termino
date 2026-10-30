@@ -252,6 +252,22 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun replayTab(): Unit = runBlocking {
+        val state = lightState()
+        seed(state)
+        val store = state.services.recordings!!
+        val writer = store.create("web-01")
+        writer.append("""{"version":2,"width":80,"height":24,"timestamp":1700000000,"title":"web-01"}""")
+        writer.append("""[0.1, "o", "dev@web-01:~$ uptime\r\n 10:02:11 up 12 days,  load average: 0.08, 0.03, 0.01\r\n"]""")
+        writer.close()
+        val summary = store.list().single().summary()!!
+        val tab = state.sessions.openReplay(summary)!!
+        withTimeout(10_000) { tab.finished.first { it } }
+        snapshot(state, "app-desktop-replay")
+        state.sessions.close(tab)
+    }
+
+    @Test
     fun phoneHostList(): Unit = runBlocking {
         val state = lightState()
         seed(state)

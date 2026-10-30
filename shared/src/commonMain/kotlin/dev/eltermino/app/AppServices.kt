@@ -14,6 +14,8 @@ class AppServices(
     val platform: Platform,
     /** This device's files for the local panel and transfers; null where there are none. */
     val localFiles: FileSystem? = null,
+    /** Where terminal recordings go; null where they can't be kept. */
+    val recordings: RecordingStore? = null,
 )
 
 /** What differs between desktop and Android. */
@@ -81,6 +83,9 @@ interface Platform {
 
     /** Opens [url] in the browser. */
     fun openUrl(url: String) {}
+
+    /** Lets the user save [bytes] under a name of their choice; false when cancelled or unsupported. */
+    suspend fun saveFile(suggestedName: String, bytes: ByteArray): Boolean = false
 }
 
 class PickedFile(val name: String, val bytes: ByteArray)

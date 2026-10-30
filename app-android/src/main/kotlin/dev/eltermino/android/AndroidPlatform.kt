@@ -19,6 +19,10 @@ class AndroidPlatform(private val context: Context) : Platform {
     @Volatile
     var documentPicker: (suspend () -> Uri?)? = null
 
+    /** Set by the visible activity too: where to create a document, named as suggested. */
+    @Volatile
+    var documentCreator: (suspend (String) -> Uri?)? = null
+
     /** Activities currently started, counted by [ElTerminoApp]. */
     @Volatile
     var startedActivities = 0
@@ -48,6 +52,13 @@ class AndroidPlatform(private val context: Context) : Platform {
             val name = displayName(uri)
             val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@withContext null
             PickedFile(name, bytes)
+        }
+    }
+
+    override suspend fun saveFile(suggestedName: String, bytes: ByteArray): Boolean {
+        val uri = documentCreator?.invoke(suggestedName) ?: return false
+        return withContext(Dispatchers.IO) {
+            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) } != null
         }
     }
 

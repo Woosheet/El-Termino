@@ -43,6 +43,7 @@ class TabLayoutFlowTest {
                     is RequestsTab -> "http:${hosts.host(tab.hostId)?.label}"
                     is MonitorTab -> "monitor:${hosts.host(tab.hostId)?.label}"
                     is DockerTab -> "docker:${hosts.host(tab.hostId)?.label}"
+                    is ReplayTab -> "replay:${tab.label}"
                 }
             }
             "$group ${frame.panes.layout}[$panes]"

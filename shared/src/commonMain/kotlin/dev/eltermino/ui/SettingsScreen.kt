@@ -83,6 +83,12 @@ internal fun SettingsScreen(state: AppState, modifier: Modifier = Modifier, extr
                 "Notifica quando un trasferimento finisce o non riesce",
             )
         }
+        if (state.services.recordings != null) RecordingSettings(
+            workspace.ui.recordSessions,
+            workspace.ui.recordingDays,
+            onRecord = { on -> update { it.copy(recordSessions = on) } },
+            onDays = { days -> update { it.copy(recordingDays = days) } },
+        )
         UpdatesSection(state, workspace.ui.checkUpdates) { on -> update { it.copy(checkUpdates = on) } }
         if (state.services.platform.isDesktop) ShortcutsSection(state.services.platform.isMacOs)
         extra()

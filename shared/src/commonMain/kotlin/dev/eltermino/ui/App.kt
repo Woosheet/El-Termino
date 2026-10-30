@@ -69,6 +69,7 @@ internal enum class Screen(val title: String) {
     Keys("Chiavi"),
     Identities("Identità"),
     Snippets("Snippet"),
+    Recordings("Registrazioni"),
     Import("Importa"),
     Settings("Impostazioni"),
 }
@@ -263,6 +264,7 @@ private fun DesktopLayout(
                 ToolRow(CartaIcons.Key, "Chiavi", screen == Screen.Keys) { onScreen(Screen.Keys) }
                 ToolRow(CartaIcons.User, "Identità", screen == Screen.Identities) { onScreen(Screen.Identities) }
                 ToolRow(CartaIcons.Snippet, "Snippet", screen == Screen.Snippets) { onScreen(Screen.Snippets) }
+                ToolRow(CartaIcons.Play, "Registrazioni", screen == Screen.Recordings) { onScreen(Screen.Recordings) }
                 ToolRow(CartaIcons.Import, "Importa", screen == Screen.Import) { onScreen(Screen.Import) }
                 ToolRow(CartaIcons.Settings, "Impostazioni", screen == Screen.Settings) { onScreen(Screen.Settings) }
             }
@@ -293,7 +295,7 @@ private fun DesktopLayout(
                 }
                 Divider()
                 // Tablets get the wide layout but still need Esc, Ctrl and the arrows on screen.
-                ScreenBody(state, screen, showExtraKeys = !state.services.platform.isDesktop, split = true, Modifier.weight(1f).fillMaxWidth(), onTour)
+                ScreenBody(state, screen, showExtraKeys = !state.services.platform.isDesktop, split = true, Modifier.weight(1f).fillMaxWidth(), onTour, onScreen)
             }
         }
         Divider()
@@ -347,18 +349,19 @@ private fun PhoneLayout(
                 }
             }
             Divider()
-            ScreenBody(state, screen, showExtraKeys = true, split = false, Modifier.weight(1f).fillMaxWidth(), onTour)
+            ScreenBody(state, screen, showExtraKeys = true, split = false, Modifier.weight(1f).fillMaxWidth(), onTour, onScreen)
         }
     }
 }
 
 @Composable
-private fun ScreenBody(state: AppState, screen: Screen, showExtraKeys: Boolean, split: Boolean, modifier: Modifier, onTour: () -> Unit) {
+private fun ScreenBody(state: AppState, screen: Screen, showExtraKeys: Boolean, split: Boolean, modifier: Modifier, onTour: () -> Unit, onScreen: (Screen) -> Unit) {
     when (screen) {
         Screen.Sessions -> SessionContent(state, showExtraKeys, split, modifier)
         Screen.Keys -> KeysScreen(state, modifier)
         Screen.Identities -> IdentitiesScreen(state, modifier)
         Screen.Snippets -> SnippetsScreen(state, modifier)
+        Screen.Recordings -> RecordingsScreen(state, onPlay = { onScreen(Screen.Sessions) }, modifier)
         Screen.Settings -> SettingsScreen(state, modifier) {
             SettingsSection("Tutorial", "La guida del primo avvio a schede, file, trasferimenti, snippet e spazi di lavoro.") {
                 Button("Rivedi il tutorial", onClick = onTour, kind = ButtonKind.Secondary)
@@ -374,7 +377,7 @@ private fun ToolsMenu(onScreen: (Screen) -> Unit) {
     Box {
         IconButton(Icons.Default.MoreVert, "Strumenti", onClick = { open = true })
         Menu(expanded = open, onDismiss = { open = false }, alignEnd = true) {
-            listOf(Screen.Keys, Screen.Identities, Screen.Snippets, Screen.Import, Screen.Settings).forEach { target ->
+            listOf(Screen.Keys, Screen.Identities, Screen.Snippets, Screen.Recordings, Screen.Import, Screen.Settings).forEach { target ->
                 MenuItem(target.title, onClick = { open = false; onScreen(target) })
             }
         }

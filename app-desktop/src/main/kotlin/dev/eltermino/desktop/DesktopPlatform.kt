@@ -43,6 +43,17 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
         dialog.files.orEmpty().map { it.absolutePath.replace('\\', '/') }
     }
 
+    override suspend fun saveFile(suggestedName: String, bytes: ByteArray): Boolean = withContext(Dispatchers.Main) {
+        val dialog = FileDialog(window(), "Esporta", FileDialog.SAVE).apply {
+            directory = home.path
+            file = suggestedName
+            isVisible = true
+        }
+        val name = dialog.file ?: return@withContext false
+        withContext(Dispatchers.IO) { File(dialog.directory, name).writeBytes(bytes) }
+        true
+    }
+
     override val isInForeground: Boolean get() = window()?.isActive == true
 
     // jpackage's launcher sets the version; a run from Gradle has none and doesn't look for updates.

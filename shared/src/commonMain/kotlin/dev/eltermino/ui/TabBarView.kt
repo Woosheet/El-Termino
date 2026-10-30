@@ -333,6 +333,10 @@ private fun FrameMenu(state: AppState, frame: Frame, sessions: List<Tab>, onNewG
     if (sessions.size > 1) MenuItem("Separa i riquadri", icon = CartaIcons.SplitSingle, onClick = { close(); state.sessions.separate(frame.id) })
     (sessions.singleOrNull() as? SessionTab)?.let { terminal ->
         MenuItem("Duplica", icon = CartaIcons.Duplicate, onClick = { close(); state.sessions.duplicate(terminal) })
+        if (state.services.recordings != null) {
+            if (terminal.recording.value) MenuItem("Ferma la registrazione", onClick = { close(); state.sessions.stopRecording(terminal) })
+            else MenuItem("Avvia registrazione", onClick = { close(); state.sessions.startRecording(terminal) })
+        }
     }
     MenuDivider()
     MenuItem("Chiudi le altre schede", onClick = {

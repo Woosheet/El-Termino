@@ -37,6 +37,20 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private var pendingCreate: CompletableDeferred<Uri?>? = null
+    private val createDocument = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        pendingCreate?.complete(uri)
+        pendingCreate = null
+    }
+    private val creator: suspend (String) -> Uri? = { name ->
+        withContext(Dispatchers.Main) {
+            pendingCreate?.complete(null)
+            val result = CompletableDeferred<Uri?>().also { pendingCreate = it }
+            createDocument.launch(name)
+            result.await()
+        }
+    }
+
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private val app get() = application as ElTerminoApp
@@ -45,6 +59,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         app.platform.documentPicker = picker
+        app.platform.documentCreator = creator
         setContent {
             // Light or dark status bar icons, to match the theme rather than the system.
             val dark = currentTheme(app.state).dark
@@ -72,7 +87,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         if (app.platform.documentPicker === picker) app.platform.documentPicker = null
+        if (app.platform.documentCreator === creator) app.platform.documentCreator = null
         pendingPick?.complete(null)
+        pendingCreate?.complete(null)
         super.onDestroy()
     }
 }

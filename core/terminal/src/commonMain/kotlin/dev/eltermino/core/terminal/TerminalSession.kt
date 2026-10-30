@@ -107,6 +107,10 @@ class TerminalSession(
             applicationKeypad = emulator.applicationKeypadModeEnabled,
         )
 
+    /** Sees every chunk of shell output before the screen does, for recording a session. */
+    @Volatile
+    var onOutput: ((ByteArray) -> Unit)? = null
+
     @Volatile
     private var shell: ShellChannel = shell
     private var reader: Job? = null
@@ -131,7 +135,10 @@ class TerminalSession(
         this.shell = shell
         reader = sessionScope.launch(processingDispatcher) {
             try {
-                shell.output.collect { emulator.processOutput(it) }
+                shell.output.collect { bytes ->
+                    onOutput?.invoke(bytes)
+                    emulator.processOutput(bytes)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {

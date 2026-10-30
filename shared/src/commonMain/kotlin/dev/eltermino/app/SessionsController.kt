@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -65,6 +66,13 @@ class SessionTab internal constructor(id: String, override val hostId: String, l
 
     internal var job: Job? = null
     internal var link: HostLink? = null
+
+    internal var recorder: AsciicastRecorder? = null
+    internal var recordJob: Job? = null
+    internal val mutableRecording = MutableStateFlow(false)
+
+    /** True while what the terminal shows goes to a recording. */
+    val recording: StateFlow<Boolean> = mutableRecording.asStateFlow()
 }
 
 /** A file panel on a host, or on this device when [hostId] is null. */
@@ -298,6 +306,35 @@ class SessionsController(
         return tab
     }
 
+    /** Starts recording what [tab]'s terminal shows, from now on. */
+    fun startRecording(tab: SessionTab) {
+        val store = services.recordings ?: return
+        val terminal = tab.terminal.value ?: return
+        if (tab.recorder != null) return
+        val size = terminal.size.value
+        val recorder = AsciicastRecorder(store.create(tab.label), tab.label, size.cols, size.rows, nowEpochSeconds())
+        tab.recorder = recorder
+        terminal.onOutput = recorder::output
+        tab.recordJob = scope.launch { terminal.size.drop(1).collect { recorder.resized(it.cols, it.rows) } }
+        tab.mutableRecording.value = true
+    }
+
+    fun stopRecording(tab: SessionTab) {
+        val recorder = tab.recorder ?: return
+        tab.terminal.value?.onOutput = null
+        tab.recordJob?.cancel()
+        recorder.close()
+        tab.recorder = null
+        tab.mutableRecording.value = false
+    }
+
+    /** Plays a recording in a new tab. */
+    fun openReplay(summary: RecordingSummary): ReplayTab? {
+        val bytes = services.recordings?.read(summary.id) ?: return null
+        val cast = runCatching { parseAsciicast(bytes.decodeToString()) }.getOrNull() ?: return null
+        return add(register(ReplayTab(newId(), summary.title.ifBlank { "Registrazione" }, cast, scope)))
+    }
+
     /** The containers on [host], with their state and usage. */
     fun openDocker(host: Host): DockerTab = add(createDocker(host))
 
@@ -388,6 +425,8 @@ class SessionsController(
             is RequestsTab -> SavedPane("requests", tab.hostId)
             is MonitorTab -> SavedPane("monitor", tab.hostId)
             is DockerTab -> SavedPane("docker", tab.hostId)
+            // A replay is for now; it isn't reopened with a layout.
+            is ReplayTab -> null
         }
         return SavedLayout(
             id = newId(),
@@ -467,6 +506,7 @@ class SessionsController(
     fun close(tab: Tab) {
         when (tab) {
             is SessionTab -> {
+                stopRecording(tab)
                 tab.job?.cancel()
                 scope.launch { tab.terminal.value?.let { withContext(NonCancellable) { runCatching { it.close() } } } }
             }
@@ -475,6 +515,7 @@ class SessionsController(
             is RequestsTab -> tab.job?.cancel()
             is MonitorTab -> tab.job?.cancel()
             is DockerTab -> tab.job?.cancel()
+            is ReplayTab -> scope.launch { tab.terminal.close() }
         }
         mutableTabs.update { it - tab }
         updateBar { it.remove(tab.id) }
@@ -607,7 +648,10 @@ class SessionsController(
             return describe(e)
         }
         val terminal = if (existing == null) {
-            TerminalSession(shell, scope, terminalConfig).also { tab.mutableTerminal.value = it }
+            TerminalSession(shell, scope, terminalConfig).also {
+                tab.mutableTerminal.value = it
+                if (services.workspace.workspace.value.ui.recordSessions) startRecording(tab)
+            }
         } else {
             existing.attach(shell, notice = "── Riconnesso alle ${clockTime()} ──")
             existing
@@ -645,6 +689,7 @@ private fun Tab.connectedHost(): kotlinx.coroutines.flow.Flow<String?> = when (t
     is RequestsTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
     is MonitorTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
     is DockerTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
+    is ReplayTab -> flowOf(null)
 }
 
 @OptIn(ExperimentalTime::class)

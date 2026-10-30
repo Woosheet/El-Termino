@@ -256,4 +256,8 @@ data class UiSettings(
     val checkUpdates: Boolean = true,
     /** Set once the first-run welcome has been answered. */
     val welcomeDone: Boolean = false,
+    /** Every terminal records what it shows from the moment it opens. */
+    val recordSessions: Boolean = false,
+    /** Recordings older than this many days are deleted at startup; 0 keeps them. */
+    val recordingDays: Int = 30,
 )

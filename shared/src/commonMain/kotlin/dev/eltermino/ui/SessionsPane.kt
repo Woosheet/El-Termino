@@ -46,6 +46,7 @@ import dev.eltermino.app.AppState
 import dev.eltermino.app.EditorTab
 import dev.eltermino.app.DockerTab
 import dev.eltermino.app.MonitorTab
+import dev.eltermino.app.ReplayTab
 import dev.eltermino.app.RequestsTab
 import dev.eltermino.app.Endpoint
 import dev.eltermino.app.Location
@@ -363,6 +364,7 @@ private fun TabBody(state: AppState, tab: Tab, showExtraKeys: Boolean, focused: 
         is RequestsTab -> RequestsPane(state, tab, focused)
         is MonitorTab -> MonitorPane(tab)
         is DockerTab -> DockerPane(state, tab)
+        is ReplayTab -> ReplayPane(tab, showExtraKeys)
     }
 }
 
@@ -372,7 +374,9 @@ internal fun TabMark(tab: Tab) {
     when (tab) {
         is SessionTab -> {
             val status by tab.status.collectAsState()
-            StatusDot(statusColor(status))
+            val recording by tab.recording.collectAsState()
+            // Red while recording, so it's never on without anyone noticing.
+            StatusDot(if (recording) Carta.colors.danger else statusColor(status))
         }
         is FilesTab -> Icon(CartaIcons.Folder, contentDescription = "File", tint = Carta.colors.textDim, size = 14.dp)
         is EditorTab -> {
@@ -382,6 +386,7 @@ internal fun TabMark(tab: Tab) {
         is RequestsTab -> RequestsTabMark()
         is MonitorTab -> MonitorTabMark()
         is DockerTab -> DockerTabMark()
+        is ReplayTab -> Icon(CartaIcons.Play, contentDescription = "Registrazione", tint = Carta.colors.textDim, size = 14.dp)
     }
 }
 
@@ -514,7 +519,7 @@ private fun Centered(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun Terminal(session: TerminalSession, showExtraKeys: Boolean, focused: Boolean) {
+internal fun Terminal(session: TerminalSession, showExtraKeys: Boolean, focused: Boolean) {
     Column(Modifier.fillMaxSize()) {
         TerminalView(
             session,

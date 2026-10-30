@@ -264,11 +264,12 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Controllo di design di spaziature, padding e stile su tutte le schermate.
   - Icona dell'app a scelta in Impostazioni: El Bigote (quella del pacchetto) o Píxel. Sul desktop cambia finestra e Dock mentre l'app gira; su Android non c'è ancora un'icona del launcher.
   - Criterio da verificare sul tuo Mac: il lettore è provato su dati costruiti nel formato di Termius, non ancora su un Termius vero.
-- Fase 8: in corso dal 30 ottobre 2026.
+- Fase 8: fatta il 30 ottobre 2026.
   - Port forwarding fatto ([decisione 0011](decisions/0011-port-forwarding.md)): regole locali, remote e dinamiche (SOCKS) salvate per host, avvio a mano o automatico alla connessione, riaperte dopo una riconnessione. Provato contro i server di test da `PortForwardFlowTest`.
   - Monitor risorse fatto ([decisione 0012](decisions/0012-resource-monitor.md)): scheda "Risorse" dal menu dell'host con CPU, carico, memoria e swap, rete e dischi, letti da `/proc` e `df` ogni 3 secondi solo con la scheda aperta. Provato da `MonitorFlowTest`.
   - Pannello Docker fatto ([decisione 0013](decisions/0013-docker-panel.md)): scheda "Docker" dal menu dell'host con i container, CPU e memoria, avvio, stop e riavvio; log e shell nel container si aprono in un terminale nuovo. Provato da `DockerFlowTest` contro un finto `docker` nei server di test.
-  - Resta: registrazione sessioni.
+  - Registrazione sessioni fatta ([decisione 0014](decisions/0014-session-recording.md)): file asciicast v2 con il solo output del terminale, avviata dal menu della scheda o sempre dalle Impostazioni, pallino rosso mentre registra, schermata Registrazioni con riproduzione a velocità scelta, esportazione e pulizia dopo 30 giorni. Provata da `RecordingFlowTest`.
+  - Punti aperti: forward solo su 127.0.0.1 e nessun elenco globale dei forward attivi; monitor solo Linux e senza processi; Docker senza compose, immagini e rimozione; la riproduzione ignora i ridimensionamenti. Nessuna delle quattro funzioni è ancora stata provata a mano nell'app o sul telefono.
 
 ## Roadmap
 
@@ -282,7 +283,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 | 5. Richieste HTTP ✓ | Scheda di richieste per host via tunnel SSH, risposta formattata, collezioni con variabili per host, verifiche, esecuzione su un gruppo, import da Postman e curl | Una collezione di verifiche gira su tutti gli host di un gruppo e mostra l'esito per host |
 | 6. Primo avvio, temi e avvisi | Benvenuto con ricerca dei dati di Termius, tema scuro "Notte" e temi iconici, notifiche dei trasferimenti, file trascinati sul terminale | Al primo avvio su un Mac con Termius gli host si importano senza export manuale |
 | 7. Autenticazione avanzata | SSH agent e forwarding, certificati, YubiKey / FIDO2, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
-| 8. Strumenti | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | |
+| 8. Strumenti ✓ | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | Ogni strumento provato contro i server di test |
 | 9. Mosh | Client Mosh in Kotlin | Sessione che sopravvive a un cambio di rete |
 
 ## Test
