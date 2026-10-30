@@ -36,4 +36,7 @@ fun createAppServices(
             File(dir, "prima-del-ripristino-${System.currentTimeMillis()}.etbackup").writeBytes(bytes)
         }
     },
+    readSafetyCopy = {
+        withContext(Dispatchers.IO) { File(dataDir, "backups").listFiles().orEmpty().maxByOrNull { it.name }?.readBytes() }
+    },
 )

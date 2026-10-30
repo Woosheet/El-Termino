@@ -123,4 +123,10 @@ class HostCaTrustTest {
         assertTrue(mixed.covers("a.example.com", 22))
         assertFalse(mixed.covers("secret.example.com", 22))
     }
+
+    @Test
+    fun theDefaultPortCanBeWrittenOutToo() {
+        assertTrue(hostPatternMatches("[10.0.0.1]:22", "10.0.0.1", 22))
+        assertFalse(hostPatternMatches("[10.0.0.1]:22", "10.0.0.1", 2222))
+    }
 }

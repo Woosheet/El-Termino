@@ -54,7 +54,7 @@ internal actual fun Modifier.dragToSystem(browser: FileBrowser, items: () -> Lis
             null
         } else {
             DragAndDropTransferData(
-                DragAndDropTransferable(FilesForDrag(browser::fileSystem, entries.map { it.path })),
+                DragAndDropTransferable(FilesForDrag(browser::fileSystem, entries.map { it.path }, onFailure = browser::notify)),
                 listOf(DragAndDropTransferAction.Copy),
             )
         }

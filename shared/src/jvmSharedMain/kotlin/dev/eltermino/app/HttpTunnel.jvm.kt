@@ -123,7 +123,7 @@ private suspend fun OkHttpClient.follow(first: Request, follow: Boolean): Pair<R
     error("unreachable")
 }
 
-private class UntrustedCertificate(val sha256: String, val subject: String, val reason: String) : CertificateException(reason)
+internal class UntrustedCertificate(val sha256: String, val subject: String, val reason: String) : CertificateException(reason)
 
 /** The system's checks first; if they refuse, only the certificates accepted by hand get through. */
 private class PinningTrustManager(private val system: X509TrustManager, private val accepted: Set<String>) : X509TrustManager {
@@ -140,6 +140,13 @@ private class PinningTrustManager(private val system: X509TrustManager, private 
     override fun getAcceptedIssuers(): Array<X509Certificate> = system.acceptedIssuers
 }
 
+/** A certificate for another name gets the same choice as any other the system refuses. */
+internal fun checkAcceptedName(certificate: X509Certificate, accepted: Set<String>): Boolean {
+    val sha256 = certificate.sha256()
+    if (sha256 in accepted) return true
+    throw IOException(UntrustedCertificate(sha256, certificate.subjectX500Principal.name, "il certificato è per un altro nome"))
+}
+
 private fun X509Certificate.sha256() = MessageDigest.getInstance("SHA-256").digest(encoded).toHexString()
 
 private val systemTrust: X509TrustManager by lazy {
@@ -153,7 +160,8 @@ private fun OkHttpClient.Builder.pinning(accepted: Set<String>): OkHttpClient.Bu
     sslSocketFactory(context.socketFactory, manager)
     // An accepted certificate is good for its address, whatever name it carries.
     hostnameVerifier { host, session ->
-        OkHostnameVerifier.verify(host, session) || (session.peerCertificates.firstOrNull() as? X509Certificate)?.sha256() in accepted
+        val certificate = session.peerCertificates.firstOrNull() as? X509Certificate
+        OkHostnameVerifier.verify(host, session) || certificate?.let { checkAcceptedName(it, accepted) } == true
     }
 }
 

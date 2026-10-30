@@ -7,11 +7,14 @@ import dev.eltermino.core.data.KnownHost
 import dev.eltermino.core.data.SavedLayout
 import dev.eltermino.core.data.SavedPane
 import dev.eltermino.core.data.SavedTab
+import dev.eltermino.core.data.TrustedCa
+import dev.eltermino.core.data.TrustedHttpCert
 import dev.eltermino.core.data.UiSettings
 import dev.eltermino.core.data.Workspace
 import dev.eltermino.core.data.mergedWith
 import dev.eltermino.core.data.WorkspaceStore
 import dev.eltermino.core.vault.BackupCipher
+import dev.eltermino.core.vault.BackupTooNewException
 import dev.eltermino.core.vault.EncryptedFileVault
 import dev.eltermino.core.vault.MasterKeyProvider
 import dev.eltermino.core.vault.Vault
@@ -181,7 +184,7 @@ class BackupFlowTest {
         val device = Device()
         val json = """{"formatVersion":99,"workspace":{},"secrets":{}}"""
         val file = BackupCipher.seal(json.encodeToByteArray(), password)
-        assertFailsWith<VaultException> { device.service.read(file, password) }
+        assertFailsWith<BackupTooNewException> { device.service.read(file, password) }
     }
 
     @Test
@@ -189,7 +192,7 @@ class BackupFlowTest {
         val device = Device()
         val json = """{"formatVersion":1,"workspace":{"version":99},"secrets":{}}"""
         val file = BackupCipher.seal(json.encodeToByteArray(), password)
-        assertFailsWith<VaultException> { device.service.read(file, password) }
+        assertFailsWith<BackupTooNewException> { device.service.read(file, password) }
     }
 
     @Test
@@ -264,5 +267,39 @@ class BackupFlowTest {
         val full = FullVault(device.vault).apply { fullAfter = 1 }
         BackupService(device.store, full) {}.restore(content, replaceAll = true, password)
         assertEquals("del backup", device.password())
+    }
+
+    @Test
+    fun thePreviewCountsWhatItWouldTrust() = runTest {
+        val source = Device().apply {
+            store.update {
+                it.copy(
+                    trustedCas = listOf(TrustedCa("c", "ca", "ssh-ed25519 AAAA", "impronta", listOf("*"))),
+                    trustedHttpCerts = listOf(TrustedHttpCert("h", 443, "aa")),
+                )
+            }
+        }
+        val device = Device()
+        val preview = device.service.preview(device.service.read(source.service.export(password), password))
+        assertEquals(1, preview.cas)
+        assertEquals(1, preview.httpCerts)
+    }
+
+    @Test
+    fun aMergedCertificateLeavesTheOneAcceptedHere() {
+        val here = Workspace(trustedHttpCerts = listOf(TrustedHttpCert("h", 443, "qui")))
+        val backup = Workspace(trustedHttpCerts = listOf(TrustedHttpCert("h", 443, "altro"), TrustedHttpCert("k", 443, "nuovo")))
+        assertEquals(listOf("qui", "nuovo"), here.mergedWith(backup).trustedHttpCerts.map { it.sha256 })
+    }
+
+    @Test
+    fun theLastSafetyCopyCanBeTakenOut() = runTest {
+        val dir = Files.createTempDirectory("copy").toFile().apply { deleteOnExit() }
+        val key = Random.nextBytes(32)
+        val services = createAppServices(dir, MasterKeyProvider { key.copyOf() }, TestPlatform())
+        assertNull(services.backup.lastSafetyCopy())
+        val content = services.backup.read(services.backup.export(password), password)
+        services.backup.restore(content, replaceAll = true, password)
+        assertNotNull(services.backup.read(services.backup.lastSafetyCopy()!!, password))
     }
 }

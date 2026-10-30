@@ -391,7 +391,7 @@ class SessionsController(
                 command = command,
             )
         } else {
-            val lease = tab.lease.value ?: return
+            val lease = dockerLease(tab) ?: return
             scope.launch { runDockerCommand(tab, lease, project.name, project.name, command) }
         }
     }
@@ -399,9 +399,12 @@ class SessionsController(
     fun dockerConfirm(tab: DockerTab) {
         val confirmation = tab.confirmation.value ?: return
         tab.mutableConfirmation.value = null
-        val lease = tab.lease.value ?: return
+        val lease = dockerLease(tab) ?: return
         scope.launch { runDockerCommand(tab, lease, confirmation.busyId, confirmation.label, confirmation.command) }
     }
+
+    private fun dockerLease(tab: DockerTab): LinkLease? =
+        tab.lease.value ?: null.also { tab.mutableActionError.value = "${tab.label} non è collegato" }
 
     fun dockerCancel(tab: DockerTab) {
         tab.mutableConfirmation.value = null

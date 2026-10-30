@@ -64,4 +64,10 @@ class FileWorkspaceStoreTest {
         val loop = Workspace(hosts = listOf(Host("x", "x", "x", jumpHostId = "y"), Host("y", "y", "y", jumpHostId = "x")))
         assertEquals(listOf("y"), loop.jumpChain(loop.hosts.first()).map { it.label })
     }
+
+    @Test
+    fun theVersionIsWrittenSoThatANewerFileIsRecognised() {
+        val text = kotlinx.serialization.json.Json.encodeToString(Workspace.serializer(), Workspace())
+        assertTrue("\"version\"" in text, text)
+    }
 }

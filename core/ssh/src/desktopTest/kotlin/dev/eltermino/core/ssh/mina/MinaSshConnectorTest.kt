@@ -496,4 +496,11 @@ internal fun sshKeygenFingerprint(file: java.io.File): String {
     val output = process.inputStream.bufferedReader().readText()
     check(process.waitFor() == 0) { output }
     return output.trim().split(Regex("\\s+"))[1]
+
+    @Test
+    fun aCaSigningWithSha1IsNotAccepted() {
+        assertFalse(caSignatureAllowed("ssh-rsa"))
+        assertTrue(caSignatureAllowed("rsa-sha2-512"))
+        assertTrue(caSignatureAllowed("ssh-ed25519"))
+    }
 }

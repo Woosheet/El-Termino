@@ -19,8 +19,10 @@ class AppServices(
     val recordings: RecordingStore? = null,
     /** Keeps the encrypted copy of what a restore is about to change. */
     saveSafetyCopy: suspend (ByteArray) -> Unit = {},
+    /** The newest of those copies. */
+    readSafetyCopy: suspend () -> ByteArray? = { null },
 ) {
-    val backup = BackupService(workspace, vault, platform.appVersion, saveSafetyCopy)
+    val backup = BackupService(workspace, vault, platform.appVersion, readSafetyCopy, saveSafetyCopy)
 }
 
 /** What differs between desktop and Android. */

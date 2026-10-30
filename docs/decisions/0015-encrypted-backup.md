@@ -12,7 +12,7 @@ Data: 30 ottobre 2026. Stato: accettata.
 - **Unisci:** gli elementi con lo stesso id prendono la versione del backup, gli altri restano. Per i known hosts si aggiungono solo le voci nuove: una chiave diversa per lo stesso host resta quella locale e l'anteprima la segnala, così un backup vecchio non cambia una chiave in silenzio.
 - **Sostituisci tutto:** chiede conferma. Le impostazioni del dispositivo restano; l'ultima sessione si tiene solo se i suoi host esistono ancora.
 
-**Niente stati a metà.** Prima di cambiare qualcosa, l'app salva in `backups/` una copia cifrata con la stessa password appena digitata, che si riapre come un backup normale. I segreti entrano sopra i vecchi, poi si salva il workspace, e solo dopo i vecchi escono: un crash non lascia mai riferimenti a segreti mancanti. Se il salvataggio del workspace fallisce, il vault torna com'era.
+**Niente stati a metà.** Prima di cambiare qualcosa, l'app salva in `backups/` una copia cifrata con la stessa password appena digitata, che si riapre come un backup normale. I segreti entrano sopra i vecchi, poi si salva il workspace, e solo dopo i vecchi escono: un crash non lascia mai riferimenti a segreti mancanti. Se il salvataggio del workspace fallisce, il vault torna com'era. L'ultima copia si riprende da Impostazioni con "Salva l'ultima copia di sicurezza…".
 
 ## Restano fuori
 

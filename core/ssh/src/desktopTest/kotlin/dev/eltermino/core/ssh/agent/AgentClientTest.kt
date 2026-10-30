@@ -103,4 +103,10 @@ fun startTestAgent(socket: File, vararg keys: String): Process {
         check(add.start().waitFor() == 0) { "ssh-add failed" }
     }
     return agent!!
+
+    @Test
+    fun pageantsPipeHasAnUnpredictableEnd() {
+        val pipes = listOf("openssh-ssh-agent", "pageant.anna.0a1b2c", "pageant.bruno.ffff", "altro")
+        assertEquals(listOf("openssh-ssh-agent", "pageant.anna.0a1b2c"), agentPipes(pipes, "anna").map { it.substringAfterLast('\\') })
+    }
 }

@@ -163,4 +163,13 @@ class DockerFlowTest {
         assertNotNull(tab.lease.value)
         assertEquals(null, tab.containers.value)
     }
+
+    @Test
+    fun aConfirmationWithNoLinkSaysSo() = withApp { state ->
+        val tab = state.freshDocker()
+        state.sessions.dockerRemove(tab, DockerKind.Volume, "dati", "dati")
+        tab.mutableLease.value = null
+        state.sessions.dockerConfirm(tab)
+        assertEquals("basic non è collegato", tab.actionError.value)
+    }
 }

@@ -9,6 +9,7 @@ import dev.eltermino.core.data.knownHostConflicts
 import dev.eltermino.core.data.mergedWith
 import dev.eltermino.core.data.newId
 import dev.eltermino.core.data.replacedBy
+import dev.eltermino.core.vault.BackupTooNewException
 import dev.eltermino.core.vault.Vault
 import dev.eltermino.core.vault.VaultException
 import kotlinx.coroutines.NonCancellable
@@ -43,6 +44,9 @@ class BackupPreview(
     val collections: Int,
     val layouts: Int,
     val knownHostConflicts: List<KnownHost>,
+    /** What the backup would have this device trust. */
+    val cas: Int = 0,
+    val httpCerts: Int = 0,
 )
 
 /** Everything in one password-encrypted file, to move between devices. */
@@ -50,9 +54,13 @@ class BackupService(
     private val store: WorkspaceStore,
     private val vault: Vault,
     private val appVersion: String? = null,
+    /** The encrypted copy the last restore left, if any. */
+    private val readSafetyCopy: suspend () -> ByteArray? = { null },
     /** Keeps the encrypted copy of what a restore is about to change. */
     private val saveSafetyCopy: suspend (ByteArray) -> Unit,
 ) {
+    suspend fun lastSafetyCopy(): ByteArray? = readSafetyCopy()
+
     suspend fun export(password: CharArray): ByteArray {
         val secrets = vault.snapshot()
         val content = BackupContent(
@@ -81,7 +89,7 @@ class BackupService(
             plain.fill(0)
         }
         if (content.formatVersion > BackupContent.CURRENT_FORMAT || content.workspace.version > Workspace.CURRENT_VERSION) {
-            throw VaultException("Backup written by a newer version of the app")
+            throw BackupTooNewException("Backup written by a newer version of the app")
         }
         return content
     }
@@ -95,6 +103,8 @@ class BackupService(
             collections = httpCollections.size,
             layouts = savedLayouts.size,
             knownHostConflicts = store.workspace.value.knownHostConflicts(this),
+            cas = trustedCas.size,
+            httpCerts = trustedHttpCerts.size,
         )
     }
 

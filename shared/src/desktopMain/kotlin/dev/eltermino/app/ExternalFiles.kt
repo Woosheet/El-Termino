@@ -1,13 +1,16 @@
 package dev.eltermino.app
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.Transferable
 import java.awt.datatransfer.UnsupportedFlavorException
 import java.io.File
+import java.io.IOException
 import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.attribute.BasicFileAttributes
@@ -113,10 +116,15 @@ internal suspend fun downloadForDrag(fs: FileSystem, paths: List<String>, folder
 }
 
 /** What a drag out of the app carries: the download happens when the system asks for the files, on drop. */
-class FilesForDrag(private val fs: suspend () -> FileSystem, private val paths: List<String>) : Transferable {
+class FilesForDrag(
+    private val fs: suspend () -> FileSystem,
+    private val paths: List<String>,
+    private val timeoutMillis: Long = 5 * 60_000,
+    private val onFailure: (String) -> Unit = {},
+) : Transferable {
     private val files: List<File> by lazy {
         // shortcut: blocks the window until the download ends, since AWT wants the files back from this call; promised files would need native code on each system.
-        runBlocking { downloadForDrag(fs(), paths, dragFolder()) }
+        runBlocking { withTimeout(timeoutMillis) { downloadForDrag(fs(), paths, dragFolder()) } }
     }
 
     override fun getTransferDataFlavors() = arrayOf(DataFlavor.javaFileListFlavor)
@@ -125,7 +133,15 @@ class FilesForDrag(private val fs: suspend () -> FileSystem, private val paths: 
 
     override fun getTransferData(flavor: DataFlavor): Any {
         if (!isDataFlavorSupported(flavor)) throw UnsupportedFlavorException(flavor)
-        return files
+        return try {
+            files
+        } catch (e: TimeoutCancellationException) {
+            onFailure("Il trascinamento ha impiegato troppo: usa \"Copia in…\"")
+            throw IOException("Drag download timed out", e)
+        } catch (e: Exception) {
+            onFailure("Trascinamento non riuscito: ${e.message}")
+            throw IOException("Drag download failed", e)
+        }
     }
 
     private companion object {
