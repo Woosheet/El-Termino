@@ -82,6 +82,7 @@ internal class MinaSshConnection(
                 ptyColumns = pty.cols
                 ptyLines = pty.rows
                 setRedirectErrorStream(true)
+                isAgentForwarding = target.agentForwarding
             }
         }
         val opened = try {

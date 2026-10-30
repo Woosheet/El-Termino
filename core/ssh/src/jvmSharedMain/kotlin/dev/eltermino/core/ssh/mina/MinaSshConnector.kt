@@ -59,7 +59,10 @@ class MinaSshConnector(
                 CoreModuleProperties.HEARTBEAT_INTERVAL.set(this, config.keepAliveInterval.toJavaDuration())
                 CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(this, config.keepAliveMaxMissed)
             }
-            this@MinaSshConnector.agent?.let { agentFactory = MinaAgentFactory(it) }
+            this@MinaSshConnector.agent?.let {
+                agentFactory = MinaAgentFactory(it)
+                channelFactories = channelFactories + agentForwardingChannels
+            }
             start()
         }
     }
@@ -98,6 +101,7 @@ class MinaSshConnector(
             sessions.asReversed().forEach { it.close(true) }
             throw e
         }
+        if (target.agentForwarding && agent != null) sessions.last().setAttribute(FORWARD_AGENT, true)
         return MinaSshConnection(target, sessions.last(), hops = sessions.dropLast(1), config)
     }
 

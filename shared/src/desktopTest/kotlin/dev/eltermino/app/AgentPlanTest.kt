@@ -50,4 +50,21 @@ class AgentPlanTest {
     fun plannerSkipsAgentWhereThereIsNone() = runTest {
         assertFalse(plan(workspace(useAgent = true), agentSupported = false).any { it is AuthMethod.Agent })
     }
+
+    @Test
+    fun forwardingFollowsTheHostOnly() = runTest {
+        val jump = Host(id = "j", label = "j", address = "j.example.com", identityId = "i", agentForwarding = true)
+        val target = host.copy(jumpHostId = "j", agentForwarding = true)
+        val workspace = workspace(useAgent = false, password = "p").let { it.copy(hosts = listOf(jump, target)) }
+        val plan = ConnectionPlanner(workspace, Prompter(), WorkspaceActions(services), LazySecrets(), mutableListOf(), agentSupported = true).plan(target)
+        assertTrue(plan.agentForwarding)
+        assertFalse(plan.jumpHosts.single().agentForwarding)
+    }
+
+    @Test
+    fun noForwardingWhereThereIsNoAgent() = runTest {
+        val target = host.copy(agentForwarding = true)
+        val plan = ConnectionPlanner(workspace(useAgent = false, password = "p"), Prompter(), WorkspaceActions(services), LazySecrets(), mutableListOf(), agentSupported = false).plan(target)
+        assertFalse(plan.agentForwarding)
+    }
 }

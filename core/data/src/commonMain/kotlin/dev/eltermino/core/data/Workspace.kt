@@ -56,6 +56,8 @@ data class Host(
     /** Folders saved in the file panel. */
     val bookmarks: List<String> = emptyList(),
     val forwards: List<PortForwardRule> = emptyList(),
+    /** Lets this host use this device's SSH agent while connected. */
+    val agentForwarding: Boolean = false,
 )
 
 /**
