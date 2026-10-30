@@ -3,6 +3,7 @@ package dev.eltermino.app
 import dev.eltermino.core.ssh.ShellChannel
 import dev.eltermino.core.terminal.TerminalSession
 import dev.eltermino.core.terminal.TerminalSessionConfig
+import dev.eltermino.core.terminal.TerminalSize
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.seconds
 
 /** A recording played back in a terminal, as it appeared, at the chosen speed. */
 class ReplayTab internal constructor(id: String, label: String, val cast: Asciicast, private val scope: CoroutineScope) : Tab(id, label) {
@@ -46,11 +49,18 @@ class ReplayTab internal constructor(id: String, label: String, val cast: Asciic
     }
 }
 
+/** The size in a resize event's "COLSxROWS"; null when it isn't one a terminal can take. */
+internal fun parseCastSize(text: String): TerminalSize? {
+    val (cols, rows) = Regex("""(\d{1,4})x(\d{1,4})""").matchEntire(text)?.destructured ?: return null
+    return TerminalSize(cols.toInt(), rows.toInt()).takeIf { it.cols > 0 && it.rows > 0 }
+}
+
 /** A "shell" that plays [tab]'s recording; what's typed into it goes nowhere. */
-private class ReplayChannel(private val tab: ReplayTab) : ShellChannel {
+internal class ReplayChannel(private val tab: ReplayTab) : ShellChannel {
     override val output: Flow<ByteArray> = flow {
         // Starts from a clean screen, also when played again over the last frame.
         emit("\u001Bc".encodeToByteArray())
+        resizeTo(TerminalSize(tab.cast.width, tab.cast.height))
         var previous = 0.0
         for (event in tab.cast.events) {
             var left = (event.time - previous).coerceIn(0.0, ReplayTab.IDLE_LIMIT)
@@ -64,12 +74,21 @@ private class ReplayChannel(private val tab: ReplayTab) : ShellChannel {
             }
             tab.playing.first { it }
             tab.mutablePosition.value = event.time
-            if (event.kind == "o") emit(event.data.encodeToByteArray())
+            when (event.kind) {
+                "o" -> emit(event.data.encodeToByteArray())
+                "r" -> parseCastSize(event.data)?.let { resizeTo(it) }
+            }
         }
         tab.mutableFinished.value = true
         tab.playing.value = false
         // Stays open, so the last frame stays on screen instead of a "closed" notice.
         awaitCancellation()
+    }
+
+    /** Waits for it, so what comes next lands at the new size; a view that resizes too shouldn't stall the replay. */
+    private suspend fun resizeTo(size: TerminalSize) {
+        tab.terminal.resize(size.cols, size.rows)
+        withTimeoutOrNull(1.seconds) { tab.terminal.size.first { it == size } }
     }
 
     override suspend fun write(bytes: ByteArray) {}

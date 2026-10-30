@@ -1,5 +1,9 @@
 package dev.eltermino.app
 
+import dev.eltermino.core.terminal.TerminalSize
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
@@ -16,6 +20,48 @@ import kotlin.test.assertTrue
 
 /** Records a terminal on the basic testenv host, then plays it back. */
 class RecordingFlowTest {
+    private fun play(vararg events: AsciicastEvent, check: (ReplayTab) -> Unit) {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val cast = Asciicast("t", 80, 24, 0, events.toList())
+            val tab = ReplayTab("r", "t", cast, scope)
+            tab.speed.value = 8f
+            runBlocking {
+                tab.terminal.attach(ReplayChannel(tab))
+                withTimeout(30_000) { tab.finished.first { it } }
+            }
+            check(tab)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun replayAppliesResizeEvents() = play(AsciicastEvent(0.1, "r", "100x30")) { tab ->
+        assertEquals(TerminalSize(100, 30), tab.terminal.size.value)
+    }
+
+    @Test
+    fun resizeEventOrderKept() {
+        val line = "x".repeat(90)
+        play(AsciicastEvent(0.1, "r", "100x30"), AsciicastEvent(0.2, "o", line), AsciicastEvent(0.3, "r", "120x30")) { tab ->
+            // Written at 100 columns: at the 80 of the header it would have wrapped.
+            assertTrue(tab.terminal.snapshotText().lines().any { it == line }, tab.terminal.snapshotText())
+            assertEquals(TerminalSize(120, 30), tab.terminal.size.value)
+        }
+    }
+
+    @Test
+    fun malformedResizeIgnored() = play(
+        AsciicastEvent(0.1, "r", "largo"),
+        AsciicastEvent(0.2, "r", "0x0"),
+        AsciicastEvent(0.3, "r", "99999999999x1"),
+        AsciicastEvent(0.4, "o", "fine"),
+    ) { tab ->
+        assertEquals(TerminalSize(80, 24), tab.terminal.size.value)
+        assertTrue("fine" in tab.terminal.snapshotText())
+    }
+
     @Test
     fun recordAndReplayATerminal() {
         val state = AppState(testServices())
