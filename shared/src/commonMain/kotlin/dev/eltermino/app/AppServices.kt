@@ -91,6 +91,9 @@ interface Platform {
     /** Opens [url] in the browser. */
     fun openUrl(url: String) {}
 
+    /** Opens a private copy of a remote file with the system's app for it; null where there's no such thing. */
+    suspend fun openExternally(name: String, bytes: ByteArray): ExternalFile? = null
+
     /** Whether [authenticate] can ask for a fingerprint or the system password here. */
     val biometricAvailable: Boolean get() = false
 

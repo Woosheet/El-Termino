@@ -80,9 +80,29 @@ class SessionTab internal constructor(id: String, override val hostId: String, l
 class FilesTab internal constructor(id: String, override val hostId: String?, label: String, val browser: FileBrowser) : Tab(id, label)
 
 /** A text file opened from a file panel, with its own share of the host's link. */
-class EditorTab internal constructor(id: String, override val hostId: String?, label: String, val path: String) : Tab(id, label) {
+class EditorTab internal constructor(
+    id: String,
+    override val hostId: String?,
+    label: String,
+    val path: String,
+    /** The text lives in an app of the system; this tab only uploads its saves. */
+    val external: Boolean = false,
+) : Tab(id, label) {
     internal val mutableEditor = MutableStateFlow<RemoteEditor?>(null)
     internal var release: (suspend () -> Unit)? = null
+    internal var job: Job? = null
+
+    /** Stops following the external file, after uploading a save not seen yet. */
+    internal var finishExternal: (() -> Unit)? = null
+
+    /** External saves uploaded so far. */
+    val uploads = MutableStateFlow(0)
+
+    /** Waiting for an answer: the file changed on the server, replace it anyway? */
+    val conflict = MutableStateFlow<CompletableDeferred<Boolean>?>(null)
+
+    /** Why the last external save didn't reach the server; the next one tries again. */
+    val uploadError = MutableStateFlow<String?>(null)
 
     /** The text as loaded; the editor keeps its own copy while you type. */
     val loaded = MutableStateFlow<String?>(null)
@@ -273,6 +293,9 @@ class SessionsController(
     /** [path] as text in a new tab; it gets its own share of the link, so closing the panel doesn't stop it. */
     fun openEditor(endpoint: Endpoint, path: String): EditorTab = add(createEditor(endpoint, path))
 
+    /** [path] in the system's app for it; the tab stays open to upload every save. */
+    fun openExternalEditor(endpoint: Endpoint, path: String): EditorTab = add(createEditor(endpoint, path, external = true))
+
     /** HTTP requests sent from [host], through its shared link. */
     fun openRequests(host: Host): RequestsTab = add(createRequests(host))
 
@@ -380,15 +403,19 @@ class SessionsController(
         return register(FilesTab(newId(), host?.id, host?.label ?: "Questo computer", browser))
     }
 
-    private fun createEditor(endpoint: Endpoint, path: String): EditorTab {
+    private fun createEditor(endpoint: Endpoint, path: String, external: Boolean = false): EditorTab {
         val host = (endpoint as? Endpoint.Remote)?.let { services.workspace.workspace.value.host(it.hostId) }
-        val tab = register(EditorTab(newId(), host?.id, fileName(path), path))
-        scope.launch {
+        val tab = register(EditorTab(newId(), host?.id, fileName(path), path, external))
+        tab.job = scope.launch {
             try {
                 val fs: FileSystem = if (host != null) {
                     connections.files(host).also { remote -> tab.release = { remote.release() } }
                 } else {
                     services.localFiles ?: throw IllegalStateException("Su questo dispositivo non ci sono file locali")
+                }
+                if (external) {
+                    followExternally(tab, RemoteEditor(endpoint, path, fs, EXTERNAL_EDIT_LIMIT_BYTES))
+                    return@launch
                 }
                 val editor = RemoteEditor(endpoint, path, fs)
                 tab.loaded.value = editor.load()
@@ -400,6 +427,31 @@ class SessionsController(
             }
         }
         return tab
+    }
+
+    private suspend fun followExternally(tab: EditorTab, editor: RemoteEditor) {
+        val file = services.platform.openExternally(tab.label, editor.loadBytes())
+            ?: throw IllegalStateException("Su questo dispositivo non si può aprire un editor esterno")
+        tab.finishExternal = file::finish
+        tab.mutableEditor.value = editor
+        tab.loaded.value = ""
+        followExternalFile(
+            editor,
+            file,
+            conflict = { _ ->
+                val answer = CompletableDeferred<Boolean>()
+                tab.conflict.value = answer
+                answer.await().also { tab.conflict.value = null }
+            },
+            saved = {
+                tab.uploads.update { it + 1 }
+                tab.uploadError.value = null
+            },
+            failed = { tab.uploadError.value = failureMessage(it) },
+        )
+        tab.finishExternal = null
+        tab.release?.invoke()
+        tab.release = null
     }
 
     private fun <T : Tab> register(tab: T): T {
@@ -512,7 +564,13 @@ class SessionsController(
                 scope.launch { tab.terminal.value?.let { withContext(NonCancellable) { runCatching { it.close() } } } }
             }
             is FilesTab -> scope.launch { tab.browser.close() }
-            is EditorTab -> scope.launch { tab.release?.invoke() }
+            is EditorTab -> tab.finishExternal?.let { finish ->
+                tab.conflict.value?.complete(false)
+                finish()
+            } ?: scope.launch {
+                tab.job?.cancel()
+                tab.release?.invoke()
+            }
             is RequestsTab -> tab.job?.cancel()
             is MonitorTab -> tab.job?.cancel()
             is DockerTab -> tab.job?.cancel()

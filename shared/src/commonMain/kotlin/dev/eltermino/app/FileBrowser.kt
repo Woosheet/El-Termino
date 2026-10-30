@@ -126,6 +126,10 @@ class FileBrowser internal constructor(
 
     fun chmod(entry: RemoteFile, mode: Int) = operate { fs -> fs.chmod(entry.path, mode) }
 
+    fun notify(message: String) {
+        mutableMessage.value = message
+    }
+
     fun dismissMessage() {
         mutableMessage.value = null
     }
@@ -172,19 +176,27 @@ class RemoteEditor internal constructor(
     }
 
     suspend fun load(): String {
+        val bytes = loadBytes()
+        if (bytes.take(8192).any { it == 0.toByte() }) throw IllegalStateException("${fileName(path)} sembra un file binario")
+        return bytes.decodeToString()
+    }
+
+    /** The file as it is, for an external editor, which can open anything. */
+    internal suspend fun loadBytes(): ByteArray {
         val file = fs.stat(path) ?: throw IllegalStateException("${fileName(path)} non esiste più")
         if (file.size > maxBytes) throw IllegalStateException("${fileName(path)} è troppo grande per l'editor (${file.size / 1024} KB)")
         val bytes = readAll(file.size)
-        if (bytes.take(8192).any { it == 0.toByte() }) throw IllegalStateException("${fileName(path)} sembra un file binario")
         known = file
-        return bytes.decodeToString()
+        return bytes
     }
 
     /**
      * Writes to a temporary file next to it, then renames it over the original, so a
      * dropped connection never leaves half a file. Permissions are kept.
      */
-    suspend fun save(text: String, force: Boolean = false): SaveResult {
+    suspend fun save(text: String, force: Boolean = false): SaveResult = save(text.encodeToByteArray(), force)
+
+    internal suspend fun save(bytes: ByteArray, force: Boolean = false): SaveResult {
         val current = fs.stat(path)
         val before = known
         if (!force && current != null && before != null &&
@@ -195,7 +207,7 @@ class RemoteEditor internal constructor(
         val temp = childPath(parentPath(path), ".${fileName(path)}.eltermino-${newId().take(8)}")
         try {
             fs.openWrite(temp).apply {
-                write(text.encodeToByteArray())
+                write(bytes)
                 close()
             }
             (current ?: before)?.permissions?.takeIf { it != 0 }?.let { fs.chmod(temp, it) }

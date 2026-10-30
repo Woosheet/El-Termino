@@ -53,6 +53,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.app.FileBrowser
 import dev.eltermino.app.ConflictPolicy
 import dev.eltermino.app.Endpoint
 import dev.eltermino.app.FileSort
@@ -141,6 +142,9 @@ internal val LocalFileDrag = staticCompositionLocalOf<FileDrag?> { null }
 internal val LocalCopyFlow = staticCompositionLocalOf<CopyFlow?> { null }
 
 internal expect fun Modifier.onFilesDropped(onHover: (Boolean) -> Unit, onDrop: (List<String>) -> Unit): Modifier
+
+/** Starts a drag towards the system's file manager; [items] are what's dragged, downloaded on drop. */
+internal expect fun Modifier.dragToSystem(browser: FileBrowser, items: () -> List<RemoteFile>): Modifier
 
 private sealed interface FileDialogState {
     data object NewFolder : FileDialogState
@@ -262,6 +266,8 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                                     if (!modifiers.isShiftPressed) anchor = index
                                 },
                                 onOpen = { openEntry(entry) },
+                                dragOut = { if (entry.path in selection) selected else listOf(entry) },
+                                browser = browser,
                                 onDragStart = { position ->
                                     if (drag == null) return@FileRow
                                     val items = if (entry.path in selection) selected else listOf(entry)
@@ -282,6 +288,9 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                                         MenuItem("Apri", onClick = { close(); openEntry(entry) })
                                     } else {
                                         MenuItem("Modifica", onClick = { close(); state.sessions.openEditor(browser.endpoint, entry.path) })
+                                        if (state.services.platform.isDesktop) {
+                                            MenuItem("Apri con editor esterno", onClick = { close(); state.sessions.openExternalEditor(browser.endpoint, entry.path) })
+                                        }
                                     }
                                     CopyTargets(state, targets) { target -> close(); copyTo(target, listOf(entry)) }
                                     MenuDivider()
@@ -451,6 +460,8 @@ private fun FileRow(
     showPermissions: Boolean,
     onClick: () -> Unit,
     onOpen: () -> Unit,
+    dragOut: () -> List<RemoteFile>,
+    browser: FileBrowser,
     onDragStart: (Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
@@ -498,6 +509,8 @@ private fun FileRow(
                 contentDescription = null,
                 tint = if (entry.isDirectory) colors.accent else colors.textDim,
                 size = 16.dp,
+                // The row's own drag copies between panels; this one leaves the app.
+                modifier = Modifier.dragToSystem(browser, dragOut),
             )
             Text(entry.name, modifier = Modifier.padding(start = 6.dp), style = Carta.type.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
             entry.linkTarget?.let {

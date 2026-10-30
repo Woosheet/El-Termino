@@ -3,6 +3,8 @@ package dev.eltermino.desktop
 import dev.eltermino.app.PickedFile
 import com.github.javakeyring.Keyring
 import dev.eltermino.app.LATEST_RELEASE_URL
+import dev.eltermino.app.DesktopExternalFile
+import dev.eltermino.app.ExternalFile
 import dev.eltermino.app.Platform
 import dev.eltermino.app.ReleaseAsset
 import dev.eltermino.app.TermiusScan
@@ -107,6 +109,17 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
 
     override fun openUpdateOnExit() {
         updater?.relaunchAfterExit()
+    }
+
+    override suspend fun openExternally(name: String, bytes: ByteArray): ExternalFile = withContext(Dispatchers.IO) {
+        DesktopExternalFile(name, bytes).also { file ->
+            try {
+                java.awt.Desktop.getDesktop().open(File(file.path))
+            } catch (e: Exception) {
+                file.close()
+                throw e
+            }
+        }
     }
 
     override fun openUrl(url: String) {

@@ -91,7 +91,43 @@ internal fun EditorPane(state: AppState, tab: EditorTab, focused: Boolean) {
             Gap(height = 12)
             Text("Apertura di ${tab.label}…", color = Carta.colors.textDim)
         }
+        tab.external -> ExternalEditorBody(state, tab)
         else -> EditorBody(tab, ready, text, focused)
+    }
+}
+
+@Composable
+private fun ExternalEditorBody(state: AppState, tab: EditorTab) {
+    val uploads by tab.uploads.collectAsState()
+    val uploadError by tab.uploadError.collectAsState()
+    val conflict by tab.conflict.collectAsState()
+    Column(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Text("${tab.label} è aperto nell'editor esterno", style = Carta.type.bodyStrong)
+        Gap(height = 4)
+        Text(
+            uploadError ?: if (uploads == 0) "Ogni salvataggio viene caricato sul server." else "Salvataggi caricati: $uploads",
+            style = Carta.type.small,
+            color = if (uploadError != null) Carta.colors.danger else Carta.colors.textDim,
+            textAlign = TextAlign.Center,
+        )
+        Gap(height = 14)
+        Button("Chiudi", onClick = { state.sessions.close(tab) }, kind = ButtonKind.Secondary)
+    }
+    conflict?.let { answer ->
+        Dialog(
+            onDismiss = { answer.complete(false) },
+            title = "${tab.label} è cambiato sul server",
+            actions = {
+                Button("Non caricare", onClick = { answer.complete(false) }, kind = ButtonKind.Secondary)
+                Button("Sostituisci", onClick = { answer.complete(true) })
+            },
+        ) {
+            Text("Qualcuno l'ha modificato dopo che l'hai aperto. Sostituendolo perdi quelle modifiche.")
+        }
     }
 }
 

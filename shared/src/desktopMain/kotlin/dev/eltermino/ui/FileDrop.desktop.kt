@@ -1,6 +1,7 @@
 package dev.eltermino.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.draganddrop.dragAndDropSource
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -10,8 +11,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
+import androidx.compose.ui.draganddrop.DragAndDropTransferAction
+import androidx.compose.ui.draganddrop.DragAndDropTransferData
+import androidx.compose.ui.draganddrop.DragAndDropTransferable
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
+import dev.eltermino.app.FileBrowser
+import dev.eltermino.app.FilesForDrag
+import dev.eltermino.app.dragOutProblem
+import dev.eltermino.core.ssh.RemoteFile
 import java.io.File
 import java.net.URI
 
@@ -33,4 +41,22 @@ internal actual fun Modifier.onFilesDropped(onHover: (Boolean) -> Unit, onDrop: 
         }
     }
     dragAndDropTarget(shouldStartDragAndDrop = { it.dragData() is DragData.FilesList }, target = target)
+}
+
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
+internal actual fun Modifier.dragToSystem(browser: FileBrowser, items: () -> List<RemoteFile>): Modifier = composed {
+    val currentItems by rememberUpdatedState(items)
+    dragAndDropSource { _ ->
+        val entries = currentItems()
+        val problem = dragOutProblem(entries)
+        if (problem != null) {
+            browser.notify(problem)
+            null
+        } else {
+            DragAndDropTransferData(
+                DragAndDropTransferable(FilesForDrag(browser::fileSystem, entries.map { it.path })),
+                listOf(DragAndDropTransferAction.Copy),
+            )
+        }
+    }
 }
