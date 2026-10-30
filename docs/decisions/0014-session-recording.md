@@ -20,6 +20,5 @@ Data: 30 ottobre 2026. Stato: accettata.
 
 ## Restano fuori
 
-- La riproduzione ignora i ridimensionamenti: resta sulla misura iniziale.
 - Saltare a un punto della registrazione.
 - Registrazioni cifrate nel vault.

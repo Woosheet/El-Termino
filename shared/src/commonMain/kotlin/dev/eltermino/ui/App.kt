@@ -72,6 +72,7 @@ internal enum class Screen(val title: String) {
     Identities("Identità"),
     Snippets("Snippet"),
     Recordings("Registrazioni"),
+    Forwards("Forward attivi"),
     Import("Importa"),
     Settings("Impostazioni"),
 }
@@ -98,8 +99,13 @@ fun App(state: AppState, onExit: () -> Unit = {}, titleBarHeight: Dp = 0.dp) {
             LocalTitleBar provides titleBarHeight,
             LocalAppIcon provides AppIconStyle.of(workspace.ui.appIcon),
         ) { AppContent(state) }
-        UpdateDialog(state, onExit)
-        ExitDialog(state, onExit)
+        val locked by state.lock.locked.collectAsState()
+        if (locked) {
+            LockScreen(state.lock)
+        } else {
+            UpdateDialog(state, onExit)
+            ExitDialog(state, onExit)
+        }
     }
 }
 
@@ -228,7 +234,9 @@ private fun AppContent(state: AppState) {
         if (!settings.ui.welcomeDone || tour) {
             WelcomeFlow(state, startAtTour = tour, onOpenImport = { screen = Screen.Import; showHostsOnPhone = false }) { tour = false }
         }
-        PromptDialogs(state.sessions.prompter)
+        // A waiting prompt stays pending: it shows up once the app is unlocked.
+        val locked by state.lock.locked.collectAsState()
+        if (!locked) PromptDialogs(state.sessions.prompter)
     }
 }
 
@@ -283,6 +291,7 @@ private fun DesktopLayout(
                     ToolRow(CartaIcons.User, "Identità", screen == Screen.Identities) { onScreen(Screen.Identities) }
                     ToolRow(CartaIcons.Snippet, "Snippet", screen == Screen.Snippets) { onScreen(Screen.Snippets) }
                     ToolRow(CartaIcons.Play, "Registrazioni", screen == Screen.Recordings) { onScreen(Screen.Recordings) }
+                    ToolRow(CartaIcons.Layers, "Forward attivi", screen == Screen.Forwards) { onScreen(Screen.Forwards) }
                     ToolRow(CartaIcons.Import, "Importa", screen == Screen.Import) { onScreen(Screen.Import) }
                     ToolRow(CartaIcons.Settings, "Impostazioni", screen == Screen.Settings) { onScreen(Screen.Settings) }
                 }
@@ -381,6 +390,7 @@ private fun ScreenBody(state: AppState, screen: Screen, showExtraKeys: Boolean, 
         Screen.Identities -> IdentitiesScreen(state, modifier)
         Screen.Snippets -> SnippetsScreen(state, modifier)
         Screen.Recordings -> RecordingsScreen(state, onPlay = { onScreen(Screen.Sessions) }, modifier)
+        Screen.Forwards -> ActiveForwardsScreen(state, modifier)
         Screen.Settings -> SettingsScreen(state, modifier) {
             SettingsSection("Tutorial", "La guida del primo avvio a schede, file, trasferimenti, snippet e spazi di lavoro.") {
                 Button("Rivedi il tutorial", onClick = onTour, kind = ButtonKind.Secondary)

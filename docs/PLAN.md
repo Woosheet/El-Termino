@@ -1,6 +1,6 @@
 # El Termino: piano di progetto
 
-Ultimo aggiornamento: 29 ottobre 2026 (Fase 5)
+Ultimo aggiornamento: 30 ottobre 2026 (Fase 7)
 
 ## Obiettivo
 
@@ -15,7 +15,7 @@ Un client SSH e SFTP per uso personale, nello stile di Termius, scritto in Kotli
 | Sincronizzazione | Nessuna, tutto locale. Backup manuale su file cifrato per spostare la configurazione tra dispositivi. |
 | Distribuzione | Solo uso personale: APK installato a mano su Android, pacchetti desktop dmg / msi / deb senza store. |
 | Import | Da Termius: host e gruppi, chiavi, identità. |
-| Autenticazione | Tutti i metodi: password, chiavi Ed25519 / RSA / ECDSA anche con passphrase, OTP, jump host, SSH agent, certificati OpenSSH, YubiKey / FIDO2. |
+| Autenticazione | Tutti i metodi: password, chiavi Ed25519 / RSA / ECDSA anche con passphrase, OTP, jump host, SSH agent, certificati OpenSSH. |
 | Funzioni extra | Port forwarding, snippet, broadcast input, monitor risorse, editor remoto, pannello Docker, registrazione sessioni, Mosh. |
 
 La conseguenza più importante: tutte e quattro le piattaforme girano su JVM (ART su Android, JVM sul desktop). Basta quindi una sola implementazione SSH, senza libssh2 e senza cinterop.
@@ -102,7 +102,6 @@ Requisiti: vim, htop, tmux e mc devono funzionare. Servono quindi alternate scre
 | Jump host / ProxyJump | Catena di bastion, ogni salto con la sua identità | 1 |
 | SSH agent | macOS/Linux con `SSH_AUTH_SOCK` (socket Unix di JDK 16+), Windows con la named pipe di OpenSSH e Pageant. Più l'agent forwarding. | 7 |
 | Certificati OpenSSH | Chiave + `-cert.pub`, host certificate con CA fidata | 7 |
-| YubiKey / FIDO2 | Desktop: tramite l'agent di sistema, poi libfido2 diretto se serve. Android: YubiKit via USB/NFC, da verificare FIDO2 o PIV. | 7 |
 | Sblocco biometrico | BiometricPrompt su Android, Touch ID su macOS | 7 |
 
 Verifica della host key sempre attiva: alla prima connessione mostra il fingerprint SHA256 e chiede conferma. Se la chiave cambia, la connessione si blocca con un avviso esplicito. Sul desktop si possono importare `~/.ssh/known_hosts` e `~/.ssh/config`.
@@ -252,8 +251,6 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Import da Postman v2.1 e da comandi curl.
   - Criterio raggiunto: `HttpRunFlowTest` esegue una collezione di verifiche su tutti gli host di un gruppo, uno dietro il bastion, e mostra l'esito per host.
   - Punti aperti:
-    - i redirect non vengono seguiti, perché potrebbero puntare a un altro host che il tunnel non raggiunge;
-    - i certificati HTTPS non validi (per esempio autofirmati) non si possono accettare a mano;
     - da provare a mano: le finestre della scheda (variabili, esecuzione su un gruppo, import) e l'editor dei campi multipart nell'app vera;
     - da provare su un telefono: la scelta di un file per un form multipart su Android.
 - Fase 6: implementata il 29 ottobre 2026 ([decisione 0009](decisions/0009-first-run-themes-and-termius.md)).
@@ -262,14 +259,22 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Avvisi a fine trasferimento, dentro l'app e come notifiche di sistema; conferma prima di chiudere con trasferimenti in corso.
   - File trascinati su un terminale caricati nella cartella della shell.
   - Controllo di design di spaziature, padding e stile su tutte le schermate.
-  - Icona dell'app a scelta in Impostazioni: El Bigote (quella del pacchetto) o Píxel. Sul desktop cambia finestra e Dock mentre l'app gira; su Android non c'è ancora un'icona del launcher.
+  - Icona dell'app a scelta in Impostazioni: El Bigote (quella del pacchetto) o Píxel. Sul desktop cambia finestra e Dock mentre l'app gira; su Android il launcher mostra El Bigote.
   - Criterio da verificare sul tuo Mac: il lettore è provato su dati costruiti nel formato di Termius, non ancora su un Termius vero.
 - Fase 8: fatta il 30 ottobre 2026.
   - Port forwarding fatto ([decisione 0011](decisions/0011-port-forwarding.md)): regole locali, remote e dinamiche (SOCKS) salvate per host, avvio a mano o automatico alla connessione, riaperte dopo una riconnessione. Provato contro i server di test da `PortForwardFlowTest`.
   - Monitor risorse fatto ([decisione 0012](decisions/0012-resource-monitor.md)): scheda "Risorse" dal menu dell'host con CPU, carico, memoria e swap, rete e dischi, letti da `/proc` e `df` ogni 3 secondi solo con la scheda aperta. Provato da `MonitorFlowTest`.
   - Pannello Docker fatto ([decisione 0013](decisions/0013-docker-panel.md)): scheda "Docker" dal menu dell'host con i container, CPU e memoria, avvio, stop e riavvio; log e shell nel container si aprono in un terminale nuovo. Provato da `DockerFlowTest` contro un finto `docker` nei server di test.
   - Registrazione sessioni fatta ([decisione 0014](decisions/0014-session-recording.md)): file asciicast v2 con il solo output del terminale, avviata dal menu della scheda o sempre dalle Impostazioni, pallino rosso mentre registra, schermata Registrazioni con riproduzione a velocità scelta, esportazione e pulizia dopo 30 giorni. Provata da `RecordingFlowTest`.
-  - Punti aperti: forward solo su 127.0.0.1 e nessun elenco globale dei forward attivi; monitor solo Linux e senza processi; Docker senza compose, immagini e rimozione; la riproduzione ignora i ridimensionamenti. Nessuna delle quattro funzioni è ancora stata provata a mano nell'app o sul telefono.
+  - Nessuna delle quattro funzioni è ancora stata provata a mano nell'app o sul telefono.
+- Fase 7: fatta il 30 ottobre 2026 ([progetto](superpowers/specs/2026-10-30-fase7-e-punti-aperti-design.md)), insieme ai punti aperti delle fasi precedenti. YubiKey e FIDO2 sono usciti dal piano.
+  - Backup cifrato fatto ([decisione 0015](decisions/0015-encrypted-backup.md)): un file con workspace e segreti, password con Argon2id, ripristino con anteprima, "Unisci" o "Sostituisci tutto", copia di sicurezza prima di cambiare i dati. Provato da `BackupFlowTest`.
+  - Master password dove manca il portachiavi fatta ([decisione 0004](decisions/0004-workspace-and-vault.md)). Provata da `PasswordMasterKeyProviderTest`; la finestra all'avvio va provata su un Linux senza Secret Service.
+  - CA per i certificati host fatta ([decisione 0016](decisions/0016-host-certificate-authorities.md)): elenco nelle Impostazioni, import da `known_hosts`, blocco netto se il certificato non è valido. Provata da `HostCaTrustTest` e `ConnectionFlowTest`, anche con un server dal certificato scaduto.
+  - SSH agent e forwarding fatti ([decisione 0017](decisions/0017-ssh-agent.md)): spunta nell'identità, forwarding per host spento di default. Provati da `AgentLoginTest` contro un `ssh-agent` vero; su Windows vanno provati a mano.
+  - Blocco biometrico fatto ([decisione 0018](decisions/0018-biometric-lock.md)): impronta o password del dispositivo all'avvio e dopo un'assenza. Blocca l'interfaccia, non il vault. Logica provata da `AppLockTest`; Touch ID e BiometricPrompt vanno provati a mano.
+  - Punti aperti chiusi: redirect e certificati HTTPS accettati a mano; indirizzo di ascolto dei forward ed elenco globale dei forward attivi; "Apri con editor esterno" e trascinamento verso il Finder o Esplora risorse; selettore di sistema su Android; processi più pesanti nel monitor; Docker con rimozione, immagini, volumi, reti e Compose; riproduzione che segue i ridimensionamenti; icona del launcher su Android.
+  - Da provare a mano: Touch ID e BiometricPrompt su hardware vero; Pageant e named pipe su Windows; la finestra della master password su un Linux senza Secret Service; il selettore di sistema e l'icona su un telefono; "Apri con editor esterno" e il trascinamento verso il Finder, dall'icona della riga. La vista del terminale può ridimensionare una riproduzione se cambia il riquadro.
 
 ## Roadmap
 
@@ -282,7 +287,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 | 4. Schede unite e gruppi | Disposizione dei riquadri per scheda, unione e separazione trascinando, gruppi di schede con nome e colore, raggruppa per host, azioni sul gruppo, spazi di lavoro salvati | Uno spazio di lavoro con due gruppi e una scheda divisa si riapre uguale dopo un riavvio |
 | 5. Richieste HTTP ✓ | Scheda di richieste per host via tunnel SSH, risposta formattata, collezioni con variabili per host, verifiche, esecuzione su un gruppo, import da Postman e curl | Una collezione di verifiche gira su tutti gli host di un gruppo e mostra l'esito per host |
 | 6. Primo avvio, temi e avvisi | Benvenuto con ricerca dei dati di Termius, tema scuro "Notte" e temi iconici, notifiche dei trasferimenti, file trascinati sul terminale | Al primo avvio su un Mac con Termius gli host si importano senza export manuale |
-| 7. Autenticazione avanzata | SSH agent e forwarding, certificati, YubiKey / FIDO2, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
+| 7. Autenticazione avanzata ✓ | SSH agent e forwarding, certificati, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
 | 8. Strumenti ✓ | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | Ogni strumento provato contro i server di test |
 | 9. Mosh | Client Mosh in Kotlin | Sessione che sopravvive a un cambio di rete |
 
@@ -296,9 +301,8 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 ## Rischi
 
 1. Qualità del terminale: è la differenza che si nota subito rispetto a Termius. Va provato con programmi reali fin dalla fase 0.
-2. FIDO2 su Android: dipende da cosa supporta YubiKit e da come la libreria SSH accetta firme esterne. Va verificato nello spike.
-3. Mosh: protocollo da implementare da zero. Resta l'ultima fase, ed è separabile se non vale lo sforzo.
-4. Libreria SSH giovane (se vince cbssh): l'interfaccia `core/ssh` permette di sostituirla.
+2. Mosh: protocollo da implementare da zero. Resta l'ultima fase, ed è separabile se non vale lo sforzo.
+3. Libreria SSH giovane (se vince cbssh): l'interfaccia `core/ssh` permette di sostituirla.
 
 ## Da verificare
 
@@ -306,7 +310,6 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 - [ ] Quale export offre il Termius installato. Termius non documenta un formato di export; l'importer CSV usa le colonne dei tool di export della community (`Groups,Label,Tags,Hostname/IP,Protocol,Port,Username,Password`). Serve un file di esempio con dati finti.
 - [x] Esito dello spike sulla libreria SSH: Apache MINA SSHD ([decisione 0001](decisions/0001-ssh-library.md))
 - [x] Esito dello spike sul terminale: kmp-terminal-emulator dietro `core/terminal` ([decisione 0002](decisions/0002-terminal-emulator.md))
-- [ ] YubiKey su Android: FIDO2 o PIV
 - [ ] Fase 5 nell'app vera: finestre della scheda Richieste, campi multipart, file scelto su Android
 
 ## Riferimenti

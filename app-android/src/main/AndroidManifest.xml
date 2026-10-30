@@ -9,6 +9,8 @@
 
     <application
         android:name=".ElTerminoApp"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="El Termino"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity

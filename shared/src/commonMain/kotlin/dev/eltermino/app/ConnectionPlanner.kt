@@ -23,9 +23,13 @@ internal class ConnectionPlanner(
     private val actions: WorkspaceActions,
     private val lazySecrets: LazySecrets,
     private val afterSuccess: MutableList<suspend () -> Unit>,
+    private val agentSupported: Boolean = false,
 ) {
     suspend fun plan(host: Host): ConnectTarget =
-        target(host).copy(jumpHosts = workspace.jumpChain(host).map { target(it) })
+        target(host).copy(
+            jumpHosts = workspace.jumpChain(host).map { target(it) },
+            agentForwarding = host.agentForwarding && agentSupported,
+        )
 
     private suspend fun target(host: Host): ConnectTarget {
         val identity = workspace.identity(host.identityId)
@@ -35,6 +39,7 @@ internal class ConnectionPlanner(
             ?: throw PromptCancelledException()
 
         val auth = mutableListOf<AuthMethod>()
+        if (identity?.useAgent == true && agentSupported) auth += AuthMethod.Agent
         val key = workspace.key(identity?.keyId)
         if (key != null) auth += AuthMethod.PublicKey(SecretRef(key.privateKeySecretId), passphrase(key), key.certificate)
 

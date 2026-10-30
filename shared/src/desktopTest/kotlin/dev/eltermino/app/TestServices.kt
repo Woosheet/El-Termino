@@ -21,6 +21,7 @@ object TestEnv {
     const val BASIC_PORT = 2201
     const val OTP_PORT = 2202
     const val BASTION_PORT = 2203
+    const val EXPIRED_PORT = 2204
     const val USER = "dev"
     const val PASSWORD = "devpass"
     const val KEY_PASSPHRASE = "testpass"
@@ -54,7 +55,7 @@ object TestEnv {
 }
 
 /** Reads absolute paths only, like a desktop with no ~/.ssh of interest. Records notifications. */
-class TestPlatform : Platform {
+open class TestPlatform : Platform {
     override val isDesktop = true
 
     @Volatile

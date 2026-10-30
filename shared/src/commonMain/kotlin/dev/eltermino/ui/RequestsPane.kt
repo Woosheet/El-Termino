@@ -133,7 +133,7 @@ internal fun RequestsPane(state: AppState, tab: RequestsTab, focused: Boolean) {
                     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp)) {
                         RequestEditor(state, tab, collection, request, compact, onDelete = { dialog = RequestsDialog.DeleteRequest(collection, request) })
                         Divider(Modifier.padding(vertical = 16.dp))
-                        ResponseView(tab, request, compact)
+                        ResponseView(state, tab, request, compact)
                     }
                 }
             }
@@ -318,6 +318,8 @@ private fun RequestEditor(state: AppState, tab: RequestsTab, collection: HttpCol
         }
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(draft.followRedirects, { draft = draft.copy(followRedirects = it) }, "Segui i redirect")
+        Hint(if (draft.viaCurl) "curl segue anche quelli verso altri host" else "Solo sullo stesso host e porta, gli unici che il tunnel raggiunge")
         Checkbox(draft.viaCurl, { draft = draft.copy(viaCurl = it) }, "Esegui con curl sul server")
         if (!compact) Text(
             if (draft.viaCurl) "Usa DNS, proxy e certificati della macchina" else "Passa dal tunnel SSH, senza installare niente sul server",
@@ -510,7 +512,7 @@ private val prettyJson = Json { prettyPrint = true; prettyPrintIndent = "  " }
 private const val SHOWN_CHARS = 200_000
 
 @Composable
-private fun ResponseView(tab: RequestsTab, request: HttpRequest, compact: Boolean) {
+private fun ResponseView(state: AppState, tab: RequestsTab, request: HttpRequest, compact: Boolean) {
     val history by tab.history.collectAsState()
     val sending by tab.sending.collectAsState()
     val outcomes = history[request.id].orEmpty()
@@ -538,10 +540,18 @@ private fun ResponseView(tab: RequestsTab, request: HttpRequest, compact: Boolea
     }
     when (outcome) {
         null -> Text("Invia la richiesta per vedere qui stato, tempi, header e corpo.", style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(top = 8.dp))
-        is HttpOutcome.Failed -> Text(outcome.message, color = colors.danger, modifier = Modifier.padding(top = 8.dp))
+        is HttpOutcome.Failed -> Column(Modifier.padding(top = 8.dp)) {
+            Text(outcome.message, color = colors.danger)
+            outcome.certificate?.let { problem ->
+                val scope = rememberCoroutineScope()
+                Text("${problem.subject} · SHA-256 ${problem.sha256}", style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(vertical = 4.dp))
+                Button("Accetta questo certificato", onClick = { scope.launch { state.requests.acceptCertificate(problem) } }, kind = ButtonKind.Secondary)
+            }
+        }
         is HttpOutcome.Answered -> {
             val response = outcome.response
             val timings = response.timings
+            response.redirectNotFollowed?.let { Text("Redirect non seguito: $it", style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(top = 8.dp)) }
             Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 val statusColor = when (response.status) {
                     in 200..299 -> colors.online

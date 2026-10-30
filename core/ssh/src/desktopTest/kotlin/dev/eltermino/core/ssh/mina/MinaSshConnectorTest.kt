@@ -23,7 +23,10 @@ import org.junit.jupiter.api.TestInstance
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
 
@@ -137,6 +140,54 @@ class MinaSshConnectorTest {
         connection.close()
         val expected = sshKeygenFingerprint(TestServers.keyFile("host_ed25519.pub"))
         assertEquals(expected, verifier.seen.single().third.sha256)
+    }
+
+    private fun parseCertificate(text: String, flipByteFromEnd: Int? = null): java.security.PublicKey {
+        val (type, body) = text.trim().split(" ")
+        val bytes = java.util.Base64.getDecoder().decode(body)
+        flipByteFromEnd?.let { bytes[bytes.size - it] = (bytes[bytes.size - it].toInt() xor 1).toByte() }
+        val line = "$type ${java.util.Base64.getEncoder().encodeToString(bytes)}"
+        return org.apache.sshd.common.config.keys.PublicKeyEntry.parsePublicKeyEntry(line).resolvePublicKey(null, emptyMap(), null)
+    }
+
+    @Test
+    fun hostCertificateReachesVerifier() = runBlocking {
+        val verifier = RecordingVerifier()
+        connector.connect(TestServers.basic(TestServers.passwordAuth()), verifier, TestSecrets()).close()
+        val certificate = assertNotNull(verifier.seen.single().third.certificate)
+        assertTrue("127.0.0.1" in certificate.principals)
+        assertTrue(certificate.signatureValid)
+        assertEquals(TestServers.keyFile("host_ca.pub").readText().trim().split(" ").take(2).joinToString(" "), certificate.caPublicKey)
+        assertTrue(certificate.validBeforeEpoch > System.currentTimeMillis() / 1000)
+    }
+
+    @Test
+    fun plainKeyHasNoCertificateInfo() = runBlocking {
+        val verifier = RecordingVerifier()
+        connector.connect(ConnectTarget(TestServers.HOST, TestServers.BASTION, TestServers.USER, listOf(TestServers.keyAuth("id_ed25519"))), verifier, TestSecrets()).close()
+        assertNull(verifier.seen.single().third.certificate)
+    }
+
+    @Test
+    fun expiredCertificateStillReachesVerifier() = runBlocking {
+        val verifier = RecordingVerifier()
+        val target = ConnectTarget(TestServers.HOST, TestServers.EXPIRED, TestServers.USER, listOf(TestServers.passwordAuth()))
+        connector.connect(target, verifier, TestSecrets()).close()
+        val certificate = assertNotNull(verifier.seen.single().third.certificate)
+        assertTrue(certificate.validBeforeEpoch < System.currentTimeMillis() / 1000)
+        assertTrue(certificate.signatureValid)
+    }
+
+    @Test
+    fun damagedCertificateIsMarkedInvalid() {
+        val key = parseCertificate(TestServers.keyFile("host_ed25519-cert.pub").readText(), flipByteFromEnd = 1)
+        assertFalse(assertNotNull(key.toHostKeyFingerprint().certificate).signatureValid)
+    }
+
+    @Test
+    fun userCertificateIsNotAHostCertificate() {
+        val key = parseCertificate(TestServers.keyFile("id_cert-cert.pub").readText())
+        assertFalse(assertNotNull(key.toHostKeyFingerprint().certificate).signatureValid)
     }
 
     /** Collects a shell's output in the background so tests can wait for text. */

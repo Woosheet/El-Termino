@@ -1,6 +1,6 @@
 # Server di test
 
-Quattro server OpenSSH in Docker, uno per ogni scenario di autenticazione. Servono solo in locale: tutte le credenziali qui sotto sono finte e non vanno usate altrove.
+Cinque server OpenSSH in Docker, uno per ogni scenario di autenticazione. Servono solo in locale: tutte le credenziali qui sotto sono finte e non vanno usate altrove.
 
 ```bash
 ./testenv/gen-keys.sh
@@ -10,6 +10,7 @@ docker compose -f testenv/docker-compose.yml up -d --build
 | Servizio | Indirizzo | Autenticazione |
 |---|---|---|
 | `basic` | `127.0.0.1:2201` | password, chiavi Ed25519 / RSA / ECDSA, chiave con passphrase, certificato utente. Host key firmata da una CA. |
+| `expired` | `127.0.0.1:2204` | come `basic`, ma con un certificato host scaduto |
 | `otp` | `127.0.0.1:2202` | keyboard-interactive: password e poi codice TOTP |
 | `bastion` | `127.0.0.1:2203` | solo chiavi. Fa da jump host verso `internal`. |
 | `internal` | `internal:22`, solo tramite `bastion` | solo chiavi |
@@ -25,6 +26,8 @@ Credenziali di test:
 Le chiavi in `keys/` vengono generate da `gen-keys.sh` e sono escluse da git.
 
 Sugli host sono installati vim, htop, tmux e mc per provare l'emulatore di terminale.
+
+Su `127.0.0.1:8443` c'è un server HTTPS con certificato autofirmato, generato all'avvio. `/cgi-bin/redirect?to=…` risponde con un redirect.
 
 Ogni host ha anche un piccolo servizio HTTP su `127.0.0.1:8080`, raggiungibile solo dall'interno della macchina, per la scheda Richieste:
 

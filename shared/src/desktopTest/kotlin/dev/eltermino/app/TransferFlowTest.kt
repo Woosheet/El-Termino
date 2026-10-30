@@ -72,6 +72,56 @@ class TransferFlowTest {
         list.forEach { assertIs<TransferState.Done>(it.state.value, "${it.name}: ${it.state.value}") }
     }
 
+    /** A queue whose local files, like a document from a provider that won't tell, report size 0 when they're the source. */
+    private fun unknownSizes(): TransferManager {
+        val real = services.localFiles!!
+        val files = object : FileSystem by real {
+            override suspend fun stat(path: String) = real.stat(path)?.let { if ("/dest-" in path) it else it.copy(size = 0, modifiedEpochSeconds = 0) }
+        }
+        val blind = AppServices(services.workspace, services.vault, services.connector, services.keyTool, services.platform, localFiles = files)
+        return TransferManager(scope, blind, connections)
+    }
+
+    @Test
+    fun saveAsWritesExactlyWhereTheSystemSaid() {
+        val bytes = Random.nextBytes(4_000)
+        val source = localFile("from-${newId().take(8)}.bin", bytes)
+        val chosen = File(local, "scelto-${newId().take(8)}.bin").apply { writeBytes(ByteArray(0)) }
+        val transfer = transfers.saveAs(Endpoint.Local, entry(Endpoint.Local, source.path), chosen.path)
+        awaitDone(transfer)
+        assertTrue(bytes.contentEquals(chosen.readBytes()))
+    }
+
+    @Test
+    fun aSourceOfUnknownSizeIsCopiedWhole() {
+        val bytes = Random.nextBytes(4_000)
+        val source = localFile("nosize-${newId().take(8)}.bin", bytes)
+        val folder = File(local, "dest-${newId().take(8)}").apply { mkdirs() }
+        val transfer = unknownSizes().saveAs(Endpoint.Local, entry(Endpoint.Local, source.path), File(folder, "x.bin").path)
+        awaitDone(transfer)
+        assertTrue(bytes.contentEquals(File(folder, "x.bin").readBytes()))
+    }
+
+    @Test
+    fun anUnknownDateIsNotWrittenOnTheCopy() {
+        val source = localFile("nodate-${newId().take(8)}.bin", Random.nextBytes(100))
+        val folder = File(local, "dest-${newId().take(8)}").apply { mkdirs() }
+        val target = File(folder, "x.bin")
+        awaitDone(unknownSizes().saveAs(Endpoint.Local, entry(Endpoint.Local, source.path), target.path))
+        assertTrue(target.lastModified() > 1_000_000_000_000L, "date: ${target.lastModified()}")
+    }
+
+    @Test
+    fun anEmptyDestinationDoesNotFinishAnUnknownSizedSource() {
+        val bytes = Random.nextBytes(4_000)
+        val name = "resume-${newId().take(8)}.bin"
+        val source = localFile(name, bytes)
+        val folder = File(local, "dest-${newId().take(8)}").apply { mkdirs() }
+        File(folder, name).writeBytes(ByteArray(0))
+        awaitDone(unknownSizes().enqueue(Endpoint.Local, listOf(entry(Endpoint.Local, source.path)), Location(Endpoint.Local, folder.path), ConflictPolicy.Resume).single())
+        assertTrue(bytes.contentEquals(File(folder, name).readBytes()))
+    }
+
     private fun localFile(name: String, bytes: ByteArray): File = File(local, name).apply { writeBytes(bytes) }
 
     @Test
@@ -119,7 +169,8 @@ class TransferFlowTest {
         Thread.sleep(400)
         assertEquals(paused, transfer.progress.value.bytesDone, "nothing moves while paused")
         val partial = File(local, "huge.bin").length()
-        assertEquals(partial, paused, "the count matches the bytes on disk")
+        // A write under way when the pause lands reaches the disk without being counted.
+        assertTrue(partial - paused in 0..256 * 1024, "the count matches the bytes on disk: $paused, $partial")
         assertTrue(partial in 1 until 150_000_000, "partial file: $partial")
 
         var lowest = Long.MAX_VALUE

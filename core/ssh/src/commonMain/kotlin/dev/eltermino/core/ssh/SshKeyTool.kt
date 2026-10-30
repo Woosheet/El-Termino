@@ -14,6 +14,13 @@ interface SshKeyTool {
     fun isEncrypted(privateKey: ByteArray): Boolean
 
     fun generateEd25519(comment: String): GeneratedKey
+
+    /**
+     * The `SHA256:` fingerprint of a public key in `authorized_keys` form.
+     *
+     * @throws InvalidKeyException when the text isn't a public key.
+     */
+    fun publicKeyFingerprint(publicKey: String): String
 }
 
 data class KeyInfo(

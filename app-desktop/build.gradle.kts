@@ -46,6 +46,7 @@ compose.desktop {
                 "java.instrument", "java.management", "java.rmi", "java.security.jgss", "java.sql",
                 "jdk.security.auth", "jdk.unsupported", "jdk.crypto.ec", "jdk.charsets",
             )
+            appResourcesRootDir.set(layout.buildDirectory.dir("app-resources"))
             macOS {
                 bundleID = "dev.eltermino.desktop"
                 iconFile.set(project.file("packaging/icon.icns"))
@@ -61,6 +62,18 @@ compose.desktop {
         }
     }
 }
+
+// Touch ID: the JVM can't reach LocalAuthentication, so a small program in the app asks for it.
+val compileTouchId = tasks.register<Exec>("compileTouchId") {
+    val source = file("native/touchid.swift")
+    val output = layout.buildDirectory.file("app-resources/macos/touchid")
+    val canCompile = System.getProperty("os.name").startsWith("Mac") && file("/usr/bin/swiftc").exists()
+    onlyIf { canCompile }
+    inputs.file(source)
+    outputs.file(output)
+    commandLine("sh", "-c", "mkdir -p \"\$(dirname \"\$1\")\" && /usr/bin/swiftc -O \"\$0\" -o \"\$1\"", source.path, output.get().asFile.path)
+}
+tasks.matching { it.name == "prepareAppResources" }.configureEach { dependsOn(compileTouchId) }
 
 // The DMG to hand out: the app next to a link to Applications, built by packaging/make-dmg.sh.
 tasks.register<Exec>("packageShareableDmg") {

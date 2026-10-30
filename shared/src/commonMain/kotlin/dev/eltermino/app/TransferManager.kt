@@ -84,6 +84,8 @@ class Transfer internal constructor(
     val name: String,
     val isDirectory: Boolean,
     val policy: ConflictPolicy,
+    /** [targetDir] is already the file to write, chosen by the system. */
+    internal val exactTarget: Boolean = false,
 ) {
     internal val mutableState = MutableStateFlow<TransferState>(TransferState.Queued)
     val state: StateFlow<TransferState> = mutableState.asStateFlow()
@@ -177,6 +179,14 @@ class TransferManager(
         val added = files.map { file ->
             Transfer(newId(), Location(source, file.path), targetDir, file.name, file.isDirectory, policy)
         }
+        mutableTransfers.update { it + added }
+        wake.trySend(Unit)
+        return added
+    }
+
+    /** Queues [file] to overwrite [targetPath], on this device, which the user has just chosen. */
+    fun saveAs(source: Endpoint, file: RemoteFile, targetPath: String): Transfer {
+        val added = Transfer(newId(), Location(source, file.path), Location(Endpoint.Local, targetPath), file.name, false, ConflictPolicy.Overwrite, exactTarget = true)
         mutableTransfers.update { it + added }
         wake.trySend(Unit)
         return added
@@ -276,7 +286,7 @@ class TransferManager(
 
     private suspend fun plan(transfer: Transfer, source: FileSystem, target: FileSystem): List<Step> {
         val item = source.stat(transfer.source.path) ?: throw IllegalStateException("${transfer.name} non c'è più")
-        var destination = childPath(transfer.targetDir.path, transfer.name)
+        var destination = if (transfer.exactTarget) transfer.targetDir.path else childPath(transfer.targetDir.path, transfer.name)
         if (transfer.policy == ConflictPolicy.Rename && target.stat(destination) != null) {
             destination = freeName(target, transfer.targetDir.path, transfer.name)
         }
@@ -328,7 +338,8 @@ class TransferManager(
             }
             else -> 0
         }
-        if (existing != null && offset == step.size && (index == transfer.partial || transfer.policy == ConflictPolicy.Resume)) {
+        // Size 0 may mean unknown, so nothing there says it's complete.
+        if (existing != null && step.size > 0 && offset == step.size && (index == transfer.partial || transfer.policy == ConflictPolicy.Resume)) {
             transfer.partial = -1
             return meter.fileDone(step.size)
         }
@@ -360,7 +371,8 @@ class TransferManager(
             }
         }
         transfer.partial = -1
-        runCatching { target.setModified(to, step.modified) }
+        // A date of 0 is one the source doesn't know, not 1970.
+        if (step.modified != 0L) runCatching { target.setModified(to, step.modified) }
         if (step.permissions != 0) runCatching { target.chmod(to, step.permissions) }
         meter.fileDone(0)
     }

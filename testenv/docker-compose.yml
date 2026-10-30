@@ -15,6 +15,16 @@ services:
       - ./keys:/testenv/keys:ro
     networks: [public]
 
+  # Like basic, with a host certificate that has expired.
+  expired:
+    <<: *sshd
+    hostname: expired
+    ports: ["127.0.0.1:2204:22"]
+    volumes:
+      - ./config/basic.conf:/testenv/sshd_config:ro
+      - ./keys/expired:/testenv/keys:ro
+    networks: [public]
+
   otp:
     <<: *sshd
     ports: ["127.0.0.1:2202:22"]

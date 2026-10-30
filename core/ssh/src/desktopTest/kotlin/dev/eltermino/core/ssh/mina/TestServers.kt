@@ -21,6 +21,7 @@ object TestServers {
     const val BASIC = 2201
     const val OTP = 2202
     const val BASTION = 2203
+    const val EXPIRED = 2204
     const val INTERNAL_HOST = "internal"
     const val USER = "dev"
     const val PASSWORD = "devpass"

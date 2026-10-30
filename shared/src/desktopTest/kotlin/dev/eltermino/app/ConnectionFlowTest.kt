@@ -3,12 +3,14 @@ package dev.eltermino.app
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.Identity
 import dev.eltermino.core.data.KnownHost
+import dev.eltermino.core.data.TrustedCa
 import dev.eltermino.core.data.newId
 import dev.eltermino.core.data.trust
 import dev.eltermino.core.ssh.ConnectionState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -102,6 +104,51 @@ class ConnectionFlowTest {
         second.assertWorks()
         assertNotSame(first, (second as TabStatus.Open).connection)
         assertEquals(emptyList(), asked, "second login needs no dialog")
+    }
+
+    private suspend fun trustTestCa(vararg patterns: String) {
+        val key = TestEnv.key("host_ca.pub").readText().trim()
+        val ca = TrustedCa(newId(), "Test", key, services.keyTool.publicKeyFingerprint(key), patterns.toList())
+        services.workspace.update { it.copy(trustedCas = listOf(ca)) }
+    }
+
+    @Test
+    fun caTrustedHostConnectsWithoutHostKeyPrompt() = runBlocking {
+        trustTestCa("[127.0.0.1]:2201")
+        connectAndWait(host("basic", TestEnv.BASIC_PORT)).assertWorks()
+        assertTrue(asked.none { it.startsWith("hostkey") }, asked.toString())
+    }
+
+    @Test
+    fun expiredCertificateOfTrustedCaIsRefusedWithoutAPrompt() = runBlocking {
+        trustTestCa("[127.0.0.1]:2204")
+        val status = connectAndWait(host("expired", TestEnv.EXPIRED_PORT))
+        assertTrue("scaduto" in assertIs<TabStatus.Failed>(status).message)
+        assertEquals(emptyList(), asked, "nothing to click through, and no password sent")
+    }
+
+    @Test
+    fun expiredCertificateWithoutCaIsAnOrdinaryKey() = runBlocking {
+        connectAndWait(host("expired", TestEnv.EXPIRED_PORT)).assertWorks()
+        assertTrue("hostkey:127.0.0.1:2204" in asked)
+    }
+
+    @Test
+    fun caCheckedOnEveryHop() = runBlocking {
+        trustTestCa("[127.0.0.1]:2204")
+        val jump = host("expired", TestEnv.EXPIRED_PORT)
+        val status = connectAndWait(host("basic", TestEnv.BASIC_PORT, jumpHostId = jump.id))
+        assertTrue("scaduto" in assertIs<TabStatus.Failed>(status).message)
+    }
+
+    @Test
+    fun renewedKeyUnderCaReplacesThePin() = runBlocking {
+        trustTestCa("[127.0.0.1]:2201")
+        services.workspace.update { it.trust(KnownHost(TestEnv.HOST, TestEnv.BASIC_PORT, "ssh-ed25519", "SHA256:vecchia", "ssh-ed25519 AAAA", 0)) }
+        val renewal = async(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { sessions.connections.keyRenewals.first() }
+        connectAndWait(host("basic", TestEnv.BASIC_PORT)).assertWorks()
+        assertEquals(TestEnv.HOST, withTimeout(5_000) { renewal.await() })
+        assertTrue(services.workspace.workspace.value.knownHosts.none { it.fingerprintSha256 == "SHA256:vecchia" })
     }
 
     @Test

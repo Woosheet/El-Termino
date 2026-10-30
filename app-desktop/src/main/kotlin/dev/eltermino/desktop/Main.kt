@@ -31,12 +31,64 @@ import dev.eltermino.app.AppCommand
 import dev.eltermino.app.AppState
 import dev.eltermino.app.Shortcuts
 import dev.eltermino.app.createAppServices
+import dev.eltermino.core.ssh.agent.openSystemAgent
+import dev.eltermino.core.vault.EncryptedFileVault
 import dev.eltermino.core.vault.KeychainMasterKeyProvider
+import dev.eltermino.core.vault.MasterKeyProvider
+import dev.eltermino.core.vault.MasterKeySource
+import dev.eltermino.core.vault.PasswordMasterKeyProvider
+import dev.eltermino.core.vault.VaultException
+import dev.eltermino.core.vault.chooseMasterKeySource
+import kotlinx.coroutines.runBlocking
+import kotlin.system.exitProcess
+import javax.swing.JPasswordField
+import javax.swing.JOptionPane
+import java.io.File
 import dev.eltermino.ui.App
 import dev.eltermino.ui.components.AppIconPainter
 import dev.eltermino.ui.components.AppIconStyle
 import java.awt.Frame
 import java.awt.Taskbar
+
+/** The system keychain where there is one, otherwise a password asked here, before any window. */
+private fun chooseMasterKey(dataDir: File): MasterKeyProvider {
+    val keychain = KeychainMasterKeyProvider()
+    val vault = File(dataDir, "vault.bin")
+    val salt = File(dataDir, "vault.salt")
+    if (chooseMasterKeySource(keychain.isAvailable(), vault.exists(), salt.exists()) == MasterKeySource.Keychain) return keychain
+    repeat(MASTER_PASSWORD_TRIES) { attempt ->
+        val provider = PasswordMasterKeyProvider(salt, ::askMasterPassword)
+        try {
+            if (vault.exists()) runBlocking { EncryptedFileVault(vault, provider).snapshot() }
+            return provider
+        } catch (e: VaultException) {
+            if (attempt == MASTER_PASSWORD_TRIES - 1 || !salt.exists()) {
+                JOptionPane.showMessageDialog(null, "Non riesco ad aprire il vault: password non valida.", "El Termino", JOptionPane.ERROR_MESSAGE)
+                exitProcess(1)
+            }
+        }
+    }
+    exitProcess(1)
+}
+
+private const val MASTER_PASSWORD_TRIES = 3
+
+private fun askMasterPassword(firstTime: Boolean): CharArray? {
+    val title = "El Termino"
+    fun ask(label: String): CharArray? {
+        val field = JPasswordField(24)
+        val pane = arrayOf<Any>(label, field)
+        val answer = JOptionPane.showConfirmDialog(null, pane, title, JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE)
+        return field.password.takeIf { answer == JOptionPane.OK_OPTION }
+    }
+    if (!firstTime) return ask("Master password")
+    while (true) {
+        val password = ask("Questo sistema non ha un portachiavi. Scegli una master password: se la perdi, i segreti salvati non si recuperano.") ?: return null
+        val again = ask("Ripeti la master password") ?: return null
+        if (password.isNotEmpty() && password.contentEquals(again)) return password
+        JOptionPane.showMessageDialog(null, "Le due password non coincidono.", title, JOptionPane.WARNING_MESSAGE)
+    }
+}
 
 fun main() {
     if (isMac) {
@@ -47,9 +99,10 @@ fun main() {
     var frame: Frame? = null
     val services = createAppServices(
         dataDir = DesktopPlatform.dataDir(),
-        masterKey = KeychainMasterKeyProvider(),
+        masterKey = chooseMasterKey(DesktopPlatform.dataDir()),
         platform = DesktopPlatform { frame },
         localFilesRoot = java.io.File(System.getProperty("user.home")),
+        sshAgent = ::openSystemAgent,
     )
     val state = AppState(services)
     if (isMac && java.awt.Desktop.isDesktopSupported()) {

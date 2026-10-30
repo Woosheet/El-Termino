@@ -13,6 +13,9 @@ class KeychainMasterKeyProvider(
     private val service: String = "El Termino",
     private val account: String = "vault-master-key",
 ) : MasterKeyProvider {
+    /** shortcut: only checks that a backend answers, enough for Linux with no Secret Service. */
+    fun isAvailable(): Boolean = runCatching { Keyring.create().close() }.isSuccess
+
     override fun load(createIfMissing: Boolean): ByteArray = try {
         Keyring.create().use { keyring ->
             val stored = try {

@@ -1,6 +1,7 @@
 package dev.eltermino.app
 
 import dev.eltermino.core.data.WorkspaceStore
+import dev.eltermino.core.ssh.RemoteFile
 import dev.eltermino.core.ssh.SshConnector
 import dev.eltermino.core.ssh.SshKeyTool
 import dev.eltermino.core.vault.Vault
@@ -16,7 +17,11 @@ class AppServices(
     val localFiles: FileSystem? = null,
     /** Where terminal recordings go; null where they can't be kept. */
     val recordings: RecordingStore? = null,
-)
+    /** Keeps the encrypted copy of what a restore is about to change. */
+    saveSafetyCopy: suspend (ByteArray) -> Unit = {},
+) {
+    val backup = BackupService(workspace, vault, platform.appVersion, saveSafetyCopy)
+}
 
 /** What differs between desktop and Android. */
 interface Platform {
@@ -30,6 +35,15 @@ interface Platform {
 
     /** Absolute paths of files chosen for upload, where the device has paths; empty otherwise. */
     suspend fun pickLocalFiles(title: String): List<String> = emptyList()
+
+    /** Whether [pickDocuments] and [createDocument] reach files outside the app's folder. */
+    val hasDocumentPicker: Boolean get() = false
+
+    /** Documents from the system picker, readable through [AppServices.localFiles]; empty when cancelled. */
+    suspend fun pickDocuments(title: String): List<RemoteFile> = emptyList()
+
+    /** A new document named by the user, writable through [AppServices.localFiles], as a path; null when cancelled. */
+    suspend fun createDocument(name: String): String? = null
 
     /** One file to send later, as a reference [readLocalFile] can read again; null when cancelled. */
     suspend fun pickAttachment(title: String): AttachedFile? =
@@ -49,6 +63,9 @@ interface Platform {
 
     /** `~/.ssh/config`, or null where there's none (always on Android). */
     fun readSshConfig(): String?
+
+    /** `~/.ssh/known_hosts`, or null where there's none (always on Android). */
+    fun readKnownHosts(): String? = null
 
     /**
      * Resolves an `Include` pattern relative to `~/.ssh`, globs included, as
@@ -83,6 +100,15 @@ interface Platform {
 
     /** Opens [url] in the browser. */
     fun openUrl(url: String) {}
+
+    /** Opens a private copy of a remote file with the system's app for it; null where there's no such thing. */
+    suspend fun openExternally(name: String, bytes: ByteArray): ExternalFile? = null
+
+    /** Whether [authenticate] can ask for a fingerprint or the system password here. */
+    val biometricAvailable: Boolean get() = false
+
+    /** Asks the system who's there; true when it's the owner. */
+    suspend fun authenticate(reason: String): Boolean = false
 
     /** Lets the user save [bytes] under a name of their choice; false when cancelled or unsupported. */
     suspend fun saveFile(suggestedName: String, bytes: ByteArray): Boolean = false

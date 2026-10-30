@@ -89,6 +89,20 @@ internal fun SettingsScreen(state: AppState, modifier: Modifier = Modifier, extr
             onRecord = { on -> update { it.copy(recordSessions = on) } },
             onDays = { days -> update { it.copy(recordingDays = days) } },
         )
+        if (state.services.platform.biometricAvailable) SettingsSection("Blocco", "Protegge lo schermo, non il vault: sessioni e trasferimenti continuano sotto il blocco.") {
+            Checkbox(workspace.ui.biometricLock, { on -> update { it.copy(biometricLock = on) } }, "Chiedi impronta o password del dispositivo per aprire l'app")
+            if (workspace.ui.biometricLock) Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1, 5, 15, 30).forEach { minutes ->
+                    dev.eltermino.ui.components.Button(
+                        "$minutes min",
+                        onClick = { update { it.copy(lockAfterMinutes = minutes) } },
+                        kind = if (workspace.ui.lockAfterMinutes == minutes) dev.eltermino.ui.components.ButtonKind.Primary else dev.eltermino.ui.components.ButtonKind.Ghost,
+                    )
+                }
+            }
+        }
+        TrustedCasSection(state)
+        BackupSection(state)
         UpdatesSection(state, workspace.ui.checkUpdates) { on -> update { it.copy(checkUpdates = on) } }
         if (state.services.platform.isDesktop) ShortcutsSection(state.services.platform.isMacOs)
         extra()

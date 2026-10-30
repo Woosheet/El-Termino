@@ -24,11 +24,16 @@ import javax.imageio.ImageIO;
  * Draws the app icon, "El Bigote": a white shell prompt on the app's accent blue, in a sombrero, with a moustache for a cursor.
  * Run from this folder with `java MakeIcons.java`, then `iconutil -c icns icon.iconset`.
  * Writes icon.iconset/ (macOS), icon.png (Linux) and icon.ico (Windows).
+ * `java MakeIcons.java android` writes the launcher icon's layers into the Android app instead.
  */
 public class MakeIcons {
     static final Color ACCENT = new Color(0x18, 0x5F, 0xA5);
 
     public static void main(String[] args) throws IOException {
+        if (args.length > 0 && args[0].equals("android")) {
+            writeAndroid(new File("../../app-android/src/main/res"));
+            return;
+        }
         File iconset = new File("icon.iconset");
         iconset.mkdirs();
         for (int size : new int[]{16, 32, 128, 256, 512}) {
@@ -57,7 +62,33 @@ public class MakeIcons {
         g.setColor(ACCENT);
         g.fill(shape);
 
-        // The artwork is drawn on a 464-unit tile centred at (256, 256), the grid of docs/logo/proposte.html.
+        artwork(g, size, tile);
+        g.dispose();
+        return image;
+    }
+
+    /** The launcher draws the background itself: this is the artwork alone, inside the 66dp of 108 that no mask cuts. */
+    static BufferedImage foreground(int size) {
+        BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = smooth(image);
+        artwork(g, size, size * 66.0 / 108);
+        g.dispose();
+        return image;
+    }
+
+    static void writeAndroid(File res) throws IOException {
+        String[] densities = {"mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"};
+        int[] scale = {2, 3, 4, 6, 8};
+        for (int i = 0; i < densities.length; i++) {
+            File folder = new File(res, "mipmap-" + densities[i]);
+            folder.mkdirs();
+            ImageIO.write(foreground(54 * scale[i]), "png", new File(folder, "ic_launcher_foreground.png"));
+            ImageIO.write(draw(24 * scale[i], false), "png", new File(folder, "ic_launcher.png"));
+        }
+    }
+
+    /** Drawn on a 464-unit tile centred at (256, 256), the grid of docs/logo/proposte.html. */
+    static void artwork(Graphics2D g, int size, double tile) {
         g.translate(size / 2.0, size / 2.0);
         g.scale(tile / 464, tile / 464);
         g.translate(-256, -256);
@@ -66,8 +97,6 @@ public class MakeIcons {
         place(g, 256, 168, 1.15, -7, () -> sombrero(g));
         place(g, 166, 330, 1, 0, () -> chevron(g));
         place(g, 330, 368, 1.02, 0, () -> mustache(g));
-        g.dispose();
-        return image;
     }
 
     /** Draws around (0, 0), moved to (x, y), turned by [degrees] and scaled. */

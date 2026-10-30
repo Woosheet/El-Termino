@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.app.FileBrowser
 import dev.eltermino.app.ConflictPolicy
 import dev.eltermino.app.Endpoint
 import dev.eltermino.app.FileSort
@@ -167,6 +168,9 @@ internal val LocalCopyFlow = staticCompositionLocalOf<CopyFlow?> { null }
 
 internal expect fun Modifier.onFilesDropped(onHover: (Boolean) -> Unit, onDrop: (List<String>) -> Unit): Modifier
 
+/** Starts a drag towards the system's file manager; [items] are what's dragged, downloaded on drop. */
+internal expect fun Modifier.dragToSystem(browser: FileBrowser, items: () -> List<RemoteFile>): Modifier
+
 private sealed interface FileDialogState {
     data object NewFolder : FileDialogState
     class Rename(val entry: RemoteFile) : FileDialogState
@@ -227,8 +231,14 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
 
     fun pickAndUpload() {
         scope.launch {
-            val picked = state.services.platform.pickLocalFiles("Scegli i file da caricare")
-            if (picked.isNotEmpty()) upload(picked)
+            val platform = state.services.platform
+            if (platform.hasDocumentPicker) {
+                val documents = platform.pickDocuments("Scegli i file da caricare")
+                here?.let { copier?.copy(Endpoint.Local, documents, it, title) }
+            } else {
+                val picked = platform.pickLocalFiles("Scegli i file da caricare")
+                if (picked.isNotEmpty()) upload(picked)
+            }
         }
     }
 
@@ -246,6 +256,17 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
             MenuItem("Apri", onClick = { close(); openEntry(entry) })
         } else {
             MenuItem("Modifica", onClick = { close(); state.sessions.openEditor(browser.endpoint, entry.path) })
+            if (state.services.platform.isDesktop) {
+                MenuItem("Apri con editor esterno", onClick = { close(); state.sessions.openExternalEditor(browser.endpoint, entry.path) })
+            }
+        }
+        if (entry.type == RemoteFile.Type.File && state.services.platform.hasDocumentPicker) {
+            MenuItem("Salva sul telefono…", onClick = {
+                close()
+                scope.launch {
+                    state.services.platform.createDocument(entry.name)?.let { state.transfers.saveAs(browser.endpoint, entry, it) }
+                }
+            })
         }
         CopyTargets(state, targets) { target -> close(); copyTo(target, listOf(entry)) }
         MenuDivider()
@@ -322,6 +343,8 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                                     if (!modifiers.isShiftPressed) anchor = index
                                 },
                                 onOpen = { openEntry(entry) },
+                                dragOut = { if (entry.path in selection) selected else listOf(entry) },
+                                browser = browser,
                                 onDragStart = { position ->
                                     if (drag == null) return@FileRow
                                     val items = if (entry.path in selection) selected else listOf(entry)
@@ -355,7 +378,7 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                         }
                         MenuItem("Aggiorna", onClick = { close(); browser.refresh() })
                         MenuItem("Nuova cartella…", onClick = { close(); dialog = FileDialogState.NewFolder })
-                        if (browser.endpoint is Endpoint.Remote && state.services.platform.isDesktop) {
+                        if (state.services.platform.hasDocumentPicker || (browser.endpoint is Endpoint.Remote && state.services.platform.isDesktop)) {
                             MenuItem("Carica file…", onClick = { close(); pickAndUpload() })
                         }
                         MenuItem("Cartella superiore", onClick = { close(); browser.up() })
@@ -482,7 +505,8 @@ private fun FilesToolbar(state: AppState, tab: FilesTab, path: String?, hidden: 
             }
         }
         IconButton(Icons.Default.Add, "Nuova cartella", onClick = onNewFolder, size = 28.dp, iconSize = 16.dp)
-        if (browser.endpoint is Endpoint.Remote && state.services.platform.isDesktop) {
+        val platform = state.services.platform
+        if (platform.hasDocumentPicker || (browser.endpoint is Endpoint.Remote && platform.isDesktop)) {
             IconButton(CartaIcons.Upload, "Carica file", onClick = onUpload, size = 28.dp, iconSize = 16.dp)
         }
     }
@@ -523,6 +547,8 @@ private fun FileRow(
     showPermissions: Boolean,
     onClick: () -> Unit,
     onOpen: () -> Unit,
+    dragOut: () -> List<RemoteFile>,
+    browser: FileBrowser,
     onDragStart: (Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
@@ -578,6 +604,8 @@ private fun FileRow(
                 contentDescription = null,
                 tint = if (entry.isDirectory) colors.accent else colors.textDim,
                 size = 16.dp,
+                // The row's own drag copies between panels; this one leaves the app.
+                modifier = Modifier.dragToSystem(browser, dragOut),
             )
             Text(entry.name, modifier = Modifier.padding(start = 6.dp), style = Carta.type.small, maxLines = 1, overflow = TextOverflow.Ellipsis)
             entry.linkTarget?.let {

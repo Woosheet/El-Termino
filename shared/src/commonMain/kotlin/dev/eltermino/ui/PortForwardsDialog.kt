@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
+import dev.eltermino.app.isLoopbackAddress
+import dev.eltermino.app.isValidBindAddress
 import dev.eltermino.app.ForwardState
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.PortForwardRule
@@ -47,9 +49,9 @@ private fun kindLabel(kind: String) = when (kind) {
 
 /** One line a person reads as "what goes where". */
 internal fun PortForwardRule.route(host: Host): String = when (kind) {
-    "remote" -> "${host.label}:$bindPort → $targetHost:$targetPort qui"
-    "dynamic" -> "SOCKS su 127.0.0.1:$bindPort, esce da ${host.label}"
-    else -> "127.0.0.1:$bindPort → $targetHost:$targetPort su ${host.label}"
+    "remote" -> "${host.label} $bindAddress:$bindPort → $targetHost:$targetPort qui"
+    "dynamic" -> "SOCKS su $bindAddress:$bindPort, esce da ${host.label}"
+    else -> "$bindAddress:$bindPort → $targetHost:$targetPort su ${host.label}"
 }
 
 /** The forwards saved on [hostId]: start, stop, add, change, remove. */
@@ -106,7 +108,7 @@ internal fun PortForwardsDialog(state: AppState, hostId: String, onDismiss: () -
             )
         }
         Text(
-            "Le porte ascoltano solo su 127.0.0.1. Una regola attiva tiene aperta la connessione all'host finché non la fermi.",
+            "Una regola attiva tiene aperta la connessione all'host finché non la fermi.",
             style = Carta.type.small,
             color = Carta.colors.textDim,
             modifier = Modifier.padding(top = 12.dp),
@@ -139,7 +141,7 @@ private fun RuleRow(
                     Text("In avvio…", style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(start = 6.dp))
                 }
                 is ForwardState.Active -> Text(
-                    if (rule.kind == "remote") "Attiva: ${host.label} ascolta sulla porta ${forwardState.port}" else "Attiva su 127.0.0.1:${forwardState.port}",
+                    if (rule.kind == "remote") "Attiva: ${host.label} ascolta sulla porta ${forwardState.port}" else "Attiva su ${rule.bindAddress}:${forwardState.port}",
                     style = Carta.type.small,
                     color = colors.online,
                 )
@@ -162,12 +164,14 @@ private fun RuleEditor(host: Host, rule: PortForwardRule, onDismiss: () -> Unit,
     var targetHost by remember { mutableStateOf(rule.targetHost) }
     var targetPort by remember { mutableStateOf(if (rule.targetPort > 0) rule.targetPort.toString() else "") }
     var autoStart by remember { mutableStateOf(rule.autoStart) }
+    var bindAddress by remember { mutableStateOf(rule.bindAddress) }
     var tried by remember { mutableStateOf(false) }
 
     val bindError = portError(bindPort)
     val targetHostError = if (kind != "dynamic" && targetHost.isBlank()) "Scrivi un indirizzo, per esempio localhost" else null
     val targetPortError = if (kind != "dynamic") portError(targetPort) else null
-    val valid = bindError == null && targetHostError == null && targetPortError == null
+    val addressError = if (isValidBindAddress(bindAddress.trim())) null else "Un indirizzo IP o un nome"
+    val valid = bindError == null && targetHostError == null && targetPortError == null && addressError == null
 
     Dialog(
         onDismiss = onDismiss,
@@ -185,6 +189,7 @@ private fun RuleEditor(host: Host, rule: PortForwardRule, onDismiss: () -> Unit,
                         targetHost = targetHost.trim(),
                         targetPort = if (kind == "dynamic") 0 else targetPort.trim().toInt(),
                         autoStart = autoStart,
+                        bindAddress = bindAddress.trim(),
                     ),
                 )
             })
@@ -192,6 +197,19 @@ private fun RuleEditor(host: Host, rule: PortForwardRule, onDismiss: () -> Unit,
     ) {
         Field("Nome", name, { name = it }, Modifier.fillMaxWidth(), placeholder = "Database")
         Picker("Tipo", KINDS, kind, ::kindLabel, { kind = it }, Modifier.fillMaxWidth())
+        Field(
+            "Indirizzo di ascolto",
+            bindAddress,
+            { bindAddress = it },
+            Modifier.fillMaxWidth(),
+            monospace = true,
+            placeholder = "127.0.0.1",
+            error = addressError.takeIf { tried },
+        )
+        if (addressError == null && !isLoopbackAddress(bindAddress.trim())) {
+            Text("La porta diventa raggiungibile da altri computer della rete.", style = Carta.type.small, color = Carta.colors.danger)
+            if (kind == "remote") Text("Sul server serve anche GatewayPorts, altrimenti resta su loopback.", style = Carta.type.small, color = Carta.colors.textDim)
+        }
         Field(
             if (kind == "remote") "Porta su ${host.label}" else "Porta su questo dispositivo",
             bindPort,

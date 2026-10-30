@@ -177,7 +177,7 @@ private fun Throwable.isWorthRetrying(): Boolean {
     val chain = generateSequence(this) { it.cause }
     if (chain.any { it is PromptCancelledException }) return false
     return when (this) {
-        is SshException.HostKeyRejected, is SshException.AuthFailed, is VaultException, is HostMissingException -> false
+        is SshException.HostKeyRejected, is SshException.HostTrustRefused, is SshException.AuthFailed, is VaultException, is HostMissingException -> false
         else -> true
     }
 }

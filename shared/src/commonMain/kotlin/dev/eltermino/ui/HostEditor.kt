@@ -47,6 +47,7 @@ internal fun HostEditorDialog(state: AppState, initial: Host?, onDismiss: () -> 
     var newGroup by remember { mutableStateOf("") }
     var identityId by remember { mutableStateOf(initial?.identityId) }
     var jumpHostId by remember { mutableStateOf(initial?.jumpHostId) }
+    var agentForwarding by remember { mutableStateOf(initial?.agentForwarding == true) }
     var tags by remember { mutableStateOf(initial?.tags?.joinToString(", ").orEmpty()) }
     var favorite by remember { mutableStateOf(initial?.favorite ?: false) }
     var notes by remember { mutableStateOf(initial?.notes.orEmpty()) }
@@ -74,6 +75,7 @@ internal fun HostEditorDialog(state: AppState, initial: Host?, onDismiss: () -> 
                     groupId = resolvedGroup,
                     identityId = identityId,
                     jumpHostId = jumpHostId,
+                    agentForwarding = agentForwarding,
                     tags = tags.split(',').map { it.trim() }.filter { it.isNotEmpty() },
                     favorite = favorite,
                     notes = notes,
@@ -152,6 +154,10 @@ internal fun HostEditorDialog(state: AppState, initial: Host?, onDismiss: () -> 
             Field("Tag", tags, { tags = it }, placeholder = "nginx, docker")
             Field("Note", notes, { notes = it }, singleLine = false)
             Checkbox(favorite, { favorite = it }, "Preferito")
+            if (state.services.connector.supportsAgent) {
+                Checkbox(agentForwarding, { agentForwarding = it }, "Inoltra l'SSH agent a questo host")
+                Hint("Chi è root sul server può usare le tue chiavi finché sei collegato.")
+            }
         }
     }
 

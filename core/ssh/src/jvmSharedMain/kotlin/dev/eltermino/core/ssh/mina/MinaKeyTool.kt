@@ -39,6 +39,13 @@ class MinaKeyTool : SshKeyTool {
         return GeneratedKey(privateKey, keyPair.toKeyInfo(comment))
     }
 
+    override fun publicKeyFingerprint(publicKey: String): String = try {
+        val key = PublicKeyEntry.parsePublicKeyEntry(publicKey.trim()).resolvePublicKey(null, emptyMap(), null)
+        KeyUtils.getFingerPrint(BuiltinDigests.sha256, key)
+    } catch (e: Exception) {
+        throw InvalidKeyException(e.message ?: "Unreadable public key", e)
+    }
+
     private class PassphraseRequested : RuntimeException()
 }
 

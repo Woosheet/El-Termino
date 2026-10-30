@@ -17,7 +17,8 @@ Data: 30 ottobre 2026. Stato: accettata.
 
 **Host non Linux.** Senza `/proc` la scheda lo dice: il monitor funziona sugli host Linux.
 
+**Processi.** Aggiunti dopo: i dieci più pesanti da `ps -eo … --sort=-pcpu`. Dove `ps` non capisce quelle opzioni (BusyBox) la sezione resta vuota e il resto continua.
+
 ## Restano fuori
 
-- I processi più pesanti (`top`/`ps`).
 - macOS e BSD come host monitorati.

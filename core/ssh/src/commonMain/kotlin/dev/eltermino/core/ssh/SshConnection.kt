@@ -17,19 +17,19 @@ interface SshConnection {
     suspend fun exec(command: String): ExecResult
 
     /**
-     * Listens on this device's loopback, on [bindPort] or a free port when 0, and carries each
+     * Listens on this device at [bindAddress], on [bindPort] or a free port when 0, and carries each
      * connection to [host]:[port] as the server sees it, so `localhost` there is the server itself.
      */
-    suspend fun forwardLocal(host: String, port: Int, bindPort: Int = 0): PortForward
+    suspend fun forwardLocal(host: String, port: Int, bindPort: Int = 0, bindAddress: String = LOOPBACK): PortForward
 
     /**
-     * Asks the server to listen on its loopback, on [bindPort] or a free port when 0, and carries
+     * Asks the server to listen at [bindAddress], which its `GatewayPorts` may overrule, on [bindPort] or a free port when 0, and carries
      * each connection back to [host]:[port] as this device sees it.
      */
-    suspend fun forwardRemote(bindPort: Int, host: String, port: Int): PortForward
+    suspend fun forwardRemote(bindPort: Int, host: String, port: Int, bindAddress: String = LOOPBACK): PortForward
 
-    /** A SOCKS proxy on this device's loopback [bindPort]: each connection goes out from the server. */
-    suspend fun forwardDynamic(bindPort: Int): PortForward
+    /** A SOCKS proxy on this device at [bindAddress], on [bindPort]: each connection goes out from the server. */
+    suspend fun forwardDynamic(bindPort: Int, bindAddress: String = LOOPBACK): PortForward
     suspend fun close()
 }
 
@@ -53,6 +53,8 @@ data class PtyConfig(
     val cols: Int = 80,
     val rows: Int = 24,
 )
+
+const val LOOPBACK = "127.0.0.1"
 
 interface ShellChannel {
     val output: Flow<ByteArray>

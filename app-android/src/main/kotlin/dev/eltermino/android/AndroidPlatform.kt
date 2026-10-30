@@ -1,5 +1,8 @@
 package dev.eltermino.android
 
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
+import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -11,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import dev.eltermino.app.AttachedFile
 import dev.eltermino.app.PickedFile
 import dev.eltermino.app.Platform
+import dev.eltermino.core.ssh.RemoteFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -18,6 +22,42 @@ class AndroidPlatform(private val context: Context) : Platform {
     /** Set by the visible activity, which owns the document picker. */
     @Volatile
     var documentPicker: (suspend () -> Uri?)? = null
+
+    /** Set by the visible activity too: the picker, for several documents at once. */
+    @Volatile
+    var documentsPicker: (suspend () -> List<Uri>)? = null
+
+    /** Where picked documents are described. */
+    lateinit var documents: DocumentFileSystem
+
+    override val hasDocumentPicker = true
+
+    /** The grant is kept so that a transfer outlives the activity that picked the file. */
+    private fun keepAccess(uri: Uri, flags: Int) {
+        runCatching { context.contentResolver.takePersistableUriPermission(uri, flags) }
+    }
+
+    override suspend fun pickDocuments(title: String): List<RemoteFile> {
+        val uris = documentsPicker?.invoke().orEmpty()
+        return uris.mapNotNull { uri ->
+            withContext(Dispatchers.IO) { keepAccess(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            documents.stat(uri.toString())
+        }
+    }
+
+    override suspend fun createDocument(name: String): String? {
+        val uri = documentCreator?.invoke(name) ?: return null
+        withContext(Dispatchers.IO) { keepAccess(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) }
+        return uri.toString()
+    }
+
+    /** Set by the visible activity, which owns the system's prompt. */
+    var biometricPrompt: (suspend (String) -> Boolean)? = null
+
+    override val biometricAvailable: Boolean
+        get() = BiometricManager.from(context).canAuthenticate(BIOMETRIC_WEAK or DEVICE_CREDENTIAL) == BiometricManager.BIOMETRIC_SUCCESS
+
+    override suspend fun authenticate(reason: String): Boolean = biometricPrompt?.invoke(reason) == true
 
     /** Set by the visible activity too: where to create a document, named as suggested. */
     @Volatile

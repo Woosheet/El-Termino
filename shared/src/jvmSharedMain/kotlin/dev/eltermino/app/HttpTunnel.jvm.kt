@@ -22,11 +22,21 @@ import java.net.Socket
 import java.net.SocketAddress
 import java.net.URLConnection
 import java.util.concurrent.TimeUnit
+import okhttp3.internal.tls.OkHostnameVerifier
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.cert.CertificateException
+import java.security.cert.X509Certificate
+import javax.net.ssl.SSLContext
+import javax.net.ssl.TrustManagerFactory
+import javax.net.ssl.X509TrustManager
 import javax.net.SocketFactory
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration
 import kotlin.time.TimeSource
+
+private const val MAX_REDIRECTS = 10
 
 private val base = OkHttpClient.Builder()
     // Each request has its own tunnel, so nothing is worth keeping for the next one.
@@ -50,6 +60,7 @@ internal actual suspend fun sendThroughTunnel(connection: SshConnection, request
         var firstByte: Long? = null
         val client = base.newBuilder()
             .socketFactory(TunnelSocketFactory(forward.port))
+            .pinning(request.trustedCerts)
             .callTimeout(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
             .eventListener(object : EventListener() {
                 override fun connectEnd(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy, protocol: okhttp3.Protocol?) {
@@ -73,7 +84,7 @@ internal actual suspend fun sendThroughTunnel(connection: SshConnection, request
         } catch (e: IllegalArgumentException) {
             throw HttpRequestException(e.message ?: "Richiesta non valida", e)
         }
-        val response = client.newCall(built).await()
+        val (response, notFollowed) = client.follow(built, request.followRedirects)
         return response.use {
             val bytes = withContext(Dispatchers.IO) { it.body.bytes() }
             HttpResponse(
@@ -82,12 +93,67 @@ internal actual suspend fun sendThroughTunnel(connection: SshConnection, request
                 headers = it.headers.map { (name, value) -> name to value },
                 body = bytes,
                 timings = HttpTimings(connected, firstByte, start.elapsedNow().inWholeMilliseconds),
+                redirectNotFollowed = notFollowed,
             )
         }
     } catch (e: IOException) {
+        generateSequence<Throwable>(e) { it.cause }.filterIsInstance<UntrustedCertificate>().firstOrNull()?.let {
+            throw HttpCertificateException(host, port, it.sha256, it.subject, it.reason)
+        }
         throw HttpRequestException("Nessuna risposta da $host:$port attraverso ${connection.target.host}: ${e.message ?: e::class.simpleName}", e)
     } finally {
         forward.close()
+    }
+}
+
+/** The last answer, and where it would have gone had that been possible. */
+private suspend fun OkHttpClient.follow(first: Request, follow: Boolean): Pair<Response, String?> {
+    var request = first
+    repeat(MAX_REDIRECTS + 1) {
+        val response = newCall(request).await()
+        if (!follow || !response.isRedirect) return response to null
+        val location = response.header("Location") ?: return response to null
+        val next = response.request.url.resolve(location) ?: return response to location
+        val sameEnd = next.scheme == first.url.scheme && next.host == first.url.host && next.port == first.url.port
+        if (!sameEnd || it == MAX_REDIRECTS) return response to location
+        response.close()
+        val keepsMethod = response.code == 307 || response.code == 308
+        request = request.newBuilder().url(next).apply { if (!keepsMethod) method("GET", null) }.build()
+    }
+    error("unreachable")
+}
+
+private class UntrustedCertificate(val sha256: String, val subject: String, val reason: String) : CertificateException(reason)
+
+/** The system's checks first; if they refuse, only the certificates accepted by hand get through. */
+private class PinningTrustManager(private val system: X509TrustManager, private val accepted: Set<String>) : X509TrustManager {
+    override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
+        try {
+            system.checkServerTrusted(chain, authType)
+        } catch (e: CertificateException) {
+            val sha256 = chain[0].sha256()
+            if (sha256 !in accepted) throw UntrustedCertificate(sha256, chain[0].subjectX500Principal.name, e.message ?: "non verificabile")
+        }
+    }
+
+    override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = system.checkClientTrusted(chain, authType)
+    override fun getAcceptedIssuers(): Array<X509Certificate> = system.acceptedIssuers
+}
+
+private fun X509Certificate.sha256() = MessageDigest.getInstance("SHA-256").digest(encoded).toHexString()
+
+private val systemTrust: X509TrustManager by lazy {
+    TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(null as KeyStore?) }
+        .trustManagers.filterIsInstance<X509TrustManager>().first()
+}
+
+private fun OkHttpClient.Builder.pinning(accepted: Set<String>): OkHttpClient.Builder = apply {
+    val manager = PinningTrustManager(systemTrust, accepted)
+    val context = SSLContext.getInstance("TLS").apply { init(null, arrayOf(manager), null) }
+    sslSocketFactory(context.socketFactory, manager)
+    // An accepted certificate is good for its address, whatever name it carries.
+    hostnameVerifier { host, session ->
+        OkHostnameVerifier.verify(host, session) || (session.peerCertificates.firstOrNull() as? X509Certificate)?.sha256() in accepted
     }
 }
 

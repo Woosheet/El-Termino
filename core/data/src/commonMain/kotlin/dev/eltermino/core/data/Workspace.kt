@@ -14,6 +14,10 @@ data class Workspace(
     val identities: List<Identity> = emptyList(),
     val keys: List<SshKeyEntry> = emptyList(),
     val knownHosts: List<KnownHost> = emptyList(),
+    /** Authorities whose certificates vouch for the hosts they cover. */
+    val trustedCas: List<TrustedCa> = emptyList(),
+    /** HTTPS certificates the system doesn't trust and the user accepted by hand. */
+    val trustedHttpCerts: List<TrustedHttpCert> = emptyList(),
     val snippets: List<Snippet> = emptyList(),
     /** Saved HTTP requests, sent from a host through its SSH connection. */
     val httpCollections: List<HttpCollection> = emptyList(),
@@ -54,11 +58,13 @@ data class Host(
     /** Folders saved in the file panel. */
     val bookmarks: List<String> = emptyList(),
     val forwards: List<PortForwardRule> = emptyList(),
+    /** Lets this host use this device's SSH agent while connected. */
+    val agentForwarding: Boolean = false,
 )
 
 /**
- * A port forward saved on a host. Ports listen on loopback only: this device's for "local" and
- * "dynamic", the server's for "remote".
+ * A port forward saved on a host. Ports listen on this device for "local" and "dynamic", on the
+ * server for "remote".
  */
 @Serializable
 data class PortForwardRule(
@@ -73,6 +79,8 @@ data class PortForwardRule(
     val targetPort: Int = 0,
     /** Started whenever the app connects to the host. */
     val autoStart: Boolean = false,
+    /** Where the port listens. Anything but loopback lets other computers on the network reach it. */
+    val bindAddress: String = "127.0.0.1",
 )
 
 @Serializable
@@ -90,6 +98,8 @@ data class Identity(
     val username: String,
     val passwordSecretId: String? = null,
     val keyId: String? = null,
+    /** Try this device's SSH agent first, before the key and the password. */
+    val useAgent: Boolean = false,
 )
 
 @Serializable
@@ -119,6 +129,22 @@ data class KnownHost(
 )
 
 /** A saved command. `{{name}}` placeholders are asked for each time it runs. */
+/** One certificate for one address, as seen from the server: another one has to be accepted again. */
+@Serializable
+data class TrustedHttpCert(val host: String, val port: Int, val sha256: String)
+
+/** Like an `@cert-authority` line of `known_hosts`. */
+@Serializable
+data class TrustedCa(
+    val id: String,
+    val label: String,
+    /** In `authorized_keys` form. */
+    val publicKey: String,
+    val fingerprintSha256: String,
+    /** Patterns as in `known_hosts`: `*.example.com`, `[10.0.0.1]:2222`, `!excluded.example.com`. */
+    val patterns: List<String>,
+)
+
 @Serializable
 data class Snippet(
     val id: String,
@@ -159,6 +185,8 @@ data class HttpRequest(
     /** Runs `curl` on the server instead of sending through the tunnel. */
     val viaCurl: Boolean = false,
     val checks: List<HttpCheck> = emptyList(),
+    /** Follows redirects that stay on the same host and port, the only ones the tunnel reaches. */
+    val followRedirects: Boolean = false,
 )
 
 /** A multipart field: [value] as text, or the file at [file] when it's set. */
@@ -262,4 +290,7 @@ data class UiSettings(
     val recordSessions: Boolean = false,
     /** Recordings older than this many days are deleted at startup; 0 keeps them. */
     val recordingDays: Int = 30,
+    /** The app opens, and reopens after [lockAfterMinutes] away, only with the fingerprint. */
+    val biometricLock: Boolean = false,
+    val lockAfterMinutes: Int = 5,
 )

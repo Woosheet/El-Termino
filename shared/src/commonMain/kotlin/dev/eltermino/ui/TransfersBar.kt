@@ -161,7 +161,7 @@ private fun detail(status: TransferState, progress: dev.eltermino.app.TransferPr
         TransferState.Queued -> "In coda"
         TransferState.Paused -> "In pausa · $amount$files"
         is TransferState.Waiting -> status.message
-        TransferState.Done -> "Completato · ${formatBytes(progress.bytesTotal)}$files$skipped"
+        TransferState.Done -> "Completato · ${formatBytes(maxOf(progress.bytesDone, progress.bytesTotal))}$files$skipped"
         is TransferState.Failed -> "Non riuscito: ${status.message}"
         TransferState.Cancelled -> "Annullato"
         TransferState.Running -> {

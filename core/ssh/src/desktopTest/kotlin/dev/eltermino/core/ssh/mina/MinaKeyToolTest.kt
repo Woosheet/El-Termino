@@ -67,4 +67,15 @@ class MinaKeyToolTest {
         val info = tool.inspect(ppk.readBytes())
         assertEquals(sshKeygenFingerprint(TestServers.keyFile("id_ed25519.pub")), info.fingerprintSha256)
     }
+
+    @Test
+    fun publicKeyFingerprintMatchesGeneratedKey() {
+        val generated = MinaKeyTool().generateEd25519("test")
+        assertEquals(generated.info.fingerprintSha256, MinaKeyTool().publicKeyFingerprint(generated.info.publicKey))
+    }
+
+    @Test
+    fun publicKeyFingerprintRejectsGarbage() {
+        assertFailsWith<dev.eltermino.core.ssh.InvalidKeyException> { MinaKeyTool().publicKeyFingerprint("non è una chiave") }
+    }
 }

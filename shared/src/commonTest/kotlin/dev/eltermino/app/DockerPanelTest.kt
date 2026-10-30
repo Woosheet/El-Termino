@@ -45,4 +45,54 @@ class DockerPanelTest {
         val container = DockerContainer("id", "it's", "img", "running", "Up", "")
         assertEquals("docker logs -f --tail 200 'it'\\''s'", dockerLogsCommand(container))
     }
+
+    @Test
+    fun listsImagesVolumesNetworks() {
+        val images = parseResources(
+            DockerKind.Image,
+            """
+            {"ID":"sha256:aaa","Repository":"nginx","Size":"192MB","Tag":"1.27"}
+            {"ID":"sha256:bbb","Repository":"<none>","Size":"10MB","Tag":"<none>"}
+            """.trimIndent(),
+        )
+        assertEquals(listOf("nginx:1.27", "sha256:bbb"), images.map { it.id })
+        assertEquals("192MB", images[0].detail)
+        assertEquals(listOf("data"), parseResources(DockerKind.Volume, """{"Driver":"local","Name":"data"}""").map { it.name })
+        val networks = parseResources(
+            DockerKind.Network,
+            """
+            {"Driver":"bridge","ID":"n1","Name":"bridge","Scope":"local"}
+            {"Driver":"bridge","ID":"n2","Name":"app_net","Scope":"local"}
+            """.trimIndent(),
+        )
+        assertEquals(mapOf("app_net" to true, "bridge" to false), networks.associate { it.name to it.removable }, "the default networks stay")
+    }
+
+    @Test
+    fun composeLsParsed() {
+        val projects = parseComposeProjects("""[{"Name":"shop","Status":"running(2)","ConfigFiles":"/srv/shop/a.yml,/srv/shop/b.yml"}]""")
+        assertEquals(listOf(ComposeProject("shop", "running(2)", listOf("/srv/shop/a.yml", "/srv/shop/b.yml"))), projects)
+        assertEquals(emptyList(), parseComposeProjects(""))
+    }
+
+    @Test
+    fun quotesProjectAndIdInCommands() {
+        assertEquals("docker volume rm 'a; rm -rf /'", dockerRemoveCommand(DockerKind.Volume, "a; rm -rf /"))
+        assertEquals(
+            "docker compose --project-name 'my app' -f '/srv/my app/c.yml' -f '/x'\\''y' restart",
+            dockerComposeCommand(ComposeProject("my app", "", listOf("/srv/my app/c.yml", "/x'y")), ComposeAction.Restart),
+        )
+    }
+
+    @Test
+    fun runningContainerNotRemovable() {
+        assertEquals(false, DockerContainer("1", "web", "i", "running", "", "").removable)
+        assertEquals(true, DockerContainer("1", "web", "i", "exited", "", "").removable)
+    }
+
+    @Test
+    fun imageInUseErrorShownInClear() {
+        val stderr = "Error response from daemon: conflict: unable to remove repository reference \"nginx:1.27\" (must force) - container 3f2a is using its referenced image"
+        assertEquals("È ancora in uso: ferma e rimuovi prima ciò che lo usa", dockerError("basic", 1, stderr))
+    }
 }

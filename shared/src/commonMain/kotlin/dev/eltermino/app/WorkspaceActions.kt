@@ -8,11 +8,40 @@ import dev.eltermino.core.data.Identity
 import dev.eltermino.core.data.Snippet
 import dev.eltermino.core.data.SshKeyEntry
 import dev.eltermino.core.data.Workspace
+import dev.eltermino.core.data.TrustedCa
 import dev.eltermino.core.data.newId
+import dev.eltermino.core.importer.parseCertAuthorities
 import dev.eltermino.core.ssh.InvalidKeyException
 
 /** Changes to the workspace that also touch the vault, kept consistent in one place. */
 class WorkspaceActions(private val services: AppServices) {
+    /** Adds a CA, or changes the one with [id]. */
+    suspend fun saveTrustedCa(id: String?, label: String, publicKey: String, patterns: List<String>) {
+        val fingerprint = services.keyTool.publicKeyFingerprint(publicKey)
+        val ca = TrustedCa(id ?: newId(), label, publicKey.trim().split(Regex("\\s+")).take(2).joinToString(" "), fingerprint, patterns)
+        services.workspace.update { ws -> ws.copy(trustedCas = ws.trustedCas.filterNot { it.id == id } + ca) }
+    }
+
+    suspend fun removeTrustedCa(id: String) {
+        services.workspace.update { ws -> ws.copy(trustedCas = ws.trustedCas.filterNot { it.id == id }) }
+    }
+
+    /** Adds the `@cert-authority` lines of [knownHosts] not yet known and returns how many. */
+    suspend fun importTrustedCas(knownHosts: String): Int {
+        var added = 0
+        for (parsed in parseCertAuthorities(knownHosts)) {
+            val fingerprint = try {
+                services.keyTool.publicKeyFingerprint(parsed.publicKey)
+            } catch (e: InvalidKeyException) {
+                continue
+            }
+            if (services.workspace.workspace.value.trustedCas.any { it.fingerprintSha256 == fingerprint }) continue
+            saveTrustedCa(null, parsed.comment.ifBlank { "CA da known_hosts" }, parsed.publicKey, parsed.patterns)
+            added++
+        }
+        return added
+    }
+
     private val store get() = services.workspace
     private val vault get() = services.vault
 

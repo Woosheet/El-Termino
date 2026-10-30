@@ -32,6 +32,8 @@ class MonitorTab internal constructor(id: String, override val hostId: String, l
 
 data class DiskUsage(val mount: String, val usedKb: Long, val sizeKb: Long)
 
+data class ProcessInfo(val pid: Int, val user: String, val cpuPercent: Double, val memPercent: Double, val command: String)
+
 data class ResourceSample(
     val uptimeSeconds: Long,
     /** 1, 5 and 15 minutes. */
@@ -50,6 +52,8 @@ data class ResourceSample(
     val rxBytesPerSecond: Double?,
     val txBytesPerSecond: Double?,
     val disks: List<DiskUsage>,
+    /** The heaviest ones by CPU; empty where this `ps` has no such options. */
+    val processes: List<ProcessInfo> = emptyList(),
 ) {
     val memUsedKb: Long get() = memTotalKb - memAvailableKb
     val swapUsedKb: Long get() = swapTotalKb - swapFreeKb
@@ -60,7 +64,21 @@ class MonitorException(message: String) : Exception(message)
 /** One exec for everything, sections split by a line with "@". Plain POSIX, nothing to install. */
 internal const val MONITOR_COMMAND =
     "cat /proc/uptime /proc/loadavg; echo @; cat /proc/meminfo; echo @; head -1 /proc/stat; grep -c '^cpu[0-9]' /proc/stat; " +
-        "echo @; cat /proc/net/dev; echo @; df -kP"
+        "echo @; cat /proc/net/dev; echo @; df -kP; " +
+        "echo @; LC_ALL=C ps -eo pid,user,pcpu,pmem,args --sort=-pcpu 2>/dev/null | head -n 11"
+
+/** Lines that don't fit are left out: the header, and whatever a `ps` of another kind prints. */
+private fun parseProcesses(lines: List<String>): List<ProcessInfo> = lines.mapNotNull { line ->
+    val fields = line.trim().split(Regex("\\s+"), limit = 5)
+    if (fields.size < 5) return@mapNotNull null
+    ProcessInfo(
+        pid = fields[0].toIntOrNull() ?: return@mapNotNull null,
+        user = fields[1],
+        cpuPercent = fields[2].toDoubleOrNull() ?: return@mapNotNull null,
+        memPercent = fields[3].toDoubleOrNull() ?: return@mapNotNull null,
+        command = fields[4],
+    )
+}
 
 /**
  * Reads [MONITOR_COMMAND]'s output. CPU and network are rates, so they need [previous]
@@ -131,6 +149,7 @@ internal fun parseSample(text: String, previous: ResourceSample?, elapsedSeconds
         rxBytesPerSecond = if (rate && rx >= previous!!.netRxBytes) (rx - previous.netRxBytes) / elapsedSeconds else null,
         txBytesPerSecond = if (rate && tx >= previous!!.netTxBytes) (tx - previous.netTxBytes) / elapsedSeconds else null,
         disks = disks,
+        processes = parseProcesses(sections.getOrElse(5) { emptyList() }),
     )
 }
 
