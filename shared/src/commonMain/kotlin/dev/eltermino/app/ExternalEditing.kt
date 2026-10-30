@@ -59,6 +59,15 @@ internal suspend fun followExternalFile(
     }
 }
 
+/** Whether opening [name] with the system's app for it would run it instead of showing it. */
+fun runsWhenOpened(name: String, windows: Boolean): Boolean {
+    val extension = name.substringAfterLast('.', "").lowercase()
+    return extension in RUN_EVERYWHERE || windows && extension in RUN_ON_WINDOWS
+}
+
+private val RUN_EVERYWHERE = setOf("jar", "app", "command", "tool", "pkg", "dmg", "scpt", "desktop", "appimage")
+private val RUN_ON_WINDOWS = setOf("bat", "cmd", "com", "exe", "msi", "scr", "pif", "ps1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "hta", "lnk", "reg", "cpl", "url")
+
 /** Why [entries] can't be dragged out of the app; null when they can. */
 fun dragOutProblem(entries: List<RemoteFile>): String? = when {
     entries.any { it.type != RemoteFile.Type.File } -> "Le cartelle non si trascinano fuori dall'app: usa \"Copia in…\""

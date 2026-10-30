@@ -227,6 +227,8 @@ private fun Pane(state: AppState, index: Int, framed: Boolean, showExtraKeys: Bo
     val tabId = panes.tabIds.getOrNull(index)
     val tab = tabs.firstOrNull { it.id == tabId }
     val focused = index == panes.focused
+    // Back to false and to true again, so the terminal takes the keyboard back after an unlock.
+    val locked by state.lock.locked.collectAsState()
     val colors = Carta.colors
     // The border only says where the keyboard is; broadcast shows in the pane header.
     val border = if (framed && focused) Modifier.border(2.dp, colors.accent) else Modifier
@@ -252,10 +254,10 @@ private fun Pane(state: AppState, index: Int, framed: Boolean, showExtraKeys: Bo
                     if (focused && tab.id in broadcast) {
                         Column(Modifier.fillMaxSize()) {
                             BroadcastBand(state, broadcast.size)
-                            Box(Modifier.weight(1f)) { TabBody(state, tab, showExtraKeys && focused, focused) }
+                            Box(Modifier.weight(1f)) { TabBody(state, tab, showExtraKeys && focused, focused && !locked) }
                         }
                     } else {
-                        TabBody(state, tab, showExtraKeys && focused, focused)
+                        TabBody(state, tab, showExtraKeys && focused, focused && !locked)
                     }
                 }
             }

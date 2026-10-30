@@ -4,6 +4,7 @@ import dev.eltermino.core.ssh.ShellChannel
 import dev.eltermino.core.terminal.TerminalSession
 import dev.eltermino.core.terminal.TerminalSessionConfig
 import dev.eltermino.core.terminal.TerminalSize
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
@@ -34,7 +35,14 @@ class ReplayTab internal constructor(id: String, label: String, val cast: Asciic
     internal val mutableFinished = MutableStateFlow(false)
     val finished: StateFlow<Boolean> = mutableFinished.asStateFlow()
 
+    /** The terminal starts reading right away, before [terminal] is even assigned. */
+    internal val started = CompletableDeferred<Unit>()
+
     val terminal = TerminalSession(ReplayChannel(this), scope, TerminalSessionConfig(cols = cast.width, rows = cast.height))
+
+    init {
+        started.complete(Unit)
+    }
 
     fun restart() {
         mutablePosition.value = 0.0
@@ -58,6 +66,7 @@ internal fun parseCastSize(text: String): TerminalSize? {
 /** A "shell" that plays [tab]'s recording; what's typed into it goes nowhere. */
 internal class ReplayChannel(private val tab: ReplayTab) : ShellChannel {
     override val output: Flow<ByteArray> = flow {
+        tab.started.await()
         // Starts from a clean screen, also when played again over the last frame.
         emit("\u001Bc".encodeToByteArray())
         resizeTo(TerminalSize(tab.cast.width, tab.cast.height))

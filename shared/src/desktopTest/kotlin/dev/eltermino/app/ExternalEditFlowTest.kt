@@ -2,9 +2,12 @@ package dev.eltermino.app
 
 import dev.eltermino.core.ssh.RemoteFile
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import java.io.File
+import java.io.IOException
+import java.awt.datatransfer.DataFlavor
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFilePermission
@@ -218,5 +221,31 @@ class ExternalEditFlowTest {
     fun dragRefusesNamesThatLeaveTheFolder() {
         val target = Files.createTempDirectory("drag").toFile().apply { deleteOnExit() }
         assertFailsWith<IllegalArgumentException> { runBlocking { downloadForDrag(fs, listOf("/x/.."), target) } }
+    }
+
+    @Test
+    fun filesTheSystemWouldRunAreRecognised() {
+        assertTrue(runsWhenOpened("deploy.BAT", windows = true))
+        assertTrue(runsWhenOpened("script.js", windows = true))
+        assertFalse(runsWhenOpened("script.js", windows = false))
+        assertTrue(runsWhenOpened("tool.jar", windows = false))
+        assertFalse(runsWhenOpened("nginx.conf", windows = true))
+        assertFalse(runsWhenOpened("Makefile", windows = true))
+    }
+
+    @Test
+    fun aStalledDragEndsWithAMessage() {
+        var told: String? = null
+        val drag = FilesForDrag({ awaitCancellation() }, listOf("/a"), timeoutMillis = 50) { told = it }
+        assertFailsWith<IOException> { drag.getTransferData(DataFlavor.javaFileListFlavor) }
+        assertNotNull(told)
+    }
+
+    @Test
+    fun aFailedDragEndsWithAMessage() {
+        var told: String? = null
+        val drag = FilesForDrag({ fs }, listOf("/non/c/è")) { told = it }
+        assertFailsWith<IOException> { drag.getTransferData(DataFlavor.javaFileListFlavor) }
+        assertNotNull(told)
     }
 }

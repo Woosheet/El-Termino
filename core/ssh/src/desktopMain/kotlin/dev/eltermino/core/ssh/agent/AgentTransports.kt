@@ -13,7 +13,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 private const val MAX_REPLY_BYTES = 256 * 1024
-private val WINDOWS_PIPES = listOf("""\\.\pipe\openssh-ssh-agent""", """\\.\pipe\pageant.${System.getProperty("user.name")}""")
+private const val WINDOWS_PIPE_PREFIX = """\\.\pipe\"""
 
 private class StreamTransport(
     private val input: InputStream,
@@ -32,6 +32,10 @@ private class StreamTransport(
     override fun close() = closeable.close()
 }
 
+/** The pipes to try among those that exist. */
+internal fun agentPipes(names: List<String>, user: String): List<String> =
+    names.filter { it == "openssh-ssh-agent" || it.startsWith("pageant.$user.") }.sortedDescending().map { WINDOWS_PIPE_PREFIX + it }
+
 /** Null when nothing listens at [path]. */
 fun openUnixAgent(path: Path): AgentTransport? {
     if (!Files.exists(path)) return null
@@ -45,13 +49,17 @@ fun openUnixAgent(path: Path): AgentTransport? {
 }
 
 /** shortcut: Windows pipes haven't been tried on a real Windows, check with OpenSSH's agent and Pageant. */
-private fun openWindowsAgent(): AgentTransport? = WINDOWS_PIPES.firstNotNullOfOrNull { pipe ->
-    try {
-        val file = RandomAccessFile(pipe, "rw")
-        StreamTransport(Channels.newInputStream(file.channel), Channels.newOutputStream(file.channel), file)
-    } catch (e: IOException) {
-        null
-    }
+private fun openWindowsAgent(): AgentTransport? {
+    // Pageant ends its pipe's name with a hash, so it has to be found rather than named.
+    val pipes = java.io.File(WINDOWS_PIPE_PREFIX).list().orEmpty().toList()
+    return agentPipes(pipes, System.getProperty("user.name")).firstNotNullOfOrNull(::openWindowsPipe)
+}
+
+private fun openWindowsPipe(pipe: String): AgentTransport? = try {
+    val file = RandomAccessFile(pipe, "rw")
+    StreamTransport(Channels.newInputStream(file.channel), Channels.newOutputStream(file.channel), file)
+} catch (e: IOException) {
+    null
 }
 
 /** The agent of the logged-in user, or null when there's none running. */

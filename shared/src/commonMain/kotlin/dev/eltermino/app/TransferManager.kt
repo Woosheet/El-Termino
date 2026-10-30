@@ -213,10 +213,11 @@ class TransferManager(
         val running = transfer.job
         transfer.mutableState.value = TransferState.Cancelled
         running?.cancel()
-        val half = transfer.steps?.getOrNull(transfer.partial) as? Step.Copy ?: return
+        // A chosen document exists from the moment it was chosen, even with nothing written yet.
+        val half = if (transfer.exactTarget) transfer.targetDir.path else (transfer.steps?.getOrNull(transfer.partial) as? Step.Copy)?.to ?: return
         scope.launch {
             running?.join()
-            runCatching { fileSystem(transfer.targetDir.endpoint).delete(half.to, recursive = false) }
+            runCatching { fileSystem(transfer.targetDir.endpoint).delete(half, recursive = false) }
             releaseIdle()
         }
     }
@@ -328,6 +329,8 @@ class TransferManager(
         val existing = target.stat(step.to)
         var to = step.to
         val offset = when {
+            // A document's size is only what its provider says, and not all of them can append.
+            transfer.exactTarget -> 0
             index == transfer.partial -> existing?.size?.coerceAtMost(step.size) ?: 0
             existing == null -> 0
             transfer.policy == ConflictPolicy.Skip -> return meter.fileDone(step.size)

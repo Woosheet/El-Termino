@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import android.graphics.Color
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -17,11 +18,15 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import dev.eltermino.ui.App
 import dev.eltermino.ui.currentTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -103,6 +108,13 @@ class MainActivity : FragmentActivity() {
         setContent {
             // Light or dark status bar icons, to match the theme rather than the system.
             val dark = currentTheme(app.state).dark
+            // With the lock on, the recent apps screen mustn't show what the lock hides.
+            val lockOn by remember { app.state.services.workspace.workspace.map { it.ui.biometricLock } }.collectAsState(false)
+            LaunchedEffect(lockOn) {
+                if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(!lockOn)
+                else if (lockOn) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
             LaunchedEffect(dark) {
                 val style = if (dark) SystemBarStyle.dark(Color.TRANSPARENT) else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)

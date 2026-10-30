@@ -57,11 +57,11 @@ fun TrustedCa.covers(host: String, port: Int): Boolean {
     return plain.any { hostPatternMatches(it, host, port) } && negated.none { hostPatternMatches(it.drop(1), host, port) }
 }
 
-/** `*` and `?` as in `known_hosts`, where a host on another port than 22 reads `[host]:port`. */
+/** `*` and `?` as in `known_hosts`, where a host on another port than 22 reads `[host]:port`; on 22 either form will do. */
 fun hostPatternMatches(pattern: String, host: String, port: Int): Boolean {
-    val name = (if (port == 22) host else "[$host]:$port").lowercase()
+    val names = listOfNotNull(host.takeIf { port == 22 }, "[$host]:$port").map { it.lowercase() }
     val regex = pattern.lowercase().split('*').joinToString(".*") { part ->
         part.split('?').joinToString(".") { Regex.escape(it) }
     }
-    return Regex(regex).matches(name)
+    return names.any(Regex(regex)::matches)
 }

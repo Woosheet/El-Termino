@@ -57,11 +57,13 @@ private fun chooseMasterKey(dataDir: File): MasterKeyProvider {
     val salt = File(dataDir, "vault.salt")
     if (chooseMasterKeySource(keychain.isAvailable(), vault.exists(), salt.exists()) == MasterKeySource.Keychain) return keychain
     repeat(MASTER_PASSWORD_TRIES) { attempt ->
-        val provider = PasswordMasterKeyProvider(salt, ::askMasterPassword)
+        var cancelled = false
+        val provider = PasswordMasterKeyProvider(salt) { first -> askMasterPassword(first).also { cancelled = it == null } }
         try {
             if (vault.exists()) runBlocking { EncryptedFileVault(vault, provider).snapshot() }
             return provider
         } catch (e: VaultException) {
+            if (cancelled) exitProcess(0)
             if (attempt == MASTER_PASSWORD_TRIES - 1 || !salt.exists()) {
                 JOptionPane.showMessageDialog(null, "Non riesco ad aprire il vault: password non valida.", "El Termino", JOptionPane.ERROR_MESSAGE)
                 exitProcess(1)

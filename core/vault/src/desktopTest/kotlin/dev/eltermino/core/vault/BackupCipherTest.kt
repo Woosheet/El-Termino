@@ -53,4 +53,19 @@ class BackupCipherTest {
     fun sealTwiceDiffers() {
         assertFalse(BackupCipher.seal(plain, password).contentEquals(BackupCipher.seal(plain, password)))
     }
+
+    @Test
+    fun aFileAskingForTooMuchMemoryIsRefused() {
+        val file = BackupCipher.seal(ByteArray(4), "password".toCharArray())
+        java.nio.ByteBuffer.wrap(file).putInt(4, 300_000)
+        val error = kotlin.test.assertFailsWith<VaultException> { BackupCipher.open(file, "password".toCharArray()) }
+        kotlin.test.assertTrue("unreasonable" in error.message.orEmpty(), error.message)
+    }
+
+    @Test
+    fun aNewerFormatSaysSo() {
+        val file = BackupCipher.seal(ByteArray(4), "password".toCharArray())
+        file[3] = 2
+        kotlin.test.assertFailsWith<BackupTooNewException> { BackupCipher.open(file, "password".toCharArray()) }
+    }
 }

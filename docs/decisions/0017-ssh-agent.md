@@ -4,7 +4,7 @@ Data: 30 ottobre 2026. Stato: accettata.
 
 ## Decisione
 
-**Dove.** Solo sul desktop: `SSH_AUTH_SOCK` con i socket Unix del JDK su macOS e Linux, la named pipe di OpenSSH e poi quella di Pageant su Windows. Su Android non compare.
+**Dove.** Solo sul desktop: `SSH_AUTH_SOCK` con i socket Unix del JDK su macOS e Linux, la named pipe di OpenSSH e poi quella di Pageant su Windows, che si trova elencando le pipe perché il suo nome finisce con un hash. Su Android non compare.
 
 **Quanto codice.** Il protocollo è quello di MINA (`AbstractAgentProxy`); nostro è solo il trasporto, con una connessione per richiesta e un limite di 256 KiB sulle risposte.
 

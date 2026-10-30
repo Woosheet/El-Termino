@@ -51,7 +51,7 @@ object BackupCipher {
         if (file.size < HEADER_BYTES || !file.copyOfRange(0, MAGIC.size).contentEquals(MAGIC)) {
             throw VaultException("Not an El Termino backup")
         }
-        if (file[MAGIC.size] != VERSION) throw VaultException("Backup format ${file[MAGIC.size]} isn't supported")
+        if (file[MAGIC.size] != VERSION) throw BackupTooNewException("Backup format ${file[MAGIC.size]} isn't supported")
         val header = ByteBuffer.wrap(file, 4, HEADER_BYTES - 4)
         val memory = header.getInt()
         val iterations = header.getInt()
@@ -62,7 +62,11 @@ object BackupCipher {
         }
         val salt = ByteArray(SALT_BYTES).also { header.get(it) }
         val nonce = ByteArray(NONCE_BYTES).also { header.get(it) }
-        val key = deriveKey(password, salt, memory, iterations, parallelism)
+        val key = try {
+            deriveKey(password, salt, memory, iterations, parallelism)
+        } catch (e: OutOfMemoryError) {
+            throw VaultException("Not enough memory to open this backup", e)
+        }
         return try {
             Cipher.getInstance(TRANSFORMATION).run {
                 init(Cipher.DECRYPT_MODE, SecretKeySpec(key, "AES"), GCMParameterSpec(TAG_BITS, nonce))
@@ -76,7 +80,7 @@ object BackupCipher {
         }
     }
 
-    private const val MAX_MEMORY_KIB = 1_048_576
+    private const val MAX_MEMORY_KIB = 262_144
     private const val MAX_ITERATIONS = 16
     private const val MAX_PARALLELISM = 8
 }

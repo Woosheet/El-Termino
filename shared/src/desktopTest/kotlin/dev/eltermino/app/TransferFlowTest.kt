@@ -2,10 +2,13 @@ package dev.eltermino.app
 
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.newId
+import dev.eltermino.core.ssh.ByteSink
+import dev.eltermino.core.ssh.ByteSource
 import dev.eltermino.core.ssh.RemoteFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filterNotNull
@@ -15,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import java.io.File
+import java.io.IOException
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -100,6 +104,61 @@ class TransferFlowTest {
         val transfer = unknownSizes().saveAs(Endpoint.Local, entry(Endpoint.Local, source.path), File(folder, "x.bin").path)
         awaitDone(transfer)
         assertTrue(bytes.contentEquals(File(folder, "x.bin").readBytes()))
+    }
+
+    /** A queue over local files changed by [wrap], as a provider of documents would behave. */
+    private fun queueOver(wrap: (FileSystem) -> FileSystem): TransferManager {
+        val files = wrap(services.localFiles!!)
+        val blind = AppServices(services.workspace, services.vault, services.connector, services.keyTool, services.platform, localFiles = files)
+        return TransferManager(scope, blind, connections)
+    }
+
+    @Test
+    fun aChosenDocumentStartsOverAfterAFailure() {
+        val bytes = Random.nextBytes(4_000)
+        val source = localFile("doc-${newId().take(8)}.bin", bytes)
+        val chosen = File(local, "scelto-${newId().take(8)}.bin").apply { writeBytes(ByteArray(0)) }
+        val offsets = mutableListOf<Long>()
+        var broken = true
+        val queue = queueOver { real ->
+            object : FileSystem by real {
+                override suspend fun openWrite(path: String, offset: Long): ByteSink {
+                    offsets += offset
+                    return real.openWrite(path, offset)
+                }
+
+                override suspend fun openRead(path: String, offset: Long): ByteSource {
+                    val inner = real.openRead(path, offset)
+                    return object : ByteSource by inner {
+                        var calls = 0
+                        override suspend fun read(buffer: ByteArray): Int {
+                            if (broken && calls++ == 1) { broken = false; throw IOException("letto a metà") }
+                            return inner.read(buffer)
+                        }
+                    }
+                }
+            }
+        }
+        val transfer = queue.saveAs(Endpoint.Local, entry(Endpoint.Local, source.path), chosen.path)
+        runBlocking { withTimeout(30_000) { transfer.state.first { it is TransferState.Failed } } }
+        queue.resume(transfer)
+        awaitDone(transfer)
+        assertEquals(listOf(0L, 0L), offsets)
+    }
+
+    @Test
+    fun aDocumentCancelledBeforeStartingDoesNotStayBehind() {
+        val source = localFile("doc-${newId().take(8)}.bin", Random.nextBytes(100))
+        val chosen = File(local, "scelto-${newId().take(8)}.bin").apply { writeBytes(ByteArray(0)) }
+        val queue = queueOver { real ->
+            object : FileSystem by real {
+                override suspend fun stat(path: String): RemoteFile? = if (path == source.path) awaitCancellation() else real.stat(path)
+            }
+        }
+        val transfer = queue.saveAs(Endpoint.Local, entry(Endpoint.Local, source.path), chosen.path)
+        runBlocking { withTimeout(10_000) { transfer.state.first { it.isActive } } }
+        queue.cancel(transfer)
+        eventually { !chosen.exists() }
     }
 
     @Test

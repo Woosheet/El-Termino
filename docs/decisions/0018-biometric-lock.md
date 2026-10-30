@@ -20,3 +20,5 @@ Data: 30 ottobre 2026. Stato: accettata.
 
 - Una finestra di dialogo già aperta quando scatta il blocco resta visibile sopra la copertura.
 - Touch ID e BiometricPrompt vanno provati a mano: i test coprono la logica, non l'hardware.
+
+**La schermata delle app recenti.** Con il blocco attivo, su Android l'anteprima non mostra il contenuto dell'app: da Android 13 con `setRecentsScreenshotEnabled`, prima con `FLAG_SECURE`, che impedisce anche gli screenshot.

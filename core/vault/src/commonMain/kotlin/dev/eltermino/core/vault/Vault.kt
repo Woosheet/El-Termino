@@ -33,4 +33,7 @@ fun interface MasterKeyProvider {
     fun load(createIfMissing: Boolean): ByteArray
 }
 
-class VaultException(message: String, cause: Throwable? = null) : Exception(message, cause)
+open class VaultException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/** A backup written by a newer version of the app: this one must not guess at it. */
+class BackupTooNewException(message: String) : VaultException(message)

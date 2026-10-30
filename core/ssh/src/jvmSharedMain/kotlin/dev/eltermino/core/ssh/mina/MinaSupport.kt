@@ -71,8 +71,11 @@ private fun OpenSshCertificate.toInfo() = HostCertificateInfo(
 /** The format's times are unsigned: "forever" reads as a negative long. */
 private fun Long.unsignedEpoch() = if (this < 0) Long.MAX_VALUE else this
 
+/** SHA-1 RSA, which OpenSSH stopped accepting by default. */
+internal fun caSignatureAllowed(algorithm: String): Boolean = algorithm != "ssh-rsa"
+
 private fun OpenSshCertificate.isWellFormedHostCertificate(): Boolean {
-    if (type != OpenSshCertificate.Type.HOST || criticalOptions.isNotEmpty()) return false
+    if (type != OpenSshCertificate.Type.HOST || criticalOptions.isNotEmpty() || !caSignatureAllowed(signatureAlgorithm)) return false
     val factory = BuiltinSignatures.fromFactoryName(signatureAlgorithm)?.takeIf { it.isSupported } ?: return false
     return runCatching {
         factory.create().run {

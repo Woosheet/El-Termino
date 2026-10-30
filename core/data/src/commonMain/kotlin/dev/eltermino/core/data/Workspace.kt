@@ -1,14 +1,18 @@
 package dev.eltermino.core.data
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 /**
  * Everything the user configures, saved as one JSON document. Secrets never appear
  * here: fields ending in `SecretId` point into the vault.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class Workspace(
-    val version: Int = CURRENT_VERSION,
+    // Always written: a default left out would read as this app's own version on any older one.
+    @EncodeDefault val version: Int = CURRENT_VERSION,
     val hosts: List<Host> = emptyList(),
     val groups: List<HostGroup> = emptyList(),
     val identities: List<Identity> = emptyList(),

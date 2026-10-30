@@ -17,6 +17,7 @@ import dev.eltermino.app.PickedFile
 import dev.eltermino.app.backupFileName
 import dev.eltermino.app.backupPasswordProblem
 import dev.eltermino.core.data.BackupContent
+import dev.eltermino.core.vault.BackupTooNewException
 import dev.eltermino.core.vault.VaultException
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
@@ -43,6 +44,13 @@ internal fun BackupSection(state: AppState) {
                 scope.launch { picked = state.services.platform.pickFile("Scegli il backup") }
             }, kind = ButtonKind.Secondary)
         }
+        Button("Salva l'ultima copia di sicurezza…", onClick = {
+            scope.launch {
+                val copy = state.services.backup.lastSafetyCopy()
+                if (copy == null) message = "Nessuna copia di sicurezza: se ne crea una a ogni ripristino."
+                else if (state.services.platform.saveFile("el-termino-copia-di-sicurezza.etbackup", copy)) message = "Copia salvata: si apre con la password del backup ripristinato."
+            }
+        }, kind = ButtonKind.Ghost, modifier = Modifier.padding(top = 8.dp))
         message?.let { Text(it, style = Carta.type.small, color = Carta.colors.textDim, modifier = Modifier.padding(top = 8.dp)) }
     }
     if (creating) CreateBackupDialog(state, onDismiss = { creating = false }) { message = it }
@@ -137,8 +145,10 @@ private fun RestoreBackupDialog(state: AppState, file: PickedFile, onDismiss: ()
                             val read = withContext(Dispatchers.Default) { backup.read(file.bytes, password.toCharArray()) }
                             content = read
                             preview = backup.preview(read)
+                        } catch (e: BackupTooNewException) {
+                            error = "Questo backup viene da una versione più nuova dell'app: aggiorna l'app e riprova."
                         } catch (e: VaultException) {
-                            error = "Password sbagliata, oppure il file è danneggiato o di una versione più nuova dell'app."
+                            error = "Password sbagliata, oppure il file è danneggiato."
                         }
                         busy = false
                     }
@@ -162,6 +172,10 @@ private fun RestoreBackupDialog(state: AppState, file: PickedFile, onDismiss: ()
             Text("${summary.hosts} host, ${summary.identities} identità, ${summary.keys} chiavi, ${summary.snippets} snippet, ${summary.collections} collezioni, ${summary.layouts} spazi di lavoro.")
             Gap(height = 8)
             Text("Unisci: gli elementi già presenti prendono la versione del backup, gli altri restano.", style = Carta.type.small, color = Carta.colors.textDim)
+            if (summary.cas + summary.httpCerts > 0) {
+                Gap(height = 8)
+                Text("Il backup fa fidare questo dispositivo di ${summary.cas} CA e ${summary.httpCerts} certificati HTTPS accettati a mano: ripristinalo solo se è tuo.", style = Carta.type.small, color = Carta.colors.danger)
+            }
             if (summary.knownHostConflicts.isNotEmpty()) {
                 Gap(height = 8)
                 val hosts = summary.knownHostConflicts.joinToString { "${it.host}:${it.port}" }

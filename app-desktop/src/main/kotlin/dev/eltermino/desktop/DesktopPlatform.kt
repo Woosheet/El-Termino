@@ -6,6 +6,7 @@ import dev.eltermino.app.LATEST_RELEASE_URL
 import dev.eltermino.app.DesktopExternalFile
 import dev.eltermino.app.ExternalFile
 import dev.eltermino.app.Platform
+import dev.eltermino.app.runsWhenOpened
 import dev.eltermino.app.ReleaseAsset
 import dev.eltermino.app.TermiusScan
 import dev.eltermino.core.importer.termius.TermiusLocal
@@ -62,11 +63,13 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
     // executable bit, and an installed app shouldn't change, so it runs from a private copy.
     private val touchId: File? by lazy {
         System.getProperty("compose.application.resources.dir")?.let { File(it, "touchid") }?.takeIf { it.isFile }?.let { packaged ->
-            File.createTempFile("touchid", null).apply {
-                deleteOnExit()
-                packaged.copyTo(this, overwrite = true)
-                setExecutable(true, true)
-            }
+            runCatching {
+                File.createTempFile("touchid", null).apply {
+                    deleteOnExit()
+                    packaged.copyTo(this, overwrite = true)
+                    setExecutable(true, true)
+                }
+            }.getOrNull()
         }
     }
 
@@ -112,6 +115,10 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
     }
 
     override suspend fun openExternally(name: String, bytes: ByteArray): ExternalFile = withContext(Dispatchers.IO) {
+        // It comes from a server: opening must never mean running.
+        check(!runsWhenOpened(name, System.getProperty("os.name").startsWith("Windows", ignoreCase = true))) {
+            "$name verrebbe eseguito invece di aperto: usa \"Copia in…\" o l'editor integrato"
+        }
         DesktopExternalFile(name, bytes).also { file ->
             try {
                 java.awt.Desktop.getDesktop().open(File(file.path))

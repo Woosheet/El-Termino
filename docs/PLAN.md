@@ -1,6 +1,6 @@
 # El Termino: piano di progetto
 
-Ultimo aggiornamento: 30 ottobre 2026 (Fase 7)
+Ultimo aggiornamento: 30 ottobre 2026 (Fase 7 e rifiniture)
 
 ## Obiettivo
 
@@ -274,6 +274,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - SSH agent e forwarding fatti ([decisione 0017](decisions/0017-ssh-agent.md)): spunta nell'identità, forwarding per host spento di default. Provati da `AgentLoginTest` contro un `ssh-agent` vero; su Windows vanno provati a mano.
   - Blocco biometrico fatto ([decisione 0018](decisions/0018-biometric-lock.md)): impronta o password del dispositivo all'avvio e dopo un'assenza. Blocca l'interfaccia, non il vault. Logica provata da `AppLockTest`; Touch ID e BiometricPrompt vanno provati a mano.
   - Punti aperti chiusi: redirect e certificati HTTPS accettati a mano; indirizzo di ascolto dei forward ed elenco globale dei forward attivi; "Apri con editor esterno" e trascinamento verso il Finder o Esplora risorse; selettore di sistema su Android; processi più pesanti nel monitor; Docker con rimozione, immagini, volumi, reti e Compose; riproduzione che segue i ridimensionamenti; icona del launcher su Android.
+  - Rifiniture dopo la revisione finale: il ripristino distingue un backup di una versione più nuova da una password sbagliata e l'anteprima conta le CA e i certificati che farebbe fidare; l'ultima copia di sicurezza si salva dalle Impostazioni; Pageant si trova elencando le pipe; i file che il sistema eseguirebbe non si aprono con "Apri con editor esterno"; un trascinamento bloccato finisce dopo 5 minuti con un messaggio; le destinazioni scelte da Android ripartono da zero; i certificati CA firmati con SHA-1 non valgono; con il blocco attivo le app recenti non mostrano il contenuto.
   - Da provare a mano: Touch ID e BiometricPrompt su hardware vero; Pageant e named pipe su Windows; la finestra della master password su un Linux senza Secret Service; il selettore di sistema e l'icona su un telefono; "Apri con editor esterno" e il trascinamento verso il Finder, dall'icona della riga. La vista del terminale può ridimensionare una riproduzione se cambia il riquadro.
 
 ## Roadmap
