@@ -42,3 +42,9 @@ Data: 29 ottobre 2026. Stato: accettata.
 - `HttpRequestFlowTest`: GET e POST attraverso il tunnel e con curl sul server; un form multipart con testo e un file del computer; errore chiaro su una porta chiusa.
 - `HttpRunFlowTest`: criterio della fase. Una collezione con verifiche gira su tre host di un gruppo (uno dietro il bastion, uno con una porta sbagliata di proposito) e dà l'esito per host. Più una scheda che invia dal suo host e tiene le risposte.
 - `HttpRequestsTest`, `HttpImportTest`: variabili, auth, corpi, curl, verifiche, import da Postman e da curl.
+
+## Aggiornamento del 30 ottobre 2026
+
+**Redirect.** Opzione per richiesta, spenta di default. Nel tunnel si seguono fino a 10 redirect, solo sullo stesso schema, host e porta: il tunnel non arriva altrove. La risposta mostra quello a cui ci si è fermati. Con "Esegui con curl sul server" si usa `curl -L` e il limite di host non vale, e l'opzione lo dice.
+
+**Certificati non validi.** La richiesta fallisce mostrando soggetto e impronta SHA-256, con un bottone per accettarli. L'accettazione vale per quell'indirizzo e quell'impronta, si salva nel workspace e viaggia nel backup; se il certificato cambia si chiede di nuovo. Non esiste un "accetta tutto".

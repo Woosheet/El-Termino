@@ -46,6 +46,20 @@ cat > /srv/http/openapi.json <<'JSON'
     "responses":{"200":{"description":"eco"}}}}
  }}
 JSON
+# Sends to the address after "to=", or to itself for ever without one.
+cat > /srv/http/cgi-bin/redirect <<'CGI'
+#!/bin/sh
+target=${QUERY_STRING#to=}
+[ -n "$target" ] || target=/cgi-bin/redirect
+printf 'Status: 302 Found\r\nLocation: %s\r\n\r\n' "$target"
+exit 0
+CGI
+chmod +x /srv/http/cgi-bin/redirect
+# HTTPS with a self-signed certificate, for the Requests tab.
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 -subj "/CN=$(hostname)" \
+  -keyout /srv/tls.key -out /srv/tls.crt 2>/dev/null
+openssl s_server -quiet -accept 127.0.0.1:8443 -key /srv/tls.key -cert /srv/tls.crt -www >/dev/null 2>&1 &
+
 busybox httpd -p 127.0.0.1:8080 -h /srv/http
 
 exec /usr/sbin/sshd -D -e -f /testenv/sshd_config

@@ -3,6 +3,7 @@ package dev.eltermino.app
 import dev.eltermino.core.data.HttpCheck
 import dev.eltermino.core.data.HttpCollection
 import dev.eltermino.core.data.HttpRequest
+import dev.eltermino.core.data.TrustedHttpCert
 import dev.eltermino.core.ssh.SshConnection
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -22,6 +23,9 @@ data class PreparedRequest(
     val body: String?,
     /** A multipart form instead of [body]. */
     val parts: List<PreparedPart>? = null,
+    val followRedirects: Boolean = false,
+    /** SHA-256 of the certificates accepted by hand for this address. */
+    val trustedCerts: Set<String> = emptySet(),
 )
 
 /** A form field: [value] as text, or the file at [file], read only when sending. */
@@ -33,6 +37,8 @@ class HttpResponse(
     val headers: List<Pair<String, String>>,
     val body: ByteArray,
     val timings: HttpTimings,
+    /** Where a followed redirect wanted to go, had the tunnel been able to or the chain not too long. */
+    val redirectNotFollowed: String? = null,
 ) {
     val text: String by lazy { body.decodeToString() }
 }
@@ -42,6 +48,10 @@ data class HttpTimings(val tunnelMs: Long?, val firstByteMs: Long?, val totalMs:
 
 /** Something the user can fix: a missing variable or secret, a bad URL, a server without curl. */
 class HttpRequestException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+/** The system doesn't trust this HTTPS certificate; the user may accept it by hand. */
+class HttpCertificateException(val host: String, val port: Int, val sha256: String, val subject: String, val reason: String) :
+    Exception("Certificato non attendibile per $host:$port: $reason")
 
 /** The values `{{name}}` takes on [hostId]: the collection's defaults, then the host's own. */
 fun HttpCollection.valuesFor(hostId: String?): Map<String, String> = variables + (hostId?.let { hostVariables[it] }.orEmpty())
@@ -100,7 +110,7 @@ suspend fun prepare(request: HttpRequest, collection: HttpCollection?, hostId: S
         else PreparedPart(fill(part.name), fill(part.value))
     }
     if (parts != null) headers.removeAll { it.first.equals("Content-Type", ignoreCase = true) }
-    return PreparedRequest(request.method.trim().uppercase().ifEmpty { "GET" }, url, headers, body, parts)
+    return PreparedRequest(request.method.trim().uppercase().ifEmpty { "GET" }, url, headers, body, parts, request.followRedirects)
 }
 
 /** One `name=value` a line, as `name=value&…` with both sides percent-encoded. */
@@ -145,6 +155,7 @@ internal expect suspend fun sendThroughTunnel(connection: SshConnection, request
 fun curlCommand(request: PreparedRequest, extra: List<String> = emptyList()): String = buildList {
     add("curl")
     add("-sS")
+    if (request.followRedirects) { add("-L"); add("--proto-redir"); add("=http,https") }
     if (request.method != "GET" || request.body != null || request.parts != null) { add("-X"); add(shellQuote(request.method)) }
     request.headers.forEach { (name, value) -> add("-H"); add(shellQuote("$name: $value")) }
     request.body?.let { add("--data-binary"); add(shellQuote(it)) }
@@ -222,8 +233,12 @@ suspend fun sendRequest(
     secret: suspend (String) -> ByteArray?,
     timeout: Duration = 30.seconds,
     readFile: (String) -> ByteArray? = { null },
+    trustedCerts: List<TrustedHttpCert> = emptyList(),
 ): HttpResponse {
-    val prepared = prepare(request, collection, hostId, secret)
+    val prepared = prepare(request, collection, hostId, secret).let { ready ->
+        val (host, port) = tunnelTarget(ready.url)
+        ready.copy(trustedCerts = trustedCerts.filter { it.host.equals(host, ignoreCase = true) && it.port == port }.mapTo(mutableSetOf()) { it.sha256 })
+    }
     return if (request.viaCurl) sendWithCurl(connection, prepared, timeout) else sendThroughTunnel(connection, prepared, timeout, readFile)
 }
 

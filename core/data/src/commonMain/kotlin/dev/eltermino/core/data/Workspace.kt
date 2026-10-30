@@ -16,6 +16,8 @@ data class Workspace(
     val knownHosts: List<KnownHost> = emptyList(),
     /** Authorities whose certificates vouch for the hosts they cover. */
     val trustedCas: List<TrustedCa> = emptyList(),
+    /** HTTPS certificates the system doesn't trust and the user accepted by hand. */
+    val trustedHttpCerts: List<TrustedHttpCert> = emptyList(),
     val snippets: List<Snippet> = emptyList(),
     /** Saved HTTP requests, sent from a host through its SSH connection. */
     val httpCollections: List<HttpCollection> = emptyList(),
@@ -125,6 +127,10 @@ data class KnownHost(
 )
 
 /** A saved command. `{{name}}` placeholders are asked for each time it runs. */
+/** One certificate for one address, as seen from the server: another one has to be accepted again. */
+@Serializable
+data class TrustedHttpCert(val host: String, val port: Int, val sha256: String)
+
 /** Like an `@cert-authority` line of `known_hosts`. */
 @Serializable
 data class TrustedCa(
@@ -177,6 +183,8 @@ data class HttpRequest(
     /** Runs `curl` on the server instead of sending through the tunnel. */
     val viaCurl: Boolean = false,
     val checks: List<HttpCheck> = emptyList(),
+    /** Follows redirects that stay on the same host and port, the only ones the tunnel reaches. */
+    val followRedirects: Boolean = false,
 )
 
 /** A multipart field: [value] as text, or the file at [file] when it's set. */

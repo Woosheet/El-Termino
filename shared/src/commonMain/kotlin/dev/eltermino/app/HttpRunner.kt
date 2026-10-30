@@ -4,6 +4,7 @@ import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.HttpCollection
 import dev.eltermino.core.data.HttpHeader
 import dev.eltermino.core.data.HttpRequest
+import dev.eltermino.core.data.TrustedHttpCert
 import dev.eltermino.core.data.newId
 import dev.eltermino.core.ssh.SshConnection
 import kotlinx.coroutines.CancellationException
@@ -64,7 +65,12 @@ sealed interface HttpOutcome {
         val passed: Boolean get() = checks.all { it.passed }
     }
 
-    class Failed(val message: String, override val atEpochSeconds: Long) : HttpOutcome
+    class Failed(
+        val message: String,
+        override val atEpochSeconds: Long,
+        /** Set when accepting a certificate would make the request work. */
+        val certificate: HttpCertificateException? = null,
+    ) : HttpOutcome
 }
 
 /** One cell of a collection run: a request on a host. */
@@ -95,6 +101,16 @@ class CollectionRun internal constructor(val collection: HttpCollection, val hos
 class HttpRunner(private val services: AppServices, private val connections: Connections, private val scope: CoroutineScope) {
     private suspend fun secret(id: String) = services.vault.get(id)
 
+    private fun trustedCerts() = services.workspace.workspace.value.trustedHttpCerts
+
+    /** From now on [problem]'s certificate is good for its address. */
+    suspend fun acceptCertificate(problem: HttpCertificateException) {
+        val accepted = TrustedHttpCert(problem.host, problem.port, problem.sha256)
+        services.workspace.update { ws ->
+            ws.copy(trustedHttpCerts = ws.trustedHttpCerts.filterNot { it.host == accepted.host && it.port == accepted.port } + accepted)
+        }
+    }
+
     /** Sends [request] from [tab]'s host; the answer goes to the tab's history. */
     fun send(tab: RequestsTab, collection: HttpCollection?, request: HttpRequest) {
         if (request.id in tab.sending.value) return
@@ -102,7 +118,7 @@ class HttpRunner(private val services: AppServices, private val connections: Con
         scope.launch {
             val outcome = outcome(request) {
                 val lease = tab.lease.filterNotNull().first()
-                sendRequest(connectionOf(lease), request, collection, tab.hostId, ::secret, readFile = services.platform::readLocalFile)
+                sendRequest(connectionOf(lease), request, collection, tab.hostId, ::secret, readFile = services.platform::readLocalFile, trustedCerts = trustedCerts())
             }
             tab.finished(request.id, outcome)
         }
@@ -131,7 +147,7 @@ class HttpRunner(private val services: AppServices, private val connections: Con
                         }
                         for (request in collection.requests) {
                             run.set(host.id, request.id, RunCell.Running)
-                            val outcome = outcome(request) { sendRequest(connection, request, collection, host.id, ::secret, readFile = services.platform::readLocalFile) }
+                            val outcome = outcome(request) { sendRequest(connection, request, collection, host.id, ::secret, readFile = services.platform::readLocalFile, trustedCerts = trustedCerts()) }
                             run.set(host.id, request.id, RunCell.Done(outcome))
                         }
                     } finally {
@@ -182,6 +198,8 @@ class HttpRunner(private val services: AppServices, private val connections: Con
         HttpOutcome.Answered(response, request.checks.map { it.evaluate(response) }, nowEpochSeconds())
     } catch (e: CancellationException) {
         throw e
+    } catch (e: HttpCertificateException) {
+        HttpOutcome.Failed(e.message.orEmpty(), nowEpochSeconds(), e)
     } catch (e: Exception) {
         HttpOutcome.Failed(message(e), nowEpochSeconds())
     }

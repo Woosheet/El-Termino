@@ -1,8 +1,10 @@
 package dev.eltermino.app
 
 import dev.eltermino.core.data.HttpCollection
+import dev.eltermino.core.data.HttpHeader
 import dev.eltermino.core.data.HttpPart
 import dev.eltermino.core.data.HttpRequest
+import dev.eltermino.core.data.TrustedHttpCert
 import dev.eltermino.core.ssh.AuthMethod
 import dev.eltermino.core.ssh.ConnectTarget
 import dev.eltermino.core.ssh.HostKeyVerifier
@@ -92,5 +94,81 @@ class HttpRequestFlowTest {
         } finally {
             connection.close()
         }
+    }
+
+    private fun redirect(to: String, follow: Boolean = true) =
+        HttpRequest("r", "Redirect", url = "http://localhost:8080/cgi-bin/redirect?to=$to", followRedirects = follow)
+
+    @Test
+    fun redirectsAreShownByDefault() = onBasic { connection ->
+        assertEquals(302, send(connection, redirect("/health.json", follow = false)).status)
+    }
+
+    @Test
+    fun followsSameHostRedirect() = onBasic { connection ->
+        val response = send(connection, redirect("/health.json"))
+        assertEquals(200, response.status)
+        assertTrue("ok" in response.text)
+    }
+
+    @Test
+    fun stopsAtOtherHostRedirect() = onBasic { connection ->
+        val response = send(connection, redirect("http://example.com/x"))
+        assertEquals(302, response.status)
+        assertEquals("http://example.com/x", response.redirectNotFollowed)
+    }
+
+    @Test
+    fun stopsAtOtherPortRedirect() = onBasic { connection ->
+        assertEquals(302, send(connection, redirect("http://localhost:9999/x")).status)
+    }
+
+    @Test
+    fun stopsAfterTenRedirects() = onBasic { connection ->
+        val response = send(connection, HttpRequest("r", "Giro", url = "http://localhost:8080/cgi-bin/redirect", followRedirects = true))
+        assertEquals(302, response.status)
+        assertTrue(response.redirectNotFollowed != null)
+    }
+
+    @Test
+    fun postBecomesGetAfterARedirect() = onBasic { connection ->
+        val request = redirect("/cgi-bin/echo?x=1").copy(method = "POST", bodyType = "text", body = "ciao")
+        assertTrue(send(connection, request).text.startsWith("GET x=1"))
+    }
+
+    @Test
+    fun headersSurviveASameHostRedirect() = onBasic { connection ->
+        val request = redirect("/cgi-bin/echo?x=1").copy(headers = listOf(HttpHeader("X-Prova", "1")))
+        assertEquals(200, send(connection, request).status)
+    }
+
+    private val https = HttpRequest("r", "Autofirmato", url = "https://localhost:8443/")
+
+    @Test
+    fun selfSignedRefusedByDefault() = onBasic { connection ->
+        val error = assertFailsWith<HttpCertificateException> { send(connection, https) }
+        assertEquals("localhost", error.host)
+        assertEquals(8443, error.port)
+        assertTrue(error.sha256.isNotEmpty())
+    }
+
+    @Test
+    fun acceptedCertificateWorks() = onBasic { connection ->
+        val sha = assertFailsWith<HttpCertificateException> { send(connection, https) }.sha256
+        val trusted = listOf(TrustedHttpCert("localhost", 8443, sha))
+        assertEquals(200, sendRequest(connection, https, null, "basic", { null }, trustedCerts = trusted).status)
+    }
+
+    @Test
+    fun changedCertificateAsksAgain() = onBasic { connection ->
+        val trusted = listOf(TrustedHttpCert("localhost", 8443, "un'altra impronta"))
+        assertFailsWith<HttpCertificateException> { sendRequest(connection, https, null, "basic", { null }, trustedCerts = trusted) }
+    }
+
+    @Test
+    fun acceptanceIsForThatAddressOnly() = onBasic { connection ->
+        val sha = assertFailsWith<HttpCertificateException> { send(connection, https) }.sha256
+        val trusted = listOf(TrustedHttpCert("altro.example.com", 8443, sha))
+        assertFailsWith<HttpCertificateException> { sendRequest(connection, https, null, "basic", { null }, trustedCerts = trusted) }
     }
 }
