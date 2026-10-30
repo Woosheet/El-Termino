@@ -362,6 +362,47 @@ class SessionsController(
     /** The containers on [host], with their state and usage. */
     fun openDocker(host: Host): DockerTab = add(createDocker(host))
 
+    /** Asks before removing; [dockerConfirm] goes ahead. */
+    fun dockerRemove(tab: DockerTab, kind: DockerKind, id: String, name: String) {
+        tab.mutableConfirmation.value = DockerConfirmation(
+            title = "Rimuovere $name?",
+            message = "Da ${tab.label}. Non si può annullare.",
+            action = "Rimuovi",
+            busyId = id,
+            label = name,
+            command = dockerRemoveCommand(kind, id),
+        )
+    }
+
+    /** Taking a project down asks first, as it removes its containers. */
+    fun dockerCompose(tab: DockerTab, project: ComposeProject, action: ComposeAction) {
+        val command = dockerComposeCommand(project, action)
+        if (action == ComposeAction.Down) {
+            tab.mutableConfirmation.value = DockerConfirmation(
+                title = "Fermare e rimuovere ${project.name}?",
+                message = "docker compose down toglie i container e le reti del progetto da ${tab.label}.",
+                action = "Esegui down",
+                busyId = project.name,
+                label = project.name,
+                command = command,
+            )
+        } else {
+            val lease = tab.lease.value ?: return
+            scope.launch { runDockerCommand(tab, lease, project.name, project.name, command) }
+        }
+    }
+
+    fun dockerConfirm(tab: DockerTab) {
+        val confirmation = tab.confirmation.value ?: return
+        tab.mutableConfirmation.value = null
+        val lease = tab.lease.value ?: return
+        scope.launch { runDockerCommand(tab, lease, confirmation.busyId, confirmation.label, confirmation.command) }
+    }
+
+    fun dockerCancel(tab: DockerTab) {
+        tab.mutableConfirmation.value = null
+    }
+
     private fun createDocker(host: Host): DockerTab {
         val tab = register(DockerTab(newId(), host.id, host.label))
         tab.job = scope.launch {
