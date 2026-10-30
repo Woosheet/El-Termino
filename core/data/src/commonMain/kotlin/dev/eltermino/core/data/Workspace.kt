@@ -244,6 +244,8 @@ data class UiSettings(
     val sidebarWidthDp: Int = 260,
     /** False when the user has folded the sidebar away, on desktop. */
     val sidebarOpen: Boolean = true,
+    /** False when the user has folded the sidebar's tools down, leaving the room to the hosts. */
+    val toolsOpen: Boolean = true,
     /** Folders saved in this device's file panel. */
     val localBookmarks: List<String> = emptyList(),
     /** A theme id, or "system" to follow the OS: Carta by day, Notte in dark mode. */

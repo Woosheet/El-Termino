@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.MoreVert
@@ -260,13 +262,30 @@ private fun DesktopLayout(
                     IconButton(Icons.Default.Add, "Nuovo host", onClick = { onEdit(null) }, tint = Carta.colors.text)
                 }
                 HostList(state, onConnect, onEdit, Modifier.weight(1f), onOpenFiles = onOpenFiles, onOpenRequests = onOpenRequests, onOpenMonitor = onOpenMonitor, onOpenDocker = onOpenDocker)
-                SectionLabel("Strumenti")
-                ToolRow(CartaIcons.Key, "Chiavi", screen == Screen.Keys) { onScreen(Screen.Keys) }
-                ToolRow(CartaIcons.User, "Identità", screen == Screen.Identities) { onScreen(Screen.Identities) }
-                ToolRow(CartaIcons.Snippet, "Snippet", screen == Screen.Snippets) { onScreen(Screen.Snippets) }
-                ToolRow(CartaIcons.Play, "Registrazioni", screen == Screen.Recordings) { onScreen(Screen.Recordings) }
-                ToolRow(CartaIcons.Import, "Importa", screen == Screen.Import) { onScreen(Screen.Import) }
-                ToolRow(CartaIcons.Settings, "Impostazioni", screen == Screen.Settings) { onScreen(Screen.Settings) }
+                val toolsOpen = workspace.ui.toolsOpen
+                Pressable(
+                    onClick = { scope.launch { store.update { it.copy(ui = it.ui.copy(toolsOpen = !toolsOpen)) } } },
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    shape = RoundedCornerShape(6.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Strumenti", style = Carta.type.label, color = Carta.colors.textDim, modifier = Modifier.weight(1f))
+                        Icon(
+                            if (toolsOpen) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                            contentDescription = if (toolsOpen) "Abbassa gli strumenti" else "Mostra gli strumenti",
+                            tint = Carta.colors.textDim,
+                            size = 16.dp,
+                        )
+                    }
+                }
+                if (toolsOpen) {
+                    ToolRow(CartaIcons.Key, "Chiavi", screen == Screen.Keys) { onScreen(Screen.Keys) }
+                    ToolRow(CartaIcons.User, "Identità", screen == Screen.Identities) { onScreen(Screen.Identities) }
+                    ToolRow(CartaIcons.Snippet, "Snippet", screen == Screen.Snippets) { onScreen(Screen.Snippets) }
+                    ToolRow(CartaIcons.Play, "Registrazioni", screen == Screen.Recordings) { onScreen(Screen.Recordings) }
+                    ToolRow(CartaIcons.Import, "Importa", screen == Screen.Import) { onScreen(Screen.Import) }
+                    ToolRow(CartaIcons.Settings, "Impostazioni", screen == Screen.Settings) { onScreen(Screen.Settings) }
+                }
             }
             if (sidebarOpen) VerticalResizeHandle(
                 onDrag = { delta -> sidebarWidth = (sidebarWidth + delta).coerceIn(SidebarMin, SidebarMax) },
