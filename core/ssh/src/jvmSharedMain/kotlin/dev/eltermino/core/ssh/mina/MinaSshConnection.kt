@@ -129,21 +129,21 @@ internal class MinaSshConnection(
         }
     }
 
-    override suspend fun forwardLocal(host: String, port: Int, bindPort: Int): PortForward =
+    override suspend fun forwardLocal(host: String, port: Int, bindPort: Int, bindAddress: String): PortForward =
         forward("Couldn't open a tunnel to $host:$port on ${target.host}") {
-            val bound = session.startLocalPortForwarding(SshdSocketAddress("127.0.0.1", bindPort), SshdSocketAddress(host, port))
+            val bound = session.startLocalPortForwarding(SshdSocketAddress(bindAddress, bindPort), SshdSocketAddress(host, port))
             bound.port to { session.stopLocalPortForwarding(bound) }
         }
 
-    override suspend fun forwardRemote(bindPort: Int, host: String, port: Int): PortForward =
+    override suspend fun forwardRemote(bindPort: Int, host: String, port: Int, bindAddress: String): PortForward =
         forward("${target.host} refused to listen on port $bindPort") {
-            val bound = session.startRemotePortForwarding(SshdSocketAddress("127.0.0.1", bindPort), SshdSocketAddress(host, port))
+            val bound = session.startRemotePortForwarding(SshdSocketAddress(bindAddress, bindPort), SshdSocketAddress(host, port))
             bound.port to { session.stopRemotePortForwarding(bound) }
         }
 
-    override suspend fun forwardDynamic(bindPort: Int): PortForward =
+    override suspend fun forwardDynamic(bindPort: Int, bindAddress: String): PortForward =
         forward("Couldn't start a SOCKS proxy on port $bindPort") {
-            val bound = session.startDynamicPortForwarding(SshdSocketAddress("127.0.0.1", bindPort))
+            val bound = session.startDynamicPortForwarding(SshdSocketAddress(bindAddress, bindPort))
             bound.port to { session.stopDynamicPortForwarding(bound) }
         }
 

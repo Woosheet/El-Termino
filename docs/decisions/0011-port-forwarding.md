@@ -21,7 +21,8 @@ Data: 30 ottobre 2026. Stato: accettata.
 
 **Interfaccia.** "Port forwarding…" nel menu dell'host apre l'elenco delle regole con stato, Avvia/Ferma, modifica ed eliminazione. Nella lista host un'etichetta dice quante porte sono attive. Modificare una regola attiva la riavvia con i nuovi valori; eliminare un host ferma le sue regole.
 
-## Restano fuori
+## Aggiornamento del 30 ottobre 2026
 
-- Porte aperte su un indirizzo diverso da loopback.
-- Un elenco unico di tutti i forward attivi, fuori dalla lista host.
+**Indirizzo di ascolto.** Ogni regola ha il suo, 127.0.0.1 di default. Un indirizzo che non è loopback mostra un avviso, perché la porta diventa raggiungibile dalla rete; per i forward remoti decide anche `GatewayPorts` sul server.
+
+**Elenco unico.** Gli strumenti hanno la schermata "Forward attivi", con tutte le regole in corso su ogni host e il bottone Ferma.

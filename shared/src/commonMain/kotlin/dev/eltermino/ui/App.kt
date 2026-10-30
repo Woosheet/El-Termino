@@ -70,6 +70,7 @@ internal enum class Screen(val title: String) {
     Identities("Identità"),
     Snippets("Snippet"),
     Recordings("Registrazioni"),
+    Forwards("Forward attivi"),
     Import("Importa"),
     Settings("Impostazioni"),
 }
@@ -272,6 +273,7 @@ private fun DesktopLayout(
                 ToolRow(CartaIcons.User, "Identità", screen == Screen.Identities) { onScreen(Screen.Identities) }
                 ToolRow(CartaIcons.Snippet, "Snippet", screen == Screen.Snippets) { onScreen(Screen.Snippets) }
                 ToolRow(CartaIcons.Play, "Registrazioni", screen == Screen.Recordings) { onScreen(Screen.Recordings) }
+                ToolRow(CartaIcons.Layers, "Forward attivi", screen == Screen.Forwards) { onScreen(Screen.Forwards) }
                 ToolRow(CartaIcons.Import, "Importa", screen == Screen.Import) { onScreen(Screen.Import) }
                 ToolRow(CartaIcons.Settings, "Impostazioni", screen == Screen.Settings) { onScreen(Screen.Settings) }
             }
@@ -369,6 +371,7 @@ private fun ScreenBody(state: AppState, screen: Screen, showExtraKeys: Boolean, 
         Screen.Identities -> IdentitiesScreen(state, modifier)
         Screen.Snippets -> SnippetsScreen(state, modifier)
         Screen.Recordings -> RecordingsScreen(state, onPlay = { onScreen(Screen.Sessions) }, modifier)
+        Screen.Forwards -> ActiveForwardsScreen(state, modifier)
         Screen.Settings -> SettingsScreen(state, modifier) {
             SettingsSection("Tutorial", "La guida del primo avvio a schede, file, trasferimenti, snippet e spazi di lavoro.") {
                 Button("Rivedi il tutorial", onClick = onTour, kind = ButtonKind.Secondary)

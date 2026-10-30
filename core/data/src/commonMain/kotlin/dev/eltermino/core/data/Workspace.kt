@@ -63,8 +63,8 @@ data class Host(
 )
 
 /**
- * A port forward saved on a host. Ports listen on loopback only: this device's for "local" and
- * "dynamic", the server's for "remote".
+ * A port forward saved on a host. Ports listen on this device for "local" and "dynamic", on the
+ * server for "remote".
  */
 @Serializable
 data class PortForwardRule(
@@ -79,6 +79,8 @@ data class PortForwardRule(
     val targetPort: Int = 0,
     /** Started whenever the app connects to the host. */
     val autoStart: Boolean = false,
+    /** Where the port listens. Anything but loopback lets other computers on the network reach it. */
+    val bindAddress: String = "127.0.0.1",
 )
 
 @Serializable

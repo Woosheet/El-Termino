@@ -2,6 +2,7 @@ package dev.eltermino.app
 
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.PortForwardRule
+import dev.eltermino.core.data.Workspace
 import dev.eltermino.core.ssh.PortForward
 import dev.eltermino.core.ssh.SshConnection
 import kotlinx.coroutines.CancellationException
@@ -30,6 +31,20 @@ sealed interface ForwardState {
 
     data class Failed(val message: String) : ForwardState
 }
+
+/** Whether only this machine can reach a port listening at [address]. */
+internal fun isLoopbackAddress(address: String): Boolean =
+    address == "localhost" || address == "::1" || Regex("""127\.\d{1,3}\.\d{1,3}\.\d{1,3}""").matches(address)
+
+/** An IP address, a name or `*`: what the SSH protocol takes as a listening address. */
+internal fun isValidBindAddress(address: String): Boolean = Regex("""\*|[A-Za-z0-9.:-]+""").matches(address) &&
+    (":" !in address || "." !in address)
+
+class RunningForward(val host: Host, val rule: PortForwardRule, val state: ForwardState)
+
+/** The rules in [states], on any host, in the order of the host list. */
+fun runningForwards(workspace: Workspace, states: Map<String, ForwardState>): List<RunningForward> =
+    workspace.hosts.flatMap { host -> host.forwards.mapNotNull { rule -> states[rule.id]?.let { RunningForward(host, rule, it) } } }
 
 /**
  * Runs the forwards saved on hosts. Each one holds a share of its host's link, so the
@@ -101,9 +116,9 @@ class PortForwards(private val services: AppServices, private val connections: C
     private fun set(ruleId: String, state: ForwardState) = mutableStates.update { it + (ruleId to state) }
 
     private suspend fun open(connection: SshConnection, rule: PortForwardRule): PortForward = when (rule.kind) {
-        "remote" -> connection.forwardRemote(rule.bindPort, rule.targetHost, rule.targetPort)
-        "dynamic" -> connection.forwardDynamic(rule.bindPort)
-        else -> connection.forwardLocal(rule.targetHost, rule.targetPort, rule.bindPort)
+        "remote" -> connection.forwardRemote(rule.bindPort, rule.targetHost, rule.targetPort, rule.bindAddress)
+        "dynamic" -> connection.forwardDynamic(rule.bindPort, rule.bindAddress)
+        else -> connection.forwardLocal(rule.targetHost, rule.targetPort, rule.bindPort, rule.bindAddress)
     }
 
     private fun message(host: Host, rule: PortForwardRule, e: Exception): String {

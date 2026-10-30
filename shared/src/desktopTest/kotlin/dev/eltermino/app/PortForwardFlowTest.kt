@@ -70,4 +70,26 @@ class PortForwardFlowTest {
             state.scope.cancel()
         }
     }
+
+    @Test
+    fun forwardsListenOnTheChosenAddress() {
+        val state = AppState(testServices())
+        state.scope.launch {
+            state.sessions.prompter.prompt.filterNotNull().collect { if (it is PendingPrompt.HostKey) it.answer(true) else it.cancel() }
+        }
+        runBlocking {
+            val identity = state.actions.keyIdentity()
+            val local = PortForwardRule(newId(), "Web", "local", freePort(), "localhost", 8080, bindAddress = "0.0.0.0")
+            val remote = PortForwardRule(newId(), "Ritorno", "remote", freePort(), "localhost", 22, bindAddress = "0.0.0.0")
+            val host = state.actions.testHost("basic", TestEnv.BASIC_PORT, identity).copy(forwards = listOf(local, remote))
+            state.actions.saveHost(host)
+            host.forwards.forEach { state.forwards.start(host, it) }
+            withTimeout(20_000) {
+                state.forwards.states.first { states -> host.forwards.all { states[it.id] is ForwardState.Active } }
+            }
+            assertTrue("status" in get(local.bindPort))
+            host.forwards.forEach { state.forwards.stop(it.id) }
+        }
+        state.scope.cancel()
+    }
 }
