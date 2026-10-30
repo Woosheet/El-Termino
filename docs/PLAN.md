@@ -1,6 +1,6 @@
 # El Termino: piano di progetto
 
-Ultimo aggiornamento: 29 ottobre 2026 (Fase 5)
+Ultimo aggiornamento: 30 ottobre 2026 (Fase 8)
 
 ## Obiettivo
 
@@ -15,7 +15,7 @@ Un client SSH e SFTP per uso personale, nello stile di Termius, scritto in Kotli
 | Sincronizzazione | Nessuna, tutto locale. Backup manuale su file cifrato per spostare la configurazione tra dispositivi. |
 | Distribuzione | Solo uso personale: APK installato a mano su Android, pacchetti desktop dmg / msi / deb senza store. |
 | Import | Da Termius: host e gruppi, chiavi, identità. |
-| Autenticazione | Tutti i metodi: password, chiavi Ed25519 / RSA / ECDSA anche con passphrase, OTP, jump host, SSH agent, certificati OpenSSH, YubiKey / FIDO2. |
+| Autenticazione | Tutti i metodi: password, chiavi Ed25519 / RSA / ECDSA anche con passphrase, OTP, jump host, SSH agent, certificati OpenSSH. |
 | Funzioni extra | Port forwarding, snippet, broadcast input, monitor risorse, editor remoto, pannello Docker, registrazione sessioni, Mosh. |
 
 La conseguenza più importante: tutte e quattro le piattaforme girano su JVM (ART su Android, JVM sul desktop). Basta quindi una sola implementazione SSH, senza libssh2 e senza cinterop.
@@ -102,7 +102,6 @@ Requisiti: vim, htop, tmux e mc devono funzionare. Servono quindi alternate scre
 | Jump host / ProxyJump | Catena di bastion, ogni salto con la sua identità | 1 |
 | SSH agent | macOS/Linux con `SSH_AUTH_SOCK` (socket Unix di JDK 16+), Windows con la named pipe di OpenSSH e Pageant. Più l'agent forwarding. | 7 |
 | Certificati OpenSSH | Chiave + `-cert.pub`, host certificate con CA fidata | 7 |
-| YubiKey / FIDO2 | Desktop: tramite l'agent di sistema, poi libfido2 diretto se serve. Android: YubiKit via USB/NFC, da verificare FIDO2 o PIV. | 7 |
 | Sblocco biometrico | BiometricPrompt su Android, Touch ID su macOS | 7 |
 
 Verifica della host key sempre attiva: alla prima connessione mostra il fingerprint SHA256 e chiede conferma. Se la chiave cambia, la connessione si blocca con un avviso esplicito. Sul desktop si possono importare `~/.ssh/known_hosts` e `~/.ssh/config`.
@@ -282,7 +281,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 | 4. Schede unite e gruppi | Disposizione dei riquadri per scheda, unione e separazione trascinando, gruppi di schede con nome e colore, raggruppa per host, azioni sul gruppo, spazi di lavoro salvati | Uno spazio di lavoro con due gruppi e una scheda divisa si riapre uguale dopo un riavvio |
 | 5. Richieste HTTP ✓ | Scheda di richieste per host via tunnel SSH, risposta formattata, collezioni con variabili per host, verifiche, esecuzione su un gruppo, import da Postman e curl | Una collezione di verifiche gira su tutti gli host di un gruppo e mostra l'esito per host |
 | 6. Primo avvio, temi e avvisi | Benvenuto con ricerca dei dati di Termius, tema scuro "Notte" e temi iconici, notifiche dei trasferimenti, file trascinati sul terminale | Al primo avvio su un Mac con Termius gli host si importano senza export manuale |
-| 7. Autenticazione avanzata | SSH agent e forwarding, certificati, YubiKey / FIDO2, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
+| 7. Autenticazione avanzata | SSH agent e forwarding, certificati, biometria, backup cifrato | Tutti i metodi passano nell'ambiente di test |
 | 8. Strumenti ✓ | Port forwarding, monitor risorse, pannello Docker, registrazione sessioni | Ogni strumento provato contro i server di test |
 | 9. Mosh | Client Mosh in Kotlin | Sessione che sopravvive a un cambio di rete |
 
@@ -296,9 +295,8 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 ## Rischi
 
 1. Qualità del terminale: è la differenza che si nota subito rispetto a Termius. Va provato con programmi reali fin dalla fase 0.
-2. FIDO2 su Android: dipende da cosa supporta YubiKit e da come la libreria SSH accetta firme esterne. Va verificato nello spike.
-3. Mosh: protocollo da implementare da zero. Resta l'ultima fase, ed è separabile se non vale lo sforzo.
-4. Libreria SSH giovane (se vince cbssh): l'interfaccia `core/ssh` permette di sostituirla.
+2. Mosh: protocollo da implementare da zero. Resta l'ultima fase, ed è separabile se non vale lo sforzo.
+3. Libreria SSH giovane (se vince cbssh): l'interfaccia `core/ssh` permette di sostituirla.
 
 ## Da verificare
 
@@ -306,7 +304,6 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
 - [ ] Quale export offre il Termius installato. Termius non documenta un formato di export; l'importer CSV usa le colonne dei tool di export della community (`Groups,Label,Tags,Hostname/IP,Protocol,Port,Username,Password`). Serve un file di esempio con dati finti.
 - [x] Esito dello spike sulla libreria SSH: Apache MINA SSHD ([decisione 0001](decisions/0001-ssh-library.md))
 - [x] Esito dello spike sul terminale: kmp-terminal-emulator dietro `core/terminal` ([decisione 0002](decisions/0002-terminal-emulator.md))
-- [ ] YubiKey su Android: FIDO2 o PIV
 - [ ] Fase 5 nell'app vera: finestre della scheda Richieste, campi multipart, file scelto su Android
 
 ## Riferimenti
