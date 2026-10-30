@@ -226,6 +226,19 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun monitorTab(): Unit = runBlocking {
+        val state = lightState()
+        state.scope.launch {
+            state.sessions.prompter.prompt.filterNotNull().collect { if (it is PendingPrompt.HostKey) it.answer(true) else it.cancel() }
+        }
+        val web = seed(state)
+        val tab = state.sessions.openMonitor(web)
+        withTimeout(60_000) { tab.samples.first { it.size >= 4 } }
+        snapshot(state, "app-desktop-monitor")
+        state.sessions.close(tab)
+    }
+
+    @Test
     fun phoneHostList(): Unit = runBlocking {
         val state = lightState()
         seed(state)

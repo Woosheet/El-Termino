@@ -118,6 +118,13 @@ object CartaIcons {
         }
     }
 
+    /** A pulse line, for the Resources tab. */
+    val Pulse: ImageVector by lazy {
+        lineIcon("Pulse") {
+            moveTo(3f, 12f); lineTo(7f, 12f); lineTo(9.5f, 5f); lineTo(14f, 19f); lineTo(16.5f, 12f); lineTo(21f, 12f)
+        }
+    }
+
     val Pause: ImageVector by lazy {
         lineIcon("Pause") { moveTo(9f, 6f); lineTo(9f, 18f); moveTo(15f, 6f); lineTo(15f, 18f) }
     }

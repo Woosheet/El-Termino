@@ -41,6 +41,7 @@ class TabLayoutFlowTest {
                     is FilesTab -> "files:${tab.hostId?.let { hosts.host(it)?.label } ?: "local"}"
                     is EditorTab -> "edit:${tab.path}"
                     is RequestsTab -> "http:${hosts.host(tab.hostId)?.label}"
+                    is MonitorTab -> "monitor:${hosts.host(tab.hostId)?.label}"
                 }
             }
             "$group ${frame.panes.layout}[$panes]"
@@ -61,6 +62,7 @@ class TabLayoutFlowTest {
         val jump = sessions.connect(bastion)
         sessions.openFiles(null)
         sessions.openRequests(basic)
+        sessions.openMonitor(bastion)
         // web | files of basic, side by side in one tab
         assertEquals(true, sessions.merge(sessions.bar.value.frameOf(files.id)!!.id, sessions.bar.value.frameOf(web.id)!!.id, Side.Right))
         sessions.createGroup(listOf(sessions.bar.value.frameOf(web.id)!!.id, sessions.bar.value.frameOf(webAgain.id)!!.id), "Web")
@@ -74,6 +76,7 @@ class TabLayoutFlowTest {
                 "Accesso(Corallo) Single[term:bastion]",
                 "- Single[files:local]",
                 "- Single[http:basic]",
+                "- Single[monitor:bastion]",
             ),
             expected,
         )

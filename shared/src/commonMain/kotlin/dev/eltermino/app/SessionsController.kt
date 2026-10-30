@@ -281,6 +281,23 @@ class SessionsController(
         return tab
     }
 
+    /** What [host] is using: CPU, memory, disks, network. */
+    fun openMonitor(host: Host): MonitorTab = add(createMonitor(host))
+
+    private fun createMonitor(host: Host): MonitorTab {
+        val tab = register(MonitorTab(newId(), host.id, host.label))
+        tab.job = scope.launch {
+            val lease = connections.acquire(host)
+            tab.mutableLease.value = lease
+            try {
+                monitor(tab, lease)
+            } finally {
+                withContext(NonCancellable) { lease.release() }
+            }
+        }
+        return tab
+    }
+
     private fun createTerminal(host: Host): SessionTab {
         val tab = register(SessionTab(newId(), host.id, host.label))
         start(tab)
@@ -341,6 +358,7 @@ class SessionsController(
             is FilesTab -> SavedPane("files", tab.hostId, tab.browser.path.value)
             is EditorTab -> SavedPane("editor", tab.hostId, tab.path)
             is RequestsTab -> SavedPane("requests", tab.hostId)
+            is MonitorTab -> SavedPane("monitor", tab.hostId)
         }
         return SavedLayout(
             id = newId(),
@@ -377,6 +395,7 @@ class SessionsController(
             "files" -> if (host == null && services.localFiles == null) null else createFiles(host, pane.path)
             "editor" -> pane.path?.let { createEditor(host?.let { Endpoint.Remote(it.id) } ?: Endpoint.Local, it) }
             "requests" -> host?.let(::createRequests)
+            "monitor" -> host?.let(::createMonitor)
             else -> null
         }
     }
@@ -424,6 +443,7 @@ class SessionsController(
             is FilesTab -> scope.launch { tab.browser.close() }
             is EditorTab -> scope.launch { tab.release?.invoke() }
             is RequestsTab -> tab.job?.cancel()
+            is MonitorTab -> tab.job?.cancel()
         }
         mutableTabs.update { it - tab }
         updateBar { it.remove(tab.id) }
@@ -592,6 +612,7 @@ private fun Tab.connectedHost(): kotlinx.coroutines.flow.Flow<String?> = when (t
     is FilesTab -> combine(browser.path, browser.error) { path, error -> if (hostId != null && path != null && error == null) hostId else null }
     is EditorTab -> flowOf(null)
     is RequestsTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
+    is MonitorTab -> lease.flatMapLatest { it?.link?.state ?: flowOf(null) }.map { if (it is LinkState.Up) hostId else null }
 }
 
 @OptIn(ExperimentalTime::class)
