@@ -25,6 +25,11 @@ class Connections(
 
     private val links = HostLinks(scope, reconnectPolicy, ::openConnection)
 
+    private val mutableLogins = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 16)
+
+    /** The id of every host just logged in to, reconnections included. */
+    val logins: kotlinx.coroutines.flow.SharedFlow<String> = mutableLogins
+
     /** A share of [host]'s link, logging in if nobody has it open yet. Release it when done. */
     suspend fun acquire(host: Host): LinkLease = links.acquire(host)
 
@@ -39,6 +44,7 @@ class Connections(
             val connection = services.connector.connect(target, hostKeyVerifier(), secretResolver(lazySecrets))
             afterSuccess.forEach { save -> runCatching { save() } }
             markConnected(hostId)
+            mutableLogins.tryEmit(hostId)
             return connection
         } finally {
             lazySecrets.clear()

@@ -49,7 +49,7 @@ internal actual suspend fun sendThroughTunnel(connection: SshConnection, request
         var connected: Long? = null
         var firstByte: Long? = null
         val client = base.newBuilder()
-            .socketFactory(TunnelSocketFactory(forward.localPort))
+            .socketFactory(TunnelSocketFactory(forward.port))
             .callTimeout(timeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
             .eventListener(object : EventListener() {
                 override fun connectEnd(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy, protocol: okhttp3.Protocol?) {

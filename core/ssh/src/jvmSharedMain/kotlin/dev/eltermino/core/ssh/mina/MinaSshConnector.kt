@@ -38,6 +38,9 @@ class MinaSshConnector(private val config: MinaConfig = MinaConfig()) : SshConne
             // MINA only records the key here; connect() asks our HostKeyVerifier
             // before authenticating, so no MINA thread ever waits on the UI.
             serverKeyVerifier = AcceptAllServerKeyVerifier.INSTANCE
+            // The default rejects what a remote forward sends back. The server can only use the
+            // ports we asked it to listen on, each tied to the address we gave.
+            forwardingFilter = org.apache.sshd.server.forward.AcceptAllForwardingFilter.INSTANCE
             // A certificate whose principals don't match the name we dialled is treated
             // like a plain key, as OpenSSH does without a trusted CA.
             CoreModuleProperties.ABORT_ON_INVALID_CERTIFICATE.set(this, false)

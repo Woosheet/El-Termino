@@ -171,7 +171,7 @@ class MinaSshConnectorTest {
     private suspend fun SshConnection.getThroughTunnel(path: String): String {
         val forward = forwardLocal("localhost", 8080)
         try {
-            return java.net.Socket("127.0.0.1", forward.localPort).use { socket ->
+            return java.net.Socket("127.0.0.1", forward.port).use { socket ->
                 socket.getOutputStream().write("GET $path HTTP/1.0\r\nHost: localhost\r\n\r\n".toByteArray())
                 socket.getInputStream().readBytes().decodeToString()
             }
@@ -187,6 +187,75 @@ class MinaSshConnectorTest {
             val response = connection.getThroughTunnel("/health.json")
             assertTrue(response.startsWith("HTTP/1.") && " 200 " in response.lineSequence().first(), response)
             assertTrue(response.endsWith("""{"status":"ok","host":"basic"}"""), response)
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun localForwardListensOnTheChosenPort() = runBlocking {
+        val connection = connect(TestServers.basic(TestServers.passwordAuth()))
+        try {
+            val free = java.net.ServerSocket(0).use { it.localPort }
+            val forward = connection.forwardLocal("localhost", 8080, bindPort = free)
+            try {
+                assertEquals(free, forward.port)
+                val response = java.net.Socket("127.0.0.1", free).use { socket ->
+                    socket.getOutputStream().write("GET /health.json HTTP/1.0\r\n\r\n".toByteArray())
+                    socket.getInputStream().readBytes().decodeToString()
+                }
+                assertTrue(response.endsWith("""{"status":"ok","host":"basic"}"""), response)
+            } finally {
+                forward.close()
+            }
+        } finally {
+            connection.close()
+        }
+    }
+
+    @Test
+    fun remoteForwardLetsTheServerReachThisMachine() = runBlocking {
+        val web = com.sun.net.httpserver.HttpServer.create(java.net.InetSocketAddress("127.0.0.1", 0), 0).apply {
+            createContext("/") { exchange ->
+                val body = "hello from the client".toByteArray()
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            start()
+        }
+        val connection = connect(TestServers.basic(TestServers.passwordAuth()))
+        try {
+            val forward = connection.forwardRemote(0, "127.0.0.1", web.address.port)
+            try {
+                assertTrue(forward.port > 0)
+                val result = connection.exec("curl -sS --max-time 10 http://127.0.0.1:${forward.port}/")
+                assertEquals("hello from the client", result.stdout.decodeToString(), "exit ${result.exitCode}: ${result.stderr.decodeToString()}")
+            } finally {
+                forward.close()
+            }
+        } finally {
+            connection.close()
+            web.stop(0)
+        }
+    }
+
+    @Test
+    fun dynamicForwardIsASocksProxyOutOfTheServer() = runBlocking {
+        val connection = connect(TestServers.basic(TestServers.passwordAuth()))
+        try {
+            val forward = connection.forwardDynamic(0)
+            try {
+                val proxy = java.net.Proxy(java.net.Proxy.Type.SOCKS, java.net.InetSocketAddress("127.0.0.1", forward.port))
+                val response = java.net.Socket(proxy).use { socket ->
+                    // Unresolved, so the name is looked up by the server: its own localhost.
+                    socket.connect(java.net.InetSocketAddress.createUnresolved("localhost", 8080), 10_000)
+                    socket.getOutputStream().write("GET /health.json HTTP/1.0\r\n\r\n".toByteArray())
+                    socket.getInputStream().readBytes().decodeToString()
+                }
+                assertTrue(response.endsWith("""{"status":"ok","host":"basic"}"""), response)
+            } finally {
+                forward.close()
+            }
         } finally {
             connection.close()
         }

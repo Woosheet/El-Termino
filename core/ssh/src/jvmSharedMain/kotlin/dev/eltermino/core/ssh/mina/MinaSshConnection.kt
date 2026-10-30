@@ -128,20 +128,37 @@ internal class MinaSshConnection(
         }
     }
 
-    override suspend fun forwardLocal(host: String, port: Int): PortForward {
+    override suspend fun forwardLocal(host: String, port: Int, bindPort: Int): PortForward =
+        forward("Couldn't open a tunnel to $host:$port on ${target.host}") {
+            val bound = session.startLocalPortForwarding(SshdSocketAddress("127.0.0.1", bindPort), SshdSocketAddress(host, port))
+            bound.port to { session.stopLocalPortForwarding(bound) }
+        }
+
+    override suspend fun forwardRemote(bindPort: Int, host: String, port: Int): PortForward =
+        forward("${target.host} refused to listen on port $bindPort") {
+            val bound = session.startRemotePortForwarding(SshdSocketAddress("127.0.0.1", bindPort), SshdSocketAddress(host, port))
+            bound.port to { session.stopRemotePortForwarding(bound) }
+        }
+
+    override suspend fun forwardDynamic(bindPort: Int): PortForward =
+        forward("Couldn't start a SOCKS proxy on port $bindPort") {
+            val bound = session.startDynamicPortForwarding(SshdSocketAddress("127.0.0.1", bindPort))
+            bound.port to { session.stopDynamicPortForwarding(bound) }
+        }
+
+    /** Starts a forward with [start], which returns the port it listens on and how to stop it. */
+    private suspend fun forward(failure: String, start: () -> Pair<Int, () -> Unit>): PortForward {
         checkOpen()
-        val bound = try {
-            withContext(Dispatchers.IO) {
-                session.startLocalPortForwarding(SshdSocketAddress("127.0.0.1", 0), SshdSocketAddress(host, port))
-            }
+        val (bound, stop) = try {
+            withContext(Dispatchers.IO) { start() }
         } catch (e: Exception) {
-            throw SshException.ChannelFailed("Couldn't open a tunnel to $host:$port on ${target.host}", e)
+            throw SshException.ChannelFailed(failure, e)
         }
         return object : PortForward {
-            override val localPort = bound.port
+            override val port = bound
 
             override suspend fun close() {
-                withContext(Dispatchers.IO) { runCatching { session.stopLocalPortForwarding(bound) } }
+                withContext(Dispatchers.IO) { runCatching { stop() } }
             }
         }
     }

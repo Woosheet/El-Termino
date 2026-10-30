@@ -53,6 +53,26 @@ data class Host(
     val lastConnectedEpochSeconds: Long? = null,
     /** Folders saved in the file panel. */
     val bookmarks: List<String> = emptyList(),
+    val forwards: List<PortForwardRule> = emptyList(),
+)
+
+/**
+ * A port forward saved on a host. Ports listen on loopback only: this device's for "local" and
+ * "dynamic", the server's for "remote".
+ */
+@Serializable
+data class PortForwardRule(
+    val id: String,
+    val name: String = "",
+    /** "local" (here → server side), "remote" (server → this side) or "dynamic" (SOCKS proxy). */
+    val kind: String = "local",
+    /** The port that listens: here for local and dynamic, on the server for remote. */
+    val bindPort: Int,
+    /** Where connections go: as the server sees it for local, as this device sees it for remote. Unused for dynamic. */
+    val targetHost: String = "localhost",
+    val targetPort: Int = 0,
+    /** Started whenever the app connects to the host. */
+    val autoStart: Boolean = false,
 )
 
 @Serializable

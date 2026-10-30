@@ -17,16 +17,25 @@ interface SshConnection {
     suspend fun exec(command: String): ExecResult
 
     /**
-     * Listens on this device's loopback and carries each connection to [host]:[port] as
-     * the server sees it, so `localhost` there is the server itself.
+     * Listens on this device's loopback, on [bindPort] or a free port when 0, and carries each
+     * connection to [host]:[port] as the server sees it, so `localhost` there is the server itself.
      */
-    suspend fun forwardLocal(host: String, port: Int): PortForward
+    suspend fun forwardLocal(host: String, port: Int, bindPort: Int = 0): PortForward
+
+    /**
+     * Asks the server to listen on its loopback, on [bindPort] or a free port when 0, and carries
+     * each connection back to [host]:[port] as this device sees it.
+     */
+    suspend fun forwardRemote(bindPort: Int, host: String, port: Int): PortForward
+
+    /** A SOCKS proxy on this device's loopback [bindPort]: each connection goes out from the server. */
+    suspend fun forwardDynamic(bindPort: Int): PortForward
     suspend fun close()
 }
 
-/** A local forward: connect to `127.0.0.1:[localPort]` to reach the remote end. */
+/** A running forward, listening on [port]: on this device, or on the server for a remote one. */
 interface PortForward {
-    val localPort: Int
+    val port: Int
     suspend fun close()
 }
 

@@ -15,6 +15,7 @@ class AppState(val services: AppServices) {
     val sessions = SessionsController(services, actions, scope)
     val transfers = TransferManager(scope, services, sessions.connections)
     val requests = HttpRunner(services, sessions.connections, scope)
+    val forwards = PortForwards(services, sessions.connections, scope)
     val notifier = TransferNotifier(scope, services, transfers)
     val updates = UpdateChecker(scope, services)
 

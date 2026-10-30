@@ -27,6 +27,7 @@ import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.Workspace
 import dev.eltermino.core.data.groupPath
 import dev.eltermino.core.data.newId
+import dev.eltermino.ui.components.Badge
 import dev.eltermino.ui.components.Button
 import dev.eltermino.ui.components.ButtonKind
 import dev.eltermino.ui.components.CartaIcons
@@ -56,6 +57,8 @@ internal fun HostList(
     val connected by state.sessions.connectedHostIds.collectAsState()
     var query by remember { mutableStateOf("") }
     var deleting by remember { mutableStateOf<Host?>(null) }
+    var forwarding by remember { mutableStateOf<String?>(null) }
+    val forwardStates by state.forwards.states.collectAsState()
     val scope = rememberCoroutineScope()
 
     val sections = remember(workspace, query) { sections(workspace, query) }
@@ -74,9 +77,11 @@ internal fun HostList(
                     host = host,
                     subtitle = subtitle(workspace, host),
                     online = host.id in connected,
+                    activeForwards = host.forwards.count { forwardStates[it.id] is dev.eltermino.app.ForwardState.Active },
                     onConnect = { onConnect(host) },
                     onOpenFiles = { onOpenFiles(host) },
                     onOpenRequests = { onOpenRequests(host) },
+                    onForwards = { forwarding = host.id },
                     onEdit = { onEdit(host) },
                     onDuplicate = { scope.launch { state.actions.saveHost(host.copy(id = newId(), label = "${host.label} (copia)", lastConnectedEpochSeconds = null)) } },
                     onToggleFavorite = { scope.launch { state.actions.saveHost(host.copy(favorite = !host.favorite)) } },
@@ -86,6 +91,8 @@ internal fun HostList(
         }
     }
 
+    forwarding?.let { PortForwardsDialog(state, it) { forwarding = null } }
+
     deleting?.let { host ->
         Dialog(
             onDismiss = { deleting = null },
@@ -94,6 +101,7 @@ internal fun HostList(
                 Button("Annulla", onClick = { deleting = null }, kind = ButtonKind.Ghost)
                 Button("Elimina", kind = ButtonKind.Danger, onClick = {
                     deleting = null
+                    host.forwards.forEach { state.forwards.stop(it.id) }
                     scope.launch { state.actions.deleteHost(host.id) }
                 })
             },
@@ -108,9 +116,11 @@ private fun HostRow(
     host: Host,
     subtitle: String,
     online: Boolean,
+    activeForwards: Int,
     onConnect: () -> Unit,
     onOpenFiles: () -> Unit,
     onOpenRequests: () -> Unit,
+    onForwards: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -124,6 +134,7 @@ private fun HostRow(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(host.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (host.favorite) Icon(CartaIcons.Star, contentDescription = "Preferito", tint = Carta.colors.textDim, size = 12.dp, modifier = Modifier.padding(start = 4.dp))
+                    if (activeForwards > 0) Row(Modifier.padding(start = 6.dp)) { Badge("$activeForwards ${if (activeForwards == 1) "porta" else "porte"}") }
                 }
                 Text(subtitle, style = Carta.type.caption, color = Carta.colors.textDim, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -133,6 +144,7 @@ private fun HostRow(
                     MenuItem("Terminale", onClick = { menu = false; onConnect() })
                     MenuItem("File (SFTP)", onClick = { menu = false; onOpenFiles() })
                     MenuItem("Richieste HTTP", onClick = { menu = false; onOpenRequests() })
+                    MenuItem("Port forwarding…", onClick = { menu = false; onForwards() })
                     MenuItem("Modifica", onClick = { menu = false; onEdit() })
                     MenuItem("Duplica", onClick = { menu = false; onDuplicate() })
                     MenuItem(if (host.favorite) "Togli dai preferiti" else "Aggiungi ai preferiti", onClick = { menu = false; onToggleFavorite() })

@@ -264,6 +264,9 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Controllo di design di spaziature, padding e stile su tutte le schermate.
   - Icona dell'app a scelta in Impostazioni: El Bigote (quella del pacchetto) o Píxel. Sul desktop cambia finestra e Dock mentre l'app gira; su Android non c'è ancora un'icona del launcher.
   - Criterio da verificare sul tuo Mac: il lettore è provato su dati costruiti nel formato di Termius, non ancora su un Termius vero.
+- Fase 8: in corso dal 30 ottobre 2026.
+  - Port forwarding fatto ([decisione 0011](decisions/0011-port-forwarding.md)): regole locali, remote e dinamiche (SOCKS) salvate per host, avvio a mano o automatico alla connessione, riaperte dopo una riconnessione. Provato contro i server di test da `PortForwardFlowTest`.
+  - Restano: monitor risorse, pannello Docker, registrazione sessioni.
 
 ## Roadmap
 

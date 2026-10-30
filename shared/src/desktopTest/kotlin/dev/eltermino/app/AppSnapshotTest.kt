@@ -198,6 +198,34 @@ class AppSnapshotTest {
     }
 
     @Test
+    fun portForwardsDialog(): Unit = runBlocking {
+        val state = lightState()
+        state.scope.launch {
+            state.sessions.prompter.prompt.filterNotNull().collect { if (it is PendingPrompt.HostKey) it.answer(true) else it.cancel() }
+        }
+        val web = seed(state).let { host ->
+            val free = java.net.ServerSocket(0).use { it.localPort }
+            host.copy(
+                forwards = listOf(
+                    dev.eltermino.core.data.PortForwardRule(newId(), "Servizio web", "local", free, "localhost", 8080, autoStart = true),
+                    dev.eltermino.core.data.PortForwardRule(newId(), "", "dynamic", 1080),
+                    dev.eltermino.core.data.PortForwardRule(newId(), "Anteprima dal portatile", "remote", 9000, "localhost", 3000),
+                ),
+            ).also { state.actions.saveHost(it) }
+        }
+        state.forwards.start(web, web.forwards.first())
+        withTimeout(60_000) { state.forwards.states.first { it[web.forwards.first().id] is ForwardState.Active } }
+        ImageComposeScene(1400, 1000, Density(2f)) {
+            dev.eltermino.ui.theme.CartaTheme { dev.eltermino.ui.PortForwardsDialog(state, web.id) {} }
+        }.use { scene ->
+            repeat(4) { scene.render(System.nanoTime()); Thread.sleep(100) }
+            val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
+            File("build/snapshots/port-forwards.png").apply { parentFile.mkdirs(); writeBytes(png) }
+        }
+        state.forwards.stop(web.forwards.first().id)
+    }
+
+    @Test
     fun phoneHostList(): Unit = runBlocking {
         val state = lightState()
         seed(state)
