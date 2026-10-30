@@ -269,6 +269,8 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Pannello Docker fatto ([decisione 0013](decisions/0013-docker-panel.md)): scheda "Docker" dal menu dell'host con i container, CPU e memoria, avvio, stop e riavvio; log e shell nel container si aprono in un terminale nuovo. Provato da `DockerFlowTest` contro un finto `docker` nei server di test.
   - Registrazione sessioni fatta ([decisione 0014](decisions/0014-session-recording.md)): file asciicast v2 con il solo output del terminale, avviata dal menu della scheda o sempre dalle Impostazioni, pallino rosso mentre registra, schermata Registrazioni con riproduzione a velocità scelta, esportazione e pulizia dopo 30 giorni. Provata da `RecordingFlowTest`.
   - Punti aperti: forward solo su 127.0.0.1 e nessun elenco globale dei forward attivi; monitor solo Linux e senza processi; Docker senza compose, immagini e rimozione; la riproduzione ignora i ridimensionamenti. Nessuna delle quattro funzioni è ancora stata provata a mano nell'app o sul telefono.
+- Fase 7: in corso.
+  - Backup cifrato fatto ([decisione 0015](decisions/0015-encrypted-backup.md)): un file con workspace e segreti, password con Argon2id, ripristino con anteprima, "Unisci" o "Sostituisci tutto", copia di sicurezza prima di cambiare i dati. Provato da `BackupFlowTest`.
 
 ## Roadmap
 

@@ -43,6 +43,30 @@ class BackupFlowTest {
     private fun layout(hostId: String) = SavedLayout(id = "l", name = "ultima", tabs = listOf(SavedTab(layout = "Single", panes = listOf(SavedPane(kind = "terminal", hostId = hostId)))))
 
     @Test
+    fun backupPasswordRules() {
+        assertNotNull(backupPasswordProblem("corta", "corta"))
+        assertNotNull(backupPasswordProblem("abbastanza lunga", "un'altra"))
+        assertNull(backupPasswordProblem("abbastanza lunga", "abbastanza lunga"))
+    }
+
+    @Test
+    fun backupFileNameCarriesTheDate() {
+        assertTrue(Regex("""el-termino-\d{4}-\d{2}-\d{2}\.etbackup""").matches(backupFileName()))
+    }
+
+    @Test
+    fun appServicesKeepSafetyCopiesUnderDataDir() = runTest {
+        val dir = Files.createTempDirectory("services").toFile().apply { deleteOnExit() }
+        val key = Random.nextBytes(32)
+        val services = createAppServices(dir, MasterKeyProvider { key.copyOf() }, TestPlatform())
+        val content = services.backup.read(services.backup.export(password), password)
+        services.backup.restore(content, replaceAll = false, password)
+        val copy = dir.resolve("backups").listFiles().orEmpty().single()
+        assertTrue(copy.name.endsWith(".etbackup"))
+        services.backup.read(copy.readBytes(), password)
+    }
+
+    @Test
     fun exportLeavesOutDeviceSettings() = runTest {
         val device = Device()
         device.store.update { it.copy(hosts = listOf(host("a")), ui = UiSettings(theme = "dracula"), lastSession = layout("a")) }

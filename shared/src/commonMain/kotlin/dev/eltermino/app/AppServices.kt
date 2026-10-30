@@ -16,7 +16,11 @@ class AppServices(
     val localFiles: FileSystem? = null,
     /** Where terminal recordings go; null where they can't be kept. */
     val recordings: RecordingStore? = null,
-)
+    /** Keeps the encrypted copy of what a restore is about to change. */
+    saveSafetyCopy: suspend (ByteArray) -> Unit = {},
+) {
+    val backup = BackupService(workspace, vault, platform.appVersion, saveSafetyCopy)
+}
 
 /** What differs between desktop and Android. */
 interface Platform {

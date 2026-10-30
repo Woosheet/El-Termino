@@ -13,10 +13,24 @@ import dev.eltermino.core.vault.VaultException
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
+import kotlin.time.Clock
+import kotlin.time.ExperimentalTime
 
 internal expect fun sealBackup(plain: ByteArray, password: CharArray): ByteArray
 
 internal expect fun openBackup(file: ByteArray, password: CharArray): ByteArray
+
+private const val MIN_PASSWORD_LENGTH = 8
+
+/** What's wrong with a new backup password, in the user's words; null when it's fine. */
+internal fun backupPasswordProblem(password: String, repeated: String): String? = when {
+    password.length < MIN_PASSWORD_LENGTH -> "Almeno $MIN_PASSWORD_LENGTH caratteri"
+    password != repeated -> "Le due password non coincidono"
+    else -> null
+}
+
+@OptIn(ExperimentalTime::class)
+internal fun backupFileName(): String = "el-termino-${Clock.System.now().toString().take(10)}.etbackup"
 
 class BackupPreview(
     val hosts: Int,

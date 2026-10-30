@@ -89,6 +89,7 @@ internal fun SettingsScreen(state: AppState, modifier: Modifier = Modifier, extr
             onRecord = { on -> update { it.copy(recordSessions = on) } },
             onDays = { days -> update { it.copy(recordingDays = days) } },
         )
+        BackupSection(state)
         UpdatesSection(state, workspace.ui.checkUpdates) { on -> update { it.copy(checkUpdates = on) } }
         if (state.services.platform.isDesktop) ShortcutsSection(state.services.platform.isMacOs)
         extra()

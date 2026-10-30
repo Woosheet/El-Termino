@@ -5,6 +5,8 @@ import dev.eltermino.core.ssh.mina.MinaKeyTool
 import dev.eltermino.core.ssh.mina.MinaSshConnector
 import dev.eltermino.core.vault.EncryptedFileVault
 import dev.eltermino.core.vault.MasterKeyProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -19,4 +21,10 @@ fun createAppServices(dataDir: File, masterKey: MasterKeyProvider, platform: Pla
     platform = platform,
     localFiles = localFilesRoot?.let(::LocalFileSystem),
     recordings = FileRecordingStore(File(dataDir, "recordings")),
+    saveSafetyCopy = { bytes ->
+        withContext(Dispatchers.IO) {
+            val dir = File(dataDir, "backups").apply { mkdirs() }
+            File(dir, "prima-del-ripristino-${System.currentTimeMillis()}.etbackup").writeBytes(bytes)
+        }
+    },
 )
