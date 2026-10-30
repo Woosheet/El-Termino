@@ -11,7 +11,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * Lives as long as the process, not the window or activity, so open sessions survive
  * an Android rotation or a recomposition.
  */
-private const val LOCK_CHECK_MILLIS = 5_000L
+private const val LOCK_CHECK_MILLIS = 1_000L
 
 class AppState(val services: AppServices) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -53,6 +53,7 @@ class AppState(val services: AppServices) {
      * that reached both the menu bar and the window, so the second is dropped.
      */
     fun run(command: AppCommand) {
+        if (lock.locked.value) return
         val last = lastCommand
         if (last != null && last.first == command && last.second.elapsedNow() < 30.milliseconds) return
         lastCommand = command to kotlin.time.TimeSource.Monotonic.markNow()

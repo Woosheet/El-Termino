@@ -23,7 +23,10 @@ interface ExternalFile {
     fun close()
 }
 
-/** Uploads every save until [file] ends, then closes it; a refused or failed one waits for the next save. */
+/**
+ * Uploads every save until [file] ends. A refused or failed one waits for the next save; if
+ * none comes, the copy stays, as the only place those changes are.
+ */
 internal suspend fun followExternalFile(
     editor: RemoteEditor,
     file: ExternalFile,
@@ -31,15 +34,20 @@ internal suspend fun followExternalFile(
     failed: (Throwable) -> Unit = {},
     saved: () -> Unit,
 ) {
+    var unsaved = false
     try {
         while (true) {
             val bytes = file.awaitChange() ?: break
+            unsaved = true
             try {
                 var result = editor.save(bytes)
                 if (result is RemoteEditor.SaveResult.ChangedOnServer && conflict(result.current)) {
                     result = editor.save(bytes, force = true)
                 }
-                if (result is RemoteEditor.SaveResult.Saved) saved()
+                if (result is RemoteEditor.SaveResult.Saved) {
+                    unsaved = false
+                    saved()
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -47,7 +55,7 @@ internal suspend fun followExternalFile(
             }
         }
     } finally {
-        file.close()
+        if (!unsaved) file.close()
     }
 }
 

@@ -75,6 +75,15 @@ class AgentLoginTest {
     }
 
     @Test
+    fun aWorkingAgentNeverAsksForTheRest() = runBlocking {
+        process = startTestAgent(socket, "id_ed25519")
+        val secrets = TestSecrets()
+        val connection = connector.connect(bastion(AuthMethod.Agent, TestServers.passwordAuth()), RecordingVerifier(), secrets)
+        connection.close()
+        assertEquals(0, secrets.calls.get())
+    }
+
+    @Test
     fun emptyAgentFallsThroughToPassword() {
         process = startTestAgent(socket)
         login(TestServers.basic(AuthMethod.Agent, TestServers.passwordAuth()))

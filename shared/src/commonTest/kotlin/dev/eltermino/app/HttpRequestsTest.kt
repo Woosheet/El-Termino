@@ -85,6 +85,12 @@ class HttpRequestsTest {
     }
 
     @Test
+    fun curlNeverFollowsRedirectsToOtherHosts() {
+        val request = PreparedRequest("GET", "http://h/", listOf("X-Api-Key" to "segreto"), null, followRedirects = true)
+        assertEquals("curl -sS -H 'X-Api-Key: segreto' 'http://h/'", curlCommand(request))
+    }
+
+    @Test
     fun curlCommandsQuoteForTheShell() {
         val request = PreparedRequest("POST", "http://h/a?b=1&c", listOf("X-Name" to "it's"), "{\"a\":1}")
         assertEquals("""curl -sS -X 'POST' -H 'X-Name: it'\''s' --data-binary '{"a":1}' 'http://h/a?b=1&c'""", curlCommand(request))

@@ -127,7 +127,7 @@ fun main() {
             state = rememberWindowState(width = 1200.dp, height = 760.dp),
             // Ahead of the focused view, so the terminal never sees the app's shortcuts.
             onPreviewKeyEvent = { event ->
-                val command = if (event.type != KeyEventType.KeyDown || state.lock.locked.value) null else Shortcuts.commandFor(
+                val command = if (event.type != KeyEventType.KeyDown) null else Shortcuts.commandFor(
                     event.key, event.isMetaPressed, event.isCtrlPressed, event.isAltPressed, event.isShiftPressed, isMac,
                 )
                 command?.let(state::run)

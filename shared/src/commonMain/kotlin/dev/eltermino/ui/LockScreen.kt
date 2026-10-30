@@ -40,7 +40,9 @@ internal fun LockScreen(lock: AppLock) {
     }
     LaunchedEffect(Unit) {
         focus.requestFocus()
-        unlock()
+        busy = true
+        lock.unlockWhenBack()
+        busy = false
     }
     Box(
         Modifier.fillMaxSize()

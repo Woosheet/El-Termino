@@ -118,7 +118,7 @@ private fun RestoreBackupDialog(state: AppState, file: PickedFile, onDismiss: ()
             title = "Sostituire tutto?",
             tone = DialogTone.Danger,
             actions = {
-                Button("Annulla", onClick = { confirmReplace = false }, kind = ButtonKind.Ghost)
+                Button("Annulla", enabled = !busy, onClick = { confirmReplace = false }, kind = ButtonKind.Ghost)
                 Button("Sostituisci tutto", enabled = !busy, onClick = { restore(replaceAll = true) }, kind = ButtonKind.Danger)
             },
         ) {

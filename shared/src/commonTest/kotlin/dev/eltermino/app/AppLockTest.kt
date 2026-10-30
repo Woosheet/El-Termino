@@ -1,6 +1,8 @@
 package dev.eltermino.app
 
 import dev.eltermino.core.data.UiSettings
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -140,5 +142,27 @@ class AppLockTest {
         settings = on
         lock.tick()
         assertFalse(lock.locked.value)
+    }
+
+    @Test
+    fun sleepingWithTheWindowInFrontCountsAsAbsence() {
+        val lock = lock().also { runTest { it.unlock() } }
+        lock.tick()
+        now += 6 * minute
+        lock.tick()
+        assertTrue(lock.locked.value)
+    }
+
+    @Test
+    fun theFingerprintWaitsForTheUserToComeBack() = runTest {
+        val device = Device().apply { foreground = false }
+        val lock = lock(device)
+        val prompt = launch { lock.unlockWhenBack() }
+        advanceTimeBy(5_000)
+        assertEquals(0, device.asked)
+        device.foreground = true
+        advanceTimeBy(1_000)
+        prompt.join()
+        assertEquals(1, device.asked)
     }
 }

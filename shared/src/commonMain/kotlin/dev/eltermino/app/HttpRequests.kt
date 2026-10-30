@@ -155,7 +155,6 @@ internal expect suspend fun sendThroughTunnel(connection: SshConnection, request
 fun curlCommand(request: PreparedRequest, extra: List<String> = emptyList()): String = buildList {
     add("curl")
     add("-sS")
-    if (request.followRedirects) { add("-L"); add("--proto-redir"); add("=http,https") }
     if (request.method != "GET" || request.body != null || request.parts != null) { add("-X"); add(shellQuote(request.method)) }
     request.headers.forEach { (name, value) -> add("-H"); add(shellQuote("$name: $value")) }
     request.body?.let { add("--data-binary"); add(shellQuote(it)) }

@@ -65,6 +65,20 @@ class ExternalEditFlowTest {
     }
 
     @Test
+    fun aSaveLeftBehindKeepsTheCopy() {
+        val file = FakeFile()
+        val editor = RemoteEditor(Endpoint.Local, remote.path, fs)
+        runBlocking {
+            editor.load()
+            remote.writeText("cambiato sul server, più lungo\n")
+            file.changes.trySend("mio\n".encodeToByteArray())
+            file.changes.trySend(null)
+            followExternalFile(editor, file, { false }) {}
+        }
+        assertFalse(file.closed)
+    }
+
+    @Test
     fun answeringYesOverwrites() {
         val file = FakeFile()
         val editor = RemoteEditor(Endpoint.Local, remote.path, fs)

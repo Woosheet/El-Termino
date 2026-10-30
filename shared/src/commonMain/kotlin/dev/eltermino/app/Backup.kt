@@ -7,9 +7,12 @@ import dev.eltermino.core.data.WorkspaceStore
 import dev.eltermino.core.data.forBackup
 import dev.eltermino.core.data.knownHostConflicts
 import dev.eltermino.core.data.mergedWith
+import dev.eltermino.core.data.newId
 import dev.eltermino.core.data.replacedBy
 import dev.eltermino.core.vault.Vault
 import dev.eltermino.core.vault.VaultException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
@@ -96,27 +99,42 @@ class BackupService(
     }
 
     /**
-     * Secrets go in first, on top of the old ones, and the old ones leave only once the
-     * workspace is saved: a crash at any point leaves no workspace pointing at a missing secret.
+     * Saving the workspace is the one moment the restore happens. Until then the vault only
+     * gains: a secret whose id is taken by a different value comes in under a new id, so
+     * a crash or a full disk at any point leaves the old workspace with its own secrets.
      *
      * @param password protects the safety copy, so the backup's own password opens it too.
      */
-    suspend fun restore(content: BackupContent, replaceAll: Boolean, password: CharArray) {
+    suspend fun restore(content: BackupContent, replaceAll: Boolean, password: CharArray): Unit = withContext(NonCancellable) {
         saveSafetyCopy(export(password))
         val before = vault.snapshot()
-        val secrets = content.secrets.mapValues { Base64.decode(it.value) }
+        val incoming = content.secrets.mapValues { Base64.decode(it.value) }
+        val renamed = incoming.filter { (id, value) -> before[id]?.contentEquals(value) == false }.keys.associateWith { newId() }
+        val secrets = incoming.mapKeys { (id, _) -> renamed[id] ?: id }
+        // Ids are random, so as text they can only be the references to them.
+        val workspace = renamed.entries.fold(json.encodeToString(Workspace.serializer(), content.workspace)) { text, (old, new) ->
+            text.replace("\"$old\"", "\"$new\"")
+        }.let { json.decodeFromString(Workspace.serializer(), it) }
         try {
             vault.restore(secrets, replace = false)
             try {
-                store.update { if (replaceAll) it.replacedBy(content.workspace) else it.mergedWith(content.workspace) }
+                store.update { if (replaceAll) it.replacedBy(workspace) else it.mergedWith(workspace) }
             } catch (e: Exception) {
-                vault.restore(before, replace = true)
+                runCatching { secrets.keys.filter { it !in before }.forEach { vault.remove(it) } }
                 throw e
             }
-            if (replaceAll) vault.restore(secrets, replace = true)
+            // What's left is tidying up: the restore is done, even if this doesn't get through.
+            runCatching {
+                if (replaceAll) {
+                    vault.restore(secrets, replace = true)
+                } else {
+                    val text = json.encodeToString(Workspace.serializer(), store.workspace.value)
+                    renamed.keys.filter { "\"$it\"" !in text }.forEach { vault.remove(it) }
+                }
+            }
         } finally {
             before.values.forEach { it.fill(0) }
-            secrets.values.forEach { it.fill(0) }
+            incoming.values.forEach { it.fill(0) }
         }
     }
 

@@ -19,6 +19,7 @@ import kotlinx.coroutines.withTimeout
 import org.apache.sshd.client.SshClient
 import org.apache.sshd.client.auth.keyboard.UserInteraction
 import org.apache.sshd.client.config.hosts.HostConfigEntryResolver
+import org.apache.sshd.client.future.AuthFuture
 import org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier
 import org.apache.sshd.client.session.ClientSession
 import org.apache.sshd.client.session.ClientSession.ClientSessionEvent
@@ -146,8 +147,18 @@ class MinaSshConnector(
 
     /** Secrets are only read once the host key has been accepted. */
     private suspend fun authenticate(session: ClientSession, hop: ConnectTarget, secrets: SecretResolver) {
+        val rest = hop.auth - AuthMethod.Agent
+        val agentFirst = rest.size < hop.auth.size && rest.isNotEmpty()
+        // On its own first, as listing the others would already ask for their secrets.
+        if (agentFirst && tryAuth(session, hop.copy(auth = listOf(AuthMethod.Agent)), secrets).isSuccess) return
+        val result = tryAuth(session, if (agentFirst) hop.copy(auth = rest) else hop, secrets)
+        if (!result.isSuccess) throw SshException.AuthFailed(hop.host, hop.username, agentProblem(hop) ?: result.exception)
+    }
+
+    private suspend fun tryAuth(session: ClientSession, hop: ConnectTarget, secrets: SecretResolver): AuthFuture {
         val methods = mutableListOf<String>()
         var responder: KeyboardInteractiveResponder? = null
+        session.setAttribute(USE_AGENT, AuthMethod.Agent in hop.auth)
         for (method in hop.auth) {
             when (method) {
                 is AuthMethod.Password -> {
@@ -164,10 +175,7 @@ class MinaSshConnector(
                     responder = method.responder
                     methods += "keyboard-interactive"
                 }
-                AuthMethod.Agent -> {
-                    session.setAttribute(USE_AGENT, true)
-                    methods += "publickey"
-                }
+                AuthMethod.Agent -> methods += "publickey"
             }
         }
         // A stored password can also answer a keyboard-interactive password prompt.
@@ -178,12 +186,11 @@ class MinaSshConnector(
         CoreModuleProperties.AUTH_TIMEOUT.set(session, (timeout * 2).toJavaDuration())
         responder?.let { session.userInteraction = BlockingInteraction(it, timeout) }
 
-        val result = try {
+        return try {
             session.auth().awaitDone(timeout)
         } catch (e: TimeoutCancellationException) {
             throw SshException.AuthFailed(hop.host, hop.username, e)
         }
-        if (!result.isSuccess) throw SshException.AuthFailed(hop.host, hop.username, agentProblem(hop) ?: result.exception)
     }
 
     private fun agentProblem(hop: ConnectTarget): AgentUnavailableException? {

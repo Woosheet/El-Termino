@@ -95,6 +95,10 @@ class EditorTab internal constructor(
     /** Stops following the external file, after uploading a save not seen yet. */
     internal var finishExternal: (() -> Unit)? = null
 
+    /** Closed with an external file still followed: nobody is left to answer. */
+    @Volatile
+    internal var closing = false
+
     /** External saves uploaded so far. */
     val uploads = MutableStateFlow(0)
 
@@ -476,23 +480,37 @@ class SessionsController(
         tab.finishExternal = file::finish
         tab.mutableEditor.value = editor
         tab.loaded.value = ""
-        followExternalFile(
-            editor,
-            file,
-            conflict = { _ ->
-                val answer = CompletableDeferred<Boolean>()
-                tab.conflict.value = answer
-                answer.await().also { tab.conflict.value = null }
-            },
-            saved = {
-                tab.uploads.update { it + 1 }
-                tab.uploadError.value = null
-            },
-            failed = { tab.uploadError.value = failureMessage(it) },
-        )
-        tab.finishExternal = null
-        tab.release?.invoke()
-        tab.release = null
+        fun leftBehind(why: String) =
+            services.platform.notify("${tab.label} non caricato", "$why La copia resta in ${file.path} fino alla chiusura dell'app.")
+        try {
+            followExternalFile(
+                editor,
+                file,
+                conflict = { _ ->
+                    val replace = if (tab.closing) {
+                        false
+                    } else {
+                        val answer = CompletableDeferred<Boolean>()
+                        tab.conflict.value = answer
+                        answer.await().also { tab.conflict.value = null }
+                    }
+                    if (!replace && tab.closing) leftBehind("È cambiato sul server.")
+                    replace
+                },
+                saved = {
+                    tab.uploads.update { it + 1 }
+                    tab.uploadError.value = null
+                },
+                failed = {
+                    if (tab.closing) leftBehind(failureMessage(it))
+                    tab.uploadError.value = failureMessage(it)
+                },
+            )
+        } finally {
+            tab.finishExternal = null
+            tab.release?.invoke()
+            tab.release = null
+        }
     }
 
     private fun <T : Tab> register(tab: T): T {
@@ -606,6 +624,7 @@ class SessionsController(
             }
             is FilesTab -> scope.launch { tab.browser.close() }
             is EditorTab -> tab.finishExternal?.let { finish ->
+                tab.closing = true
                 tab.conflict.value?.complete(false)
                 finish()
             } ?: scope.launch {

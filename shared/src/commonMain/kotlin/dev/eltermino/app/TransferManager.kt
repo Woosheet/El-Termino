@@ -363,7 +363,8 @@ class TransferManager(
             }
         }
         transfer.partial = -1
-        runCatching { target.setModified(to, step.modified) }
+        // A date of 0 is one the source doesn't know, not 1970.
+        if (step.modified != 0L) runCatching { target.setModified(to, step.modified) }
         if (step.permissions != 0) runCatching { target.chmod(to, step.permissions) }
         meter.fileDone(0)
     }

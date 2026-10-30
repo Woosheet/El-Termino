@@ -2,6 +2,7 @@ package dev.eltermino.app
 
 import dev.eltermino.core.data.FileWorkspaceStore
 import dev.eltermino.core.data.Host
+import dev.eltermino.core.data.Identity
 import dev.eltermino.core.data.KnownHost
 import dev.eltermino.core.data.SavedLayout
 import dev.eltermino.core.data.SavedPane
@@ -13,6 +14,7 @@ import dev.eltermino.core.data.WorkspaceStore
 import dev.eltermino.core.vault.BackupCipher
 import dev.eltermino.core.vault.EncryptedFileVault
 import dev.eltermino.core.vault.MasterKeyProvider
+import dev.eltermino.core.vault.Vault
 import dev.eltermino.core.vault.VaultException
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
@@ -211,5 +213,56 @@ class BackupFlowTest {
         assertFailsWith<IllegalStateException> { service.restore(content, replaceAll = true, password) }
         assertNull(device.vault.get(incoming))
         assertContentEquals("vecchio".encodeToByteArray(), device.vault.get(old))
+    }
+
+    /** A vault whose write of the whole set fails: the disk has no room left for a rollback. */
+    private class FullVault(private val real: Vault) : Vault by real {
+        var fullAfter = Int.MAX_VALUE
+        override suspend fun restore(entries: Map<String, ByteArray>, replace: Boolean) {
+            if (fullAfter-- <= 0) error("disco pieno")
+            real.restore(entries, replace)
+        }
+    }
+
+    private suspend fun Device.withSharedSecret(value: String) {
+        vault.restore(mapOf("segreto" to value.encodeToByteArray()), replace = false)
+        store.update { it.copy(identities = listOf(Identity("i", "io", "io", passwordSecretId = "segreto"))) }
+    }
+
+    private suspend fun Device.password(): String? =
+        store.workspace.value.identities.single().passwordSecretId?.let { vault.get(it)?.decodeToString() }
+
+    @Test
+    fun anOldSecretIsNotOverwrittenBeforeTheWorkspaceIsSaved() = runTest {
+        val source = Device().apply { withSharedSecret("del backup") }
+        val device = Device().apply { withSharedSecret("cambiata dopo") }
+        val full = FullVault(device.vault).apply { fullAfter = 1 }
+        val broken = object : WorkspaceStore by device.store {
+            override suspend fun update(transform: (Workspace) -> Workspace): Workspace = error("disco pieno")
+        }
+        val service = BackupService(broken, full) {}
+        val content = service.read(source.service.export(password), password)
+        assertFailsWith<IllegalStateException> { service.restore(content, replaceAll = true, password) }
+        assertEquals("cambiata dopo", device.password())
+    }
+
+    @Test
+    fun aSecretThatDiffersStillArrivesWithItsWorkspace() = runTest {
+        val source = Device().apply { withSharedSecret("del backup") }
+        val device = Device().apply { withSharedSecret("cambiata dopo") }
+        val content = device.service.read(source.service.export(password), password)
+        device.service.restore(content, replaceAll = false, password)
+        assertEquals("del backup", device.password())
+        assertEquals(1, device.vault.snapshot().size, "nothing points at the old value any more")
+    }
+
+    @Test
+    fun aFailureAfterTheWorkspaceIsSavedIsNotAFailedRestore() = runTest {
+        val source = Device().apply { withSharedSecret("del backup") }
+        val device = Device().apply { withSharedSecret("cambiata dopo") }
+        val content = device.service.read(source.service.export(password), password)
+        val full = FullVault(device.vault).apply { fullAfter = 1 }
+        BackupService(device.store, full) {}.restore(content, replaceAll = true, password)
+        assertEquals("del backup", device.password())
     }
 }

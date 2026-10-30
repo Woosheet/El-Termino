@@ -55,7 +55,7 @@ object TestEnv {
 }
 
 /** Reads absolute paths only, like a desktop with no ~/.ssh of interest. Records notifications. */
-class TestPlatform : Platform {
+open class TestPlatform : Platform {
     override val isDesktop = true
 
     @Volatile
