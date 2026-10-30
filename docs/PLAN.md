@@ -271,6 +271,7 @@ Password e chiavi private probabilmente non escono dall'export. Dopo l'import un
   - Punti aperti: forward solo su 127.0.0.1 e nessun elenco globale dei forward attivi; monitor solo Linux e senza processi; Docker senza compose, immagini e rimozione; la riproduzione ignora i ridimensionamenti. Nessuna delle quattro funzioni è ancora stata provata a mano nell'app o sul telefono.
 - Fase 7: in corso.
   - Backup cifrato fatto ([decisione 0015](decisions/0015-encrypted-backup.md)): un file con workspace e segreti, password con Argon2id, ripristino con anteprima, "Unisci" o "Sostituisci tutto", copia di sicurezza prima di cambiare i dati. Provato da `BackupFlowTest`.
+  - Master password dove manca il portachiavi fatta ([decisione 0004](decisions/0004-workspace-and-vault.md)). Provata da `PasswordMasterKeyProviderTest`; la finestra all'avvio va provata su un Linux senza Secret Service.
 
 ## Roadmap
 
