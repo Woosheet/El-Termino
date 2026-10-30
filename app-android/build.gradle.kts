@@ -5,6 +5,7 @@ plugins {
 
 android {
     namespace = "dev.eltermino.android"
+    useLibrary("android.test.mock")
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {

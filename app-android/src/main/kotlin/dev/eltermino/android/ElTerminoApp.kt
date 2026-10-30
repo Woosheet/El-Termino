@@ -28,6 +28,7 @@ class ElTerminoApp : Application() {
         MinaPlatform.setUpAndroid(filesDir)
         val dataDir = File(filesDir, "data")
         platform = AndroidPlatform(this)
+        lateinit var documents: DocumentFileSystem
         state = AppState(
             createAppServices(
                 dataDir = dataDir,
@@ -35,8 +36,10 @@ class ElTerminoApp : Application() {
                 platform = platform,
                 // App storage: other apps' files are reached through the system picker.
                 localFilesRoot = getExternalFilesDir(null) ?: File(filesDir, "files").apply { mkdirs() },
+                wrapLocalFiles = { documents = DocumentFileSystem(this, it); documents },
             ),
         )
+        platform.documents = documents
         // The foreground service runs while there's a tab open or a transfer going.
         CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
             combine(state.sessions.tabs, state.transfers.summary) { tabs, transfers -> tabs.isNotEmpty() || transfers.active + transfers.waiting > 0 }

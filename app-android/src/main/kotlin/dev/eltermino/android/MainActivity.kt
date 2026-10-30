@@ -40,6 +40,20 @@ class MainActivity : FragmentActivity() {
         }
     }
 
+    private var pendingPicks: CompletableDeferred<List<Uri>>? = null
+    private val openDocuments = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        pendingPicks?.complete(uris)
+        pendingPicks = null
+    }
+    private val documentsPicker: suspend () -> List<Uri> = {
+        withContext(Dispatchers.Main) {
+            pendingPicks?.complete(emptyList())
+            val result = CompletableDeferred<List<Uri>>().also { pendingPicks = it }
+            openDocuments.launch(arrayOf("*/*"))
+            result.await()
+        }
+    }
+
     private val biometricPrompt: suspend (String) -> Boolean = { reason ->
         withContext(Dispatchers.Main) {
             val result = CompletableDeferred<Boolean>()
@@ -84,6 +98,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         app.platform.documentPicker = picker
         app.platform.documentCreator = creator
+        app.platform.documentsPicker = documentsPicker
         app.platform.biometricPrompt = biometricPrompt
         setContent {
             // Light or dark status bar icons, to match the theme rather than the system.
@@ -113,9 +128,11 @@ class MainActivity : FragmentActivity() {
     override fun onDestroy() {
         if (app.platform.documentPicker === picker) app.platform.documentPicker = null
         if (app.platform.documentCreator === creator) app.platform.documentCreator = null
+        if (app.platform.documentsPicker === documentsPicker) app.platform.documentsPicker = null
         if (app.platform.biometricPrompt === biometricPrompt) app.platform.biometricPrompt = null
         pendingPick?.complete(null)
         pendingCreate?.complete(null)
+        pendingPicks?.complete(emptyList())
         super.onDestroy()
     }
 }

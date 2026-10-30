@@ -20,13 +20,15 @@ fun createAppServices(
     platform: Platform,
     localFilesRoot: File? = null,
     sshAgent: (() -> AgentTransport?)? = null,
+    /** Adds to the local files what's reached differently on this system. */
+    wrapLocalFiles: (FileSystem) -> FileSystem = { it },
 ): AppServices = AppServices(
     workspace = FileWorkspaceStore(File(dataDir, "workspace.json")),
     vault = EncryptedFileVault(File(dataDir, "vault.bin"), masterKey),
     connector = MinaSshConnector(agent = sshAgent),
     keyTool = MinaKeyTool(),
     platform = platform,
-    localFiles = localFilesRoot?.let(::LocalFileSystem),
+    localFiles = localFilesRoot?.let { wrapLocalFiles(LocalFileSystem(it)) },
     recordings = FileRecordingStore(File(dataDir, "recordings")),
     saveSafetyCopy = { bytes ->
         withContext(Dispatchers.IO) {

@@ -212,8 +212,14 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
     ) {
         FilesToolbar(state, tab, path, hidden, onNewFolder = { dialog = FileDialogState.NewFolder }, onUpload = {
             scope.launch {
-                val picked = state.services.platform.pickLocalFiles("Scegli i file da caricare")
-                if (picked.isNotEmpty()) upload(picked)
+                val platform = state.services.platform
+                if (platform.hasDocumentPicker) {
+                    val documents = platform.pickDocuments("Scegli i file da caricare")
+                    here?.let { copier?.copy(Endpoint.Local, documents, it, title) }
+                } else {
+                    val picked = platform.pickLocalFiles("Scegli i file da caricare")
+                    if (picked.isNotEmpty()) upload(picked)
+                }
             }
         })
         Divider()
@@ -291,6 +297,14 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                                         if (state.services.platform.isDesktop) {
                                             MenuItem("Apri con editor esterno", onClick = { close(); state.sessions.openExternalEditor(browser.endpoint, entry.path) })
                                         }
+                                    }
+                                    if (entry.type == RemoteFile.Type.File && state.services.platform.hasDocumentPicker) {
+                                        MenuItem("Salva sul telefono…", onClick = {
+                                            close()
+                                            scope.launch {
+                                                state.services.platform.createDocument(entry.name)?.let { state.transfers.saveAs(browser.endpoint, entry, it) }
+                                            }
+                                        })
                                     }
                                     CopyTargets(state, targets) { target -> close(); copyTo(target, listOf(entry)) }
                                     MenuDivider()
@@ -419,7 +433,8 @@ private fun FilesToolbar(state: AppState, tab: FilesTab, path: String?, hidden: 
             }
         }
         IconButton(Icons.Default.Add, "Nuova cartella", onClick = onNewFolder, size = 28.dp, iconSize = 16.dp)
-        if (browser.endpoint is Endpoint.Remote && state.services.platform.isDesktop) {
+        val platform = state.services.platform
+        if (platform.hasDocumentPicker || (browser.endpoint is Endpoint.Remote && platform.isDesktop)) {
             IconButton(CartaIcons.Upload, "Carica file", onClick = onUpload, size = 28.dp, iconSize = 16.dp)
         }
     }

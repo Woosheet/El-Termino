@@ -1,6 +1,7 @@
 package dev.eltermino.app
 
 import dev.eltermino.core.data.WorkspaceStore
+import dev.eltermino.core.ssh.RemoteFile
 import dev.eltermino.core.ssh.SshConnector
 import dev.eltermino.core.ssh.SshKeyTool
 import dev.eltermino.core.vault.Vault
@@ -34,6 +35,15 @@ interface Platform {
 
     /** Absolute paths of files chosen for upload, where the device has paths; empty otherwise. */
     suspend fun pickLocalFiles(title: String): List<String> = emptyList()
+
+    /** Whether [pickDocuments] and [createDocument] reach files outside the app's folder. */
+    val hasDocumentPicker: Boolean get() = false
+
+    /** Documents from the system picker, readable through [AppServices.localFiles]; empty when cancelled. */
+    suspend fun pickDocuments(title: String): List<RemoteFile> = emptyList()
+
+    /** A new document named by the user, writable through [AppServices.localFiles], as a path; null when cancelled. */
+    suspend fun createDocument(name: String): String? = null
 
     /** One file to send later, as a reference [readLocalFile] can read again; null when cancelled. */
     suspend fun pickAttachment(title: String): AttachedFile? =
