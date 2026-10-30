@@ -33,12 +33,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -146,10 +148,12 @@ internal fun SessionContent(state: AppState, showExtraKeys: Boolean, split: Bool
     val scope = rememberCoroutineScope()
     val drag = remember { FileDrag() }
     val copier = remember { CopyFlow(state, scope) }
+    var origin by remember { mutableStateOf(Offset.Zero) }
     CompositionLocalProvider(LocalFileDrag provides drag, LocalCopyFlow provides copier) {
         Column(modifier) {
-            Box(Modifier.weight(1f).fillMaxWidth().background(Carta.theme.terminal.background)) {
+            Box(Modifier.weight(1f).fillMaxWidth().background(Carta.theme.terminal.background).onGloballyPositioned { origin = it.positionInWindow() }) {
                 SplitPanes(state, tabs.isEmpty(), layout, showExtraKeys)
+                FileDragLabel(drag, origin)
             }
             TransfersBar(state)
         }

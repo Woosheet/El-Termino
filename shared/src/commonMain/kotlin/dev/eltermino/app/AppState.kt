@@ -23,6 +23,14 @@ class AppState(val services: AppServices) {
     init {
         // Old recordings go at startup, as long as the user asked to keep them.
         scope.launch { services.recordings?.prune(services.workspace.workspace.value.ui.recordingDays, nowEpochSeconds()) }
+        // What a copy brings into a folder shows up in the panels open there, hidden ones included.
+        scope.launch {
+            transfers.ended.collect { transfer ->
+                sessions.tabs.value.filterIsInstance<FilesTab>()
+                    .filter { it.browser.endpoint == transfer.targetDir.endpoint && it.browser.path.value == transfer.targetDir.path }
+                    .forEach { it.browser.refresh() }
+            }
+        }
     }
 
     private val mutableCommands = kotlinx.coroutines.flow.MutableSharedFlow<AppCommand>(extraBufferCapacity = 16)

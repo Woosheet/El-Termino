@@ -11,7 +11,9 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -141,6 +143,11 @@ class TransferManager(
         }
         .stateIn(scope, SharingStarted.Eagerly, TransferSummary())
 
+    private val mutableEnded = MutableSharedFlow<Transfer>(extraBufferCapacity = 64)
+
+    /** Each transfer as it stops, for whatever reason: its destination folder may have changed. */
+    val ended: SharedFlow<Transfer> = mutableEnded
+
     private val wake = Channel<Unit>(Channel.CONFLATED)
     private val mutex = Mutex()
     private val remotes = mutableMapOf<String, RemoteFileSystem>()
@@ -233,6 +240,7 @@ class TransferManager(
             } catch (e: Throwable) {
                 transfer.mutableState.value = TransferState.Failed(failureMessage(e))
             } finally {
+                mutableEnded.tryEmit(transfer)
                 withContext(NonCancellable) { releaseIdle() }
                 wake.trySend(Unit)
             }

@@ -101,12 +101,15 @@ internal class ChipDrag {
 
 internal val LocalChipDrag = staticCompositionLocalOf<ChipDrag?> { null }
 
-/** Runs [onMenu] on a right click, the way a context menu opens on desktop. */
-internal fun Modifier.onSecondaryClick(onMenu: () -> Unit): Modifier = pointerInput(Unit) {
+/**
+ * Runs [onMenu] with the pointer's position on a right click, the way a context menu opens on
+ * desktop. A new [key] restarts it, for a callback that depends on what the element shows.
+ */
+internal fun Modifier.onSecondaryClick(key: Any? = Unit, onMenu: (Offset) -> Unit): Modifier = pointerInput(key) {
     awaitPointerEventScope {
         while (true) {
             val event = awaitPointerEvent()
-            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) onMenu()
+            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) onMenu(event.changes.first().position)
         }
     }
 }

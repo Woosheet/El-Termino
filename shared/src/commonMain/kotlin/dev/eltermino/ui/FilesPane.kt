@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +29,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,6 +37,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -51,6 +55,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import dev.eltermino.app.AppState
 import dev.eltermino.app.ConflictPolicy
@@ -61,6 +66,7 @@ import dev.eltermino.app.FilesTab
 import dev.eltermino.app.Location
 import dev.eltermino.app.childPath
 import dev.eltermino.app.failureMessage
+import dev.eltermino.app.fileName
 import dev.eltermino.app.formatBytes
 import dev.eltermino.app.formatFileTime
 import dev.eltermino.app.formatPermissions
@@ -87,6 +93,7 @@ import dev.eltermino.ui.theme.Carta
 import dev.eltermino.ui.theme.tabular
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 /** Files on their way to another panel, while the user still holds the mouse button. */
 internal class FileDrag {
@@ -94,7 +101,7 @@ internal class FileDrag {
     var items by mutableStateOf<List<RemoteFile>>(emptyList())
     var pointer by mutableStateOf(Offset.Zero)
 
-    /** Where each file panel is on screen, to know which one is under the pointer. */
+    /** Where each panel on screen is, to know which one is under the pointer. A panel leaves when it's no longer shown. */
     val zones = mutableStateMapOf<String, Rect>()
 
     val active: Boolean get() = source != null
@@ -137,6 +144,24 @@ internal class CopyFlow(private val state: AppState, private val scope: Coroutin
     }
 }
 
+/** What's being dragged, beside the pointer. [origin] is where the caller sits in the window. */
+@Composable
+internal fun FileDragLabel(drag: FileDrag, origin: Offset) {
+    if (!drag.active) return
+    Text(
+        drag.items.singleOrNull()?.name ?: "${drag.items.size} elementi",
+        modifier = Modifier
+            .offset { IntOffset((drag.pointer.x - origin.x).roundToInt() + 14, (drag.pointer.y - origin.y).roundToInt() + 14) }
+            .widthIn(max = 280.dp)
+            .background(Carta.colors.accent, RoundedCornerShape(6.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        style = Carta.type.small,
+        color = Carta.colors.background,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
 internal val LocalFileDrag = staticCompositionLocalOf<FileDrag?> { null }
 internal val LocalCopyFlow = staticCompositionLocalOf<CopyFlow?> { null }
 
@@ -148,6 +173,9 @@ private sealed interface FileDialogState {
     class Delete(val entries: List<RemoteFile>) : FileDialogState
     class Permissions(val entry: RemoteFile) : FileDialogState
 }
+
+/** A right click: where it landed and the row under it, if any. */
+private class PanelMenu(val at: Offset, val entry: RemoteFile?)
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -171,6 +199,8 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
     var dialog by remember { mutableStateOf<FileDialogState?>(null) }
     var anchor by remember { mutableStateOf(-1) }
     var externalHover by remember { mutableStateOf(false) }
+    var panelMenu by remember { mutableStateOf<PanelMenu?>(null) }
+    var clickedRow by remember { mutableStateOf<RemoteFile?>(null) }
 
     val here = path?.let { Location(browser.endpoint, it) }
     val title = tabs.titles()[tab.id] ?: tab.label
@@ -187,7 +217,18 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
         val local = state.services.localFiles ?: return
         scope.launch {
             val files = paths.mapNotNull { runCatching { local.stat(it) }.getOrNull() }
+            if (files.size < paths.size) {
+                val unread = paths.filter { path -> files.none { it.path == path } }.map(::fileName)
+                copier?.error = "Non riesco a leggere ${unread.joinToString(", ")}: controlla che El Termino possa accedere a quella cartella"
+            }
             copier?.copy(Endpoint.Local, files, destination, title)
+        }
+    }
+
+    fun pickAndUpload() {
+        scope.launch {
+            val picked = state.services.platform.pickLocalFiles("Scegli i file da caricare")
+            if (picked.isNotEmpty()) upload(picked)
         }
     }
 
@@ -195,6 +236,22 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
         scope.launch {
             if (!browser.enter(entry)) state.sessions.openEditor(browser.endpoint, entry.path)
         }
+    }
+
+    // A hidden or closed panel's old place must not catch a drop meant for the one shown there now.
+    DisposableEffect(tab.id) { onDispose { drag?.zones?.remove(tab.id) } }
+
+    val entryItems: @Composable (RemoteFile, () -> Unit) -> Unit = { entry, close ->
+        if (entry.isDirectory || entry.type == RemoteFile.Type.Symlink) {
+            MenuItem("Apri", onClick = { close(); openEntry(entry) })
+        } else {
+            MenuItem("Modifica", onClick = { close(); state.sessions.openEditor(browser.endpoint, entry.path) })
+        }
+        CopyTargets(state, targets) { target -> close(); copyTo(target, listOf(entry)) }
+        MenuDivider()
+        MenuItem("Rinomina…", onClick = { close(); dialog = FileDialogState.Rename(entry) })
+        MenuItem("Permessi…", onClick = { close(); dialog = FileDialogState.Permissions(entry) })
+        MenuItem("Elimina…", danger = true, onClick = { close(); dialog = FileDialogState.Delete(listOf(entry)) })
     }
 
     val dropTarget = drag?.over() == tab.id
@@ -206,12 +263,7 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
             .then(if (dropTarget || externalHover) Modifier.border(2.dp, colors.accent) else Modifier)
             .onFilesDropped(onHover = { externalHover = it }, onDrop = ::upload),
     ) {
-        FilesToolbar(state, tab, path, hidden, onNewFolder = { dialog = FileDialogState.NewFolder }, onUpload = {
-            scope.launch {
-                val picked = state.services.platform.pickLocalFiles("Scegli i file da caricare")
-                if (picked.isNotEmpty()) upload(picked)
-            }
-        })
+        FilesToolbar(state, tab, path, hidden, onNewFolder = { dialog = FileDialogState.NewFolder }, onUpload = ::pickAndUpload)
         Divider()
         error?.let { Banner(it, action = "Riprova") { browser.refresh() ?: path?.let(browser::open) } }
         message?.let { Banner(it, action = "Chiudi") { browser.dismissMessage() } }
@@ -224,7 +276,15 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                 color = colors.accent,
             )
         }
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+        BoxWithConstraints(
+            Modifier.weight(1f).fillMaxWidth().onSecondaryClick { at ->
+                // The row under the pointer has already said so: children hear a click first.
+                val row = clickedRow
+                clickedRow = null
+                if (row != null && row.path !in browser.selection.value) browser.selection.value = setOf(row.path)
+                panelMenu = PanelMenu(at, row)
+            },
+        ) {
             val showDate = maxWidth >= 460.dp
             val showPermissions = maxWidth >= 620.dp
             Column(Modifier.fillMaxSize()) {
@@ -270,27 +330,39 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                                     drag.items = items
                                     drag.pointer = position
                                 },
-                                onDrag = { delta -> drag?.let { it.pointer += delta } },
+                                onDrag = { position -> drag?.pointer = position },
                                 onDragEnd = {
                                     val target = drag?.over()?.let { id -> targets.firstOrNull { it.id == id } }
                                     val items = drag?.items.orEmpty()
                                     drag?.source = null
                                     if (target != null) copyTo(target, items)
                                 },
-                                menu = { close ->
-                                    if (entry.isDirectory || entry.type == RemoteFile.Type.Symlink) {
-                                        MenuItem("Apri", onClick = { close(); openEntry(entry) })
-                                    } else {
-                                        MenuItem("Modifica", onClick = { close(); state.sessions.openEditor(browser.endpoint, entry.path) })
-                                    }
-                                    CopyTargets(state, targets) { target -> close(); copyTo(target, listOf(entry)) }
-                                    MenuDivider()
-                                    MenuItem("Rinomina…", onClick = { close(); dialog = FileDialogState.Rename(entry) })
-                                    MenuItem("Permessi…", onClick = { close(); dialog = FileDialogState.Permissions(entry) })
-                                    MenuItem("Elimina…", danger = true, onClick = { close(); dialog = FileDialogState.Delete(listOf(entry)) })
-                                },
+                                onDragCancel = { drag?.source = null },
+                                onRightClick = { clickedRow = entry },
+                                menu = { close -> entryItems(entry, close) },
                             )
                         }
+                    }
+                }
+            }
+            panelMenu?.let { open ->
+                val close = { panelMenu = null }
+                Box(Modifier.offset { IntOffset(open.at.x.roundToInt(), open.at.y.roundToInt()) }) {
+                    Menu(expanded = true, onDismiss = close) {
+                        if (open.entry != null) {
+                            entryItems(open.entry, close)
+                            MenuDivider()
+                        }
+                        MenuItem("Aggiorna", onClick = { close(); browser.refresh() })
+                        MenuItem("Nuova cartella…", onClick = { close(); dialog = FileDialogState.NewFolder })
+                        if (browser.endpoint is Endpoint.Remote && state.services.platform.isDesktop) {
+                            MenuItem("Carica file…", onClick = { close(); pickAndUpload() })
+                        }
+                        MenuItem("Cartella superiore", onClick = { close(); browser.up() })
+                        MenuItem(if (hidden) "Nascondi i file nascosti" else "Mostra i file nascosti", onClick = {
+                            close()
+                            browser.showHidden.value = !hidden
+                        })
                     }
                 }
             }
@@ -454,6 +526,8 @@ private fun FileRow(
     onDragStart: (Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+    onRightClick: () -> Unit,
     menu: @Composable ((close: () -> Unit) -> Unit),
 ) {
     val colors = Carta.colors
@@ -461,6 +535,12 @@ private fun FileRow(
     val hovered by interaction.collectIsHoveredAsState()
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var open by remember { mutableStateOf(false) }
+    // The gesture below runs as long as the row shows this path, so it has to read the latest
+    // callbacks: the ones from when the row appeared know an old selection and old panels.
+    val dragStarted by rememberUpdatedState(onDragStart)
+    val dragged by rememberUpdatedState(onDrag)
+    val dragEnded by rememberUpdatedState(onDragEnd)
+    val dragCancelled by rememberUpdatedState(onDragCancel)
     Row(
         Modifier
             .fillMaxWidth()
@@ -473,16 +553,16 @@ private fun FileRow(
                 },
             )
             .hoverable(interaction)
-            .onSecondaryClick { open = true }
+            .onSecondaryClick(entry.path) { onRightClick() }
             .pointerInput(entry.path) {
                 detectDragGestures(
-                    onDragStart = { offset -> onDragStart((coordinates?.positionInWindow() ?: Offset.Zero) + offset) },
-                    onDrag = { change, delta ->
+                    onDragStart = { offset -> dragStarted((coordinates?.positionInWindow() ?: Offset.Zero) + offset) },
+                    onDrag = { change, _ ->
                         change.consume()
-                        onDrag(delta)
+                        dragged((coordinates?.positionInWindow() ?: Offset.Zero) + change.position)
                     },
-                    onDragEnd = onDragEnd,
-                    onDragCancel = onDragEnd,
+                    onDragEnd = { dragEnded() },
+                    onDragCancel = { dragCancelled() },
                 )
             }
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onDoubleClick = onOpen)
