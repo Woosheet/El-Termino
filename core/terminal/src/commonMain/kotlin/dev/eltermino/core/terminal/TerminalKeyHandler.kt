@@ -83,7 +83,8 @@ internal fun decideKeyAction(
     return KeyAction.PassThrough
 }
 
-private fun isPrintable(codePoint: Int) = codePoint >= 0x20 && codePoint != 0x7F
+// A key with no character of its own, like Shift alone, reports 0xFFFF on desktop.
+private fun isPrintable(codePoint: Int) = codePoint >= 0x20 && codePoint != 0x7F && codePoint != 0xFFFF
 
 private val specialKeys: Map<Key, TerminalKey> = mapOf(
     Key.Enter to TerminalKey.Enter,

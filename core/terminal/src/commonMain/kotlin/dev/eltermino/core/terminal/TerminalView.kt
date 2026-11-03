@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
 import com.johnan.terminal.core.ArrowDirection
@@ -51,6 +53,9 @@ import com.johnan.terminal.ui.TerminalCursorStyle
 import com.johnan.terminal.ui.TerminalRenderer
 import com.johnan.terminal.ui.TerminalTypographyConfig
 import com.johnan.terminal.ui.TerminalUiConfig
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /** What a right click in the terminal offers; the app draws it with its own menu. */
 class TerminalMenu(
@@ -62,8 +67,9 @@ class TerminalMenu(
 
 /**
  * Draws [session] and sends keyboard input to it. The view sizes the terminal to fit its
- * bounds. Dragging with the mouse selects text, and on a touch screen holding and dragging
- * does; the selection is copied on release. Cmd+C/V on macOS and Ctrl+Shift+C/V elsewhere
+ * bounds. Dragging with the mouse selects text, scrolling when the pointer goes past the top
+ * or bottom edge, and Shift+click moves an end of the selection to the point; on a touch
+ * screen holding and dragging selects. The selection is copied on release. Cmd+C/V on macOS and Ctrl+Shift+C/V elsewhere
  * copy and paste without reaching the shell, and a right click shows [contextMenu] where
  * the pointer is. With several views on screen, only the [focused] one takes the keyboard.
  */
@@ -89,6 +95,8 @@ fun TerminalView(
         )
     }
     var selection by remember(session) { mutableStateOf<SelectionState>(SelectionState.None) }
+    // The renderer takes the click of a Shift+click for a tap, which would clear what it just extended.
+    var ignoreTap by remember { mutableStateOf(false) }
     val inputFocus = remember { FocusRequester() }
     val viewFocus = remember { FocusRequester() }
     val keyHandler = remember { TerminalKeyHandler(isMacOs) }
@@ -96,6 +104,7 @@ fun TerminalView(
     var cellHeightPx by remember { mutableFloatStateOf(0f) }
     // Ours, so a mouse position can be turned into a row of the scrollback.
     val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
 
@@ -154,29 +163,68 @@ fun TerminalView(
             // unless Shift is held, as in xterm.
             .pointerInput(selectsOnPress) {
                 if (!selectsOnPress) return@pointerInput
+                // The rows drawn end here; any strip left below them belongs to no row.
+                fun rowsBottom() = floor(size.height / cellHeightPx) * cellHeightPx
                 fun cellAt(at: Offset): Pair<Int, Int>? {
                     if (cellWidthPx <= 0f || cellHeightPx <= 0f) return null
-                    val row = floor((at.y + scroll.value) / cellHeightPx).toInt().coerceAtLeast(0)
+                    // Past an edge the pointer stands for the row on that edge.
+                    val y = at.y.coerceIn(0f, (rowsBottom() - 1f).coerceAtLeast(0f))
+                    val row = floor((y + scroll.value) / cellHeightPx).toInt().coerceAtLeast(0)
                     return row to floor(at.x / cellWidthPx).toInt().coerceAtLeast(0)
+                }
+                // Lines to scroll at each step: none inside the view, more the farther out the pointer is.
+                fun linesPastEdge(y: Float): Int {
+                    if (cellHeightPx <= 0f) return 0
+                    val past = if (y < 0f) -y else y - rowsBottom()
+                    if (past <= 0f) return 0
+                    val lines = (1 + (past / (cellHeightPx * 4)).toInt()).coerceAtMost(MAX_AUTO_SCROLL_LINES)
+                    return if (y < 0f) -lines else lines
                 }
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
                     val press = currentEvent
                     val mine = down.type == PointerType.Mouse && press.buttons.isPrimaryPressed &&
                         (state.mouseTrackingMode == MouseTrackingMode.None || press.keyboardModifiers.isShiftPressed)
-                    val start = if (mine) cellAt(down.position) else null
-                    if (start == null) return@awaitEachGesture
-                    var dragged = false
-                    while (true) {
-                        val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
-                        if (!change.pressed) break
-                        val end = cellAt(change.position) ?: continue
-                        if (end != start || dragged) {
-                            dragged = true
-                            selection = SelectionState.EndCursorDragging(start.first, start.second, end.first, end.second)
-                            change.consume()
+                    val clicked = if (mine) cellAt(down.position) else null
+                    if (clicked == null) return@awaitEachGesture
+                    ignoreTap = false
+                    val extended = selection.toTerminalSelection().takeIf { press.keyboardModifiers.isShiftPressed }
+                    val start = extended?.anchorFor(clicked) ?: clicked
+                    var dragged = extended != null
+                    if (extended != null) {
+                        selection = SelectionState.EndCursorDragging(start.first, start.second, clicked.first, clicked.second)
+                        down.consume()
+                    }
+                    var pointer = down.position
+                    fun extendTo(at: Offset): Boolean {
+                        val end = cellAt(at) ?: return false
+                        if (end == start && !dragged) return false
+                        dragged = true
+                        selection = SelectionState.EndCursorDragging(start.first, start.second, end.first, end.second)
+                        return true
+                    }
+                    // Past an edge the view scrolls on its own clock, whether the mouse moves or not.
+                    val autoScroll = scope.launch {
+                        while (isActive) {
+                            delay(AUTO_SCROLL_MILLIS)
+                            val lines = linesPastEdge(pointer.y)
+                            if (lines != 0) {
+                                scroll.dispatchRawDelta(lines * cellHeightPx)
+                                extendTo(pointer)
+                            }
                         }
                     }
+                    try {
+                        while (true) {
+                            val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) break
+                            pointer = change.position
+                            if (extendTo(pointer)) change.consume()
+                        }
+                    } finally {
+                        autoScroll.cancel()
+                    }
+                    ignoreTap = extended != null
                     // A plain click clears the selection and leaves the clipboard alone.
                     if (dragged) {
                         selection = TerminalSelectionLogic.finalizeEndCursor(selection)
@@ -211,7 +259,7 @@ fun TerminalView(
             fontSize = fontSize.value,
             scrollState = scroll,
             selectionState = selection,
-            onSingleTap = { _, _ -> selection = SelectionState.None },
+            onSingleTap = { _, _ -> if (ignoreTap) ignoreTap = false else selection = SelectionState.None },
             onStartDirectTouchSelection = { row, col -> selection = SelectionState.EndCursorDragging(row, col, row, col) },
             onStartDraggingStartCursor = { row, col -> selection = TerminalSelectionLogic.startDraggingStartCursor(selection, row, col) },
             onUpdateStartCursor = { row, col -> selection = TerminalSelectionLogic.updateStartCursor(selection, row, col) },
@@ -222,7 +270,7 @@ fun TerminalView(
                 selection = TerminalSelectionLogic.finalizeEndCursor(selection)
                 copySelection()
             },
-            onExitCopyMode = { selection = SelectionState.None },
+            onExitCopyMode = { if (!ignoreTap) selection = SelectionState.None },
             onTerminalResize = session::resize,
         )
         menu?.let { (at, text) ->
@@ -244,6 +292,23 @@ private fun ArrowDirection.toKey() = when (this) {
     ArrowDirection.DOWN -> TerminalKey.Down
     ArrowDirection.LEFT -> TerminalKey.Left
     ArrowDirection.RIGHT -> TerminalKey.Right
+}
+
+/** Between two scroll steps while a selection is dragged past an edge. */
+private const val AUTO_SCROLL_MILLIS = 80L
+
+private const val MAX_AUTO_SCROLL_LINES = 5
+
+/**
+ * The end of this selection that stays put when Shift+click moves the other one to [cell]: the
+ * farther, so a click outside only grows the selection.
+ */
+internal fun TerminalSelection.anchorFor(cell: Pair<Int, Int>): Pair<Int, Int> {
+    val range = normalized()
+    val start = range.startRow to range.startCol
+    val end = range.endRow to range.endCol
+    fun distanceFrom(point: Pair<Int, Int>) = abs((cell.first - point.first) * 10_000L + (cell.second - point.second))
+    return if (distanceFrom(start) >= distanceFrom(end)) start else end
 }
 
 /** Plain text of [selection], whose rows count from the top of the scrollback. */

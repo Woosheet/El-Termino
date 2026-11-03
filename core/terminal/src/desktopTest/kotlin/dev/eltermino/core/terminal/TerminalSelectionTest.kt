@@ -1,6 +1,7 @@
 package dev.eltermino.core.terminal
 
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.pointer.PointerEventType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,6 +16,11 @@ import kotlin.test.assertTrue
 
 /** Selecting with the mouse, as on desktop: drag to select, release to copy, right click for the menu. */
 class TerminalSelectionTest {
+    private companion object {
+        /** What a key without a character reports on desktop, AWT's CHAR_UNDEFINED. */
+        const val NO_CHARACTER = 0xFFFF
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val shell = FakeShellChannel()
     private val session = TerminalSession(shell, scope)
@@ -50,6 +56,147 @@ class TerminalSelectionTest {
         mouse(PointerEventType.Move, Offset((from.x + to.x) / 2, to.y))
         mouse(PointerEventType.Move, to)
         mouse(PointerEventType.Release, to)
+    }
+
+    private fun HeadlessView.longOutput() {
+        shell.emit((1..80).joinToString("") { "riga $it\r\n" } + "fine")
+        eventually({ session.snapshotText().takeLast(80) }) { session.snapshotText().trimEnd().endsWith("fine") }
+        frames(8)
+    }
+
+    /** Keeps the button down past an edge for [millis]; with [jiggle] the mouse never stops moving. */
+    private fun HeadlessView.holdAt(at: Offset, millis: Long, jiggle: Boolean = false) {
+        mouse(PointerEventType.Move, at)
+        val deadline = System.currentTimeMillis() + millis
+        var step = 0
+        while (System.currentTimeMillis() < deadline) {
+            Thread.sleep(20)
+            frames(1)
+            if (jiggle) mouse(PointerEventType.Move, at + Offset(if (step++ % 2 == 0) 3f else 0f, 0f))
+        }
+    }
+
+    /** Selects from [from] with the button held at [at], past an edge, and returns what got copied. */
+    private fun HeadlessView.selectPastAnEdge(from: Offset, at: Offset, jiggle: Boolean = false): List<String> {
+        clipboard.text = null
+        mouse(PointerEventType.Press, from)
+        Thread.sleep(30)
+        frames(2)
+        holdAt(at, 900, jiggle)
+        mouse(PointerEventType.Release, at)
+        eventually({ "nothing copied" }) { clipboard.text != null }
+        return clipboard.text!!.lines()
+    }
+
+    @Test
+    fun draggingPastTheTopScrollsUpAndKeepsSelecting() {
+        HeadlessView(session, width, height).use { view ->
+            view.ready()
+            view.longOutput()
+            val rows = session.size.value.rows
+            val copied = view.selectPastAnEdge(cell(3, rows - 1), Offset(cell(0, 0).x, -30f))
+            assertTrue(copied.size >= rows + 4, "only ${copied.size} lines of $rows on screen: ${copied.first()}")
+            assertEquals("fine", copied.last())
+        }
+    }
+
+    @Test
+    fun draggingPastTheBottomScrollsDownAndKeepsSelecting() {
+        HeadlessView(session, width, height).use { view ->
+            view.ready()
+            view.longOutput()
+            val rows = session.size.value.rows
+            // Up into the scrollback, then down from there.
+            view.selectPastAnEdge(cell(3, rows - 1), Offset(cell(0, 0).x, -30f))
+            val copied = view.selectPastAnEdge(cell(0, 0), Offset(cell(3, 0).x, height + 30f))
+            assertTrue(copied.size >= rows + 4, "only ${copied.size} lines of $rows on screen: ${copied.last()}")
+            // It may reach the end of the output, whose last line isn't numbered.
+            val numbers = copied.filter { it.startsWith("riga ") }.map { it.removePrefix("riga ").toInt() }
+            assertEquals((numbers.first()..numbers.last()).toList(), numbers, "lines skipped")
+        }
+    }
+
+    /** A mouse moves all the time, and that must not hold the scrolling back. */
+    @Test
+    fun keepsScrollingWhileTheMouseMoves() {
+        HeadlessView(session, width, height).use { view ->
+            view.ready()
+            view.longOutput()
+            val rows = session.size.value.rows
+            val copied = view.selectPastAnEdge(cell(3, rows - 1), Offset(cell(0, 0).x, -30f), jiggle = true)
+            assertTrue(copied.size >= rows + 4, "only ${copied.size} lines of $rows on screen")
+        }
+    }
+
+    private fun HeadlessView.shiftClick(at: Offset) {
+        mouse(PointerEventType.Press, at, shift = true)
+        Thread.sleep(30)
+        frames(2)
+        mouse(PointerEventType.Release, at, shift = true)
+    }
+
+    @Test
+    fun shiftClickExtendsTheSelectionAndKeepsIt() {
+        HeadlessView(session, width, height).use { view ->
+            view.ready()
+            view.drag(cell(0, 0), cell(4, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "hello" }
+            view.shiftClick(cell(7, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "hello wo" }
+            // Still selected after the release, so a second one goes on from there.
+            Thread.sleep(100)
+            view.frames(3)
+            view.shiftClick(cell(10, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "hello world" }
+        }
+    }
+
+    /** A real Shift+click starts with Shift going down on its own, which has no character. */
+    @Test
+    fun pressingShiftLeavesTheSelectionAloneAndSendsNothing() {
+        HeadlessView(session, width, height).use { view ->
+            view.ready()
+            view.drag(cell(0, 0), cell(4, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "hello" }
+            val written = shell.writtenText()
+            view.press(Key.ShiftLeft, codePoint = NO_CHARACTER, shift = true)
+            view.shiftClick(cell(10, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "hello world" }
+            assertEquals(written, shell.writtenText(), "Shift reached the shell")
+        }
+    }
+
+    @Test
+    fun shiftClickBeforeTheSelectionKeepsWhatWasSelected() {
+        HeadlessView(session, width, height).use { view ->
+            view.ready()
+            view.drag(cell(6, 0), cell(10, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "world" }
+            view.shiftClick(cell(0, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "hello world" }
+        }
+    }
+
+    @Test
+    fun shiftClickInsideTheSelectionMovesTheNearerEnd() {
+        HeadlessView(session, width, height).use { view ->
+            view.ready()
+            view.drag(cell(0, 0), cell(10, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "hello world" }
+            view.shiftClick(cell(8, 0))
+            eventually({ "clipboard has ${view.clipboard.text}" }) { view.clipboard.text == "hello wor" }
+        }
+    }
+
+    @Test
+    fun shiftClickWithNothingSelectedStaysAClick() {
+        HeadlessView(session, width, height).use { view ->
+            view.ready()
+            view.clipboard.text = "prima"
+            view.shiftClick(cell(4, 0))
+            Thread.sleep(100)
+            assertEquals("prima", view.clipboard.text)
+        }
     }
 
     @Test

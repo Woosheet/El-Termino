@@ -13,6 +13,15 @@ class KeyActionTest {
         inputFieldActive: Boolean = true,
     ) = decideKeyAction(key, codePoint, mods, macOs, inputFieldActive)
 
+    /** During a selection nothing else stands between these keys and the shell. */
+    @Test
+    fun keysWithoutACharacterAreNotTyped() {
+        val noCharacter = 0xFFFF
+        assertEquals(KeyAction.PassThrough, decide(Key.ShiftLeft, noCharacter, KeyModifiers.Shift, macOs = true, inputFieldActive = false))
+        assertEquals(KeyAction.PassThrough, decide(Key.AltLeft, noCharacter, KeyModifiers.Alt, macOs = true, inputFieldActive = false))
+        assertEquals(KeyAction.PassThrough, decide(Key.CapsLock, noCharacter, macOs = true, inputFieldActive = false))
+    }
+
     @Test
     fun specialKeysAreHandledByUs() {
         assertEquals(KeyAction.SendKey(TerminalKey.Enter, KeyModifiers.None), decide(Key.Enter, '\r'.code))

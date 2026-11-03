@@ -14,6 +14,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerButtons
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -63,13 +64,14 @@ class HeadlessView(
     }
 
     /** A mouse event at [at], in pixels; [secondary] is the right button. */
-    fun mouse(type: PointerEventType, at: Offset, secondary: Boolean = false) {
+    fun mouse(type: PointerEventType, at: Offset, secondary: Boolean = false, shift: Boolean = false) {
         val held = type != PointerEventType.Release
         scene.sendPointerEvent(
             type,
             at,
             type = PointerType.Mouse,
             buttons = PointerButtons(isPrimaryPressed = held && !secondary, isSecondaryPressed = held && secondary),
+            keyboardModifiers = PointerKeyboardModifiers(isShiftPressed = shift),
             button = if (type == PointerEventType.Move) null else if (secondary) PointerButton.Secondary else PointerButton.Primary,
         )
         frames(1)
