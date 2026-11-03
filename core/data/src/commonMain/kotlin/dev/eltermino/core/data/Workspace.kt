@@ -68,6 +68,10 @@ data class Host(
     val agentForwarding: Boolean = false,
 )
 
+/** An application of this device that opens files: its name and where it is, a bundle, an executable or a command. */
+@Serializable
+data class ExternalApp(val name: String, val path: String)
+
 /** What looking for HTTP APIs on a host found: the ports that answer HTTP, with their description where they serve one. */
 @Serializable
 data class ApiDiscovery(
@@ -308,6 +312,8 @@ data class UiSettings(
     val theme: String = "system",
     /** The terminal's colours by id, or "app" for the ones of [theme]. */
     val terminalTheme: String = "app",
+    /** Apps chosen in "Apri con", most recent first. */
+    val recentApps: List<ExternalApp> = emptyList(),
     /** The app icon's `AppIconStyle` id, shown in the Dock, taskbar and window. */
     val appIcon: String = "bigote",
     /** System notifications when a transfer finishes or fails. */

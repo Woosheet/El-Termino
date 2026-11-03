@@ -5,6 +5,7 @@ import com.github.javakeyring.Keyring
 import dev.eltermino.app.LATEST_RELEASE_URL
 import dev.eltermino.app.DesktopExternalFile
 import dev.eltermino.app.ExternalFile
+import dev.eltermino.core.data.ExternalApp
 import dev.eltermino.app.Platform
 import dev.eltermino.app.runsWhenOpened
 import dev.eltermino.app.ReleaseAsset
@@ -114,18 +115,71 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
         updater?.relaunchAfterExit()
     }
 
-    override suspend fun openExternally(name: String, bytes: ByteArray): ExternalFile = withContext(Dispatchers.IO) {
-        // It comes from a server: opening must never mean running.
-        check(!runsWhenOpened(name, System.getProperty("os.name").startsWith("Windows", ignoreCase = true))) {
-            "$name verrebbe eseguito invece di aperto: usa \"Copia in…\" o l'editor integrato"
+    override suspend fun openExternally(name: String, bytes: ByteArray, app: ExternalApp?): ExternalFile = withContext(Dispatchers.IO) {
+        // It comes from a server: opening must never mean running. An editor the user chose only opens it.
+        check(!runsWhenOpened(name, isWindows) || (app != null && !app.isTerminal())) {
+            "$name verrebbe eseguito invece di aperto: aprilo con un editor, usa \"Copia in…\" o l'editor integrato"
         }
         DesktopExternalFile(name, bytes).also { file ->
             try {
-                java.awt.Desktop.getDesktop().open(File(file.path))
+                if (app == null) java.awt.Desktop.getDesktop().open(File(file.path)) else launch(app, file.path)
             } catch (e: Exception) {
                 file.close()
                 throw e
             }
+        }
+    }
+
+    /** Opens [path] with [app]: `open -a` for a macOS bundle, so it reuses a running copy; the program itself elsewhere. */
+    private fun launch(app: ExternalApp, path: String) {
+        if (isMacOs && app.path.endsWith(".app")) {
+            val open = ProcessBuilder("open", "-a", app.path, path).redirectErrorStream(true).start()
+            val finished = open.waitFor(15, java.util.concurrent.TimeUnit.SECONDS)
+            if (!finished || open.exitValue() != 0) {
+                val why = if (finished) open.inputStream.bufferedReader().readText().trim() else "non ha risposto"
+                throw IllegalStateException("${app.name} non si è aperto: $why")
+            }
+        } else {
+            ProcessBuilder(app.path, path).start()
+        }
+    }
+
+    override fun externalApps(): List<ExternalApp> = when {
+        isMacOs -> MAC_EDITORS.mapNotNull { name ->
+            listOf("/Applications", "${home.path}/Applications", "/System/Applications")
+                .map { File(it, "$name.app") }
+                .firstOrNull { it.isDirectory }
+                ?.let { ExternalApp(name, it.path) }
+        }
+        isWindows -> WINDOWS_EDITORS.mapNotNull { (name, path) ->
+            val expanded = path.replace("%LOCALAPPDATA%", System.getenv("LOCALAPPDATA").orEmpty())
+            File(expanded).takeIf { it.isFile }?.let { ExternalApp(name, it.path) }
+        }
+        else -> LINUX_EDITORS.mapNotNull { (command, name) ->
+            System.getenv("PATH").orEmpty().split(File.pathSeparator)
+                .map { File(it, command) }
+                .firstOrNull { it.canExecute() }
+                ?.let { ExternalApp(name, it.path) }
+        }
+    }
+
+    override suspend fun pickApp(): ExternalApp? = withContext(Dispatchers.Main) {
+        // Applications are bundles on macOS: the picker has to treat them as files to choose one.
+        if (isMacOs) System.setProperty("apple.awt.use-file-dialog-packages", "true")
+        try {
+            val dialog = FileDialog(window(), "Scegli l'app con cui aprire il file", FileDialog.LOAD).apply {
+                directory = when {
+                    isMacOs -> "/Applications"
+                    isWindows -> System.getenv("ProgramFiles") ?: "C:\\Program Files"
+                    else -> "/usr/bin"
+                }
+                if (isMacOs) setFilenameFilter { _, name -> name.endsWith(".app") }
+                isVisible = true
+            }
+            val name = dialog.file ?: return@withContext null
+            ExternalApp(name.removeSuffix(".app").removeSuffix(".exe"), File(dialog.directory, name).path)
+        } finally {
+            if (isMacOs) System.setProperty("apple.awt.use-file-dialog-packages", "false")
         }
     }
 
@@ -230,3 +284,28 @@ class DesktopPlatform(private val window: () -> Frame?) : Platform {
         }
     }
 }
+
+private val isWindows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+
+/** Editors offered in "Apri con" when installed, by bundle name in /Applications. */
+private val MAC_EDITORS = listOf(
+    "Visual Studio Code", "Cursor", "Zed", "Sublime Text", "BBEdit", "CotEditor", "Nova", "TextMate", "MacVim",
+    "IntelliJ IDEA", "IntelliJ IDEA CE", "WebStorm", "PyCharm", "PyCharm CE", "Xcode", "TextEdit",
+)
+
+private val WINDOWS_EDITORS = listOf(
+    "Visual Studio Code" to "%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\Code.exe",
+    "Notepad++" to "C:\\Program Files\\Notepad++\\notepad++.exe",
+    "Sublime Text" to "C:\\Program Files\\Sublime Text\\sublime_text.exe",
+    "Blocco note" to "C:\\Windows\\System32\\notepad.exe",
+)
+
+/** Commands looked up on the PATH, with the name the menu shows. */
+private val LINUX_EDITORS = listOf(
+    "code" to "Visual Studio Code", "zed" to "Zed", "subl" to "Sublime Text", "gnome-text-editor" to "Editor di testo",
+    "gedit" to "gedit", "kate" to "Kate", "mousepad" to "Mousepad", "xed" to "Xed",
+)
+
+/** Apps that run a script they're given rather than show it. */
+private fun ExternalApp.isTerminal(): Boolean =
+    listOf("terminal", "iterm", "warp", "alacritty", "kitty", "ghostty", "wezterm", "powershell", "cmd").any { it in name.lowercase() }

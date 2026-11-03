@@ -1,5 +1,7 @@
 package dev.eltermino.app
 
+import dev.eltermino.core.data.ExternalApp
+
 import dev.eltermino.core.data.WorkspaceStore
 import dev.eltermino.core.ssh.RemoteFile
 import dev.eltermino.core.ssh.SshConnector
@@ -103,8 +105,17 @@ interface Platform {
     /** Opens [url] in the browser. */
     fun openUrl(url: String) {}
 
-    /** Opens a private copy of a remote file with the system's app for it; null where there's no such thing. */
-    suspend fun openExternally(name: String, bytes: ByteArray): ExternalFile? = null
+    /**
+     * Opens a private copy of a remote file with [app], or with the system's app for it when null;
+     * null where there's no such thing.
+     */
+    suspend fun openExternally(name: String, bytes: ByteArray, app: ExternalApp? = null): ExternalFile? = null
+
+    /** The text editors installed here, offered by name in "Apri con". */
+    fun externalApps(): List<ExternalApp> = emptyList()
+
+    /** Lets the user choose any application; null when cancelled or unsupported. */
+    suspend fun pickApp(): ExternalApp? = null
 
     /** Whether [authenticate] can ask for a fingerprint or the system password here. */
     val biometricAvailable: Boolean get() = false

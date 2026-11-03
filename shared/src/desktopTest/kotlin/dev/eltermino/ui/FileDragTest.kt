@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.PointerButtons
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerKeyboardModifiers
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
@@ -76,13 +77,14 @@ class FileDragTest {
         Thread.sleep(15)
     }
 
-    private fun ImageComposeScene.mouse(type: PointerEventType, at: Offset, secondary: Boolean = false) {
+    private fun ImageComposeScene.mouse(type: PointerEventType, at: Offset, secondary: Boolean = false, option: Boolean = false) {
         val held = type != PointerEventType.Release
         sendPointerEvent(
             type,
             at,
             type = PointerType.Mouse,
             buttons = PointerButtons(isPrimaryPressed = held && !secondary, isSecondaryPressed = held && secondary),
+            keyboardModifiers = PointerKeyboardModifiers(isAltPressed = option),
             button = if (type == PointerEventType.Move) null else if (secondary) PointerButton.Secondary else PointerButton.Primary,
         )
         frames(2)
@@ -103,13 +105,13 @@ class FileDragTest {
     }
 
     /** From a row of the left panel to the middle of the right one. */
-    private fun ImageComposeScene.dragToTheRight(y: Float) {
+    private fun ImageComposeScene.dragToTheRight(y: Float, option: Boolean = false) {
         val start = Offset(100f, y)
         val end = Offset(WIDTH * 0.75f, HEIGHT / 2f)
-        mouse(PointerEventType.Press, start)
-        mouse(PointerEventType.Move, start + Offset(40f, 0f))
-        mouse(PointerEventType.Move, end)
-        mouse(PointerEventType.Release, end)
+        mouse(PointerEventType.Press, start, option = option)
+        mouse(PointerEventType.Move, start + Offset(40f, 0f), option = option)
+        mouse(PointerEventType.Move, end, option = option)
+        mouse(PointerEventType.Release, end, option = option)
     }
 
     /** Where each row of [left] is, found by picking them up and putting them down again. */
@@ -146,8 +148,11 @@ class FileDragTest {
             dragToTheRight(rows.getValue("b.txt"))
             eventually { File(to, "b.txt").exists() }
         }
-        assertEquals(listOf("b.txt"), state.transfers.transfers.value.map { it.name })
+        // Two panels of one machine: the file moves, no copy runs.
+        assertFalse(File(from, "b.txt").exists())
+        assertTrue(File(from, "a.txt").exists())
         assertFalse(File(to, "a.txt").exists())
+        assertEquals(emptyList(), state.transfers.transfers.value)
     }
 
     @Test
@@ -165,7 +170,67 @@ class FileDragTest {
             dragToTheRight(rows.getValue("a.txt"))
             eventually { File(to, "a.txt").exists() && File(to, "b.txt").exists() }
         }
-        assertEquals(setOf("a.txt", "b.txt"), state.transfers.transfers.value.map { it.name }.toSet())
+        assertFalse(File(from, "a.txt").exists() || File(from, "b.txt").exists())
+        assertTrue(File(from, "c.txt").exists())
+    }
+
+    @Test
+    fun aDropOnAFolderGoesInsideIt() {
+        val from = folder("from", "a.txt")
+        File(from, "dest").mkdirs()
+        val left = panel(from)
+        val rows = rows(left)
+        scene(left) {
+            val start = Offset(100f, rows.getValue("a.txt"))
+            val folder = Offset(100f, rows.getValue("dest"))
+            mouse(PointerEventType.Press, start)
+            mouse(PointerEventType.Move, start + Offset(40f, 0f))
+            mouse(PointerEventType.Move, folder)
+            mouse(PointerEventType.Release, folder)
+            eventually { File(from, "dest/a.txt").exists() }
+        }
+        assertFalse(File(from, "a.txt").exists())
+    }
+
+    @Test
+    fun optionMakesItACopy() {
+        val from = folder("from", "a.txt")
+        val to = folder("to")
+        val left = panel(from)
+        val rows = rows(left)
+        onTheRight = panel(to)
+        scene(left) {
+            dragToTheRight(rows.getValue("a.txt"), option = true)
+            eventually { File(to, "a.txt").exists() }
+        }
+        assertTrue(File(from, "a.txt").exists())
+        assertEquals(listOf("a.txt"), state.transfers.transfers.value.map { it.name })
+    }
+
+    @Test
+    fun aFolderNeverGoesInsideItself() {
+        val from = folder("from")
+        File(from, "box/inner").mkdirs()
+        val left = panel(from)
+        val box = left.browser.entries.value.single { it.name == "box" }
+        left.browser.moveInto(listOf(box), "${from.path}/box/inner")
+        eventually { left.browser.message.value != null }
+        assertTrue("dentro se stessa" in left.browser.message.value!!, left.browser.message.value)
+        assertTrue(File(from, "box/inner").isDirectory)
+    }
+
+    @Test
+    fun aNameAlreadyThereIsLeftAlone() {
+        val from = folder("from", "a.txt")
+        File(from, "dest").mkdirs()
+        File(from, "dest/a.txt").writeText("quella di prima")
+        val left = panel(from)
+        val file = left.browser.entries.value.single { it.name == "a.txt" }
+        left.browser.moveInto(listOf(file), "${from.path}/dest")
+        eventually { left.browser.message.value != null }
+        assertTrue("c'è già a.txt" in left.browser.message.value!!, left.browser.message.value)
+        assertEquals("quella di prima", File(from, "dest/a.txt").readText())
+        assertTrue(File(from, "a.txt").exists())
     }
 
     @Test

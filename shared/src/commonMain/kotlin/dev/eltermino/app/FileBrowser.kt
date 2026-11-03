@@ -124,6 +124,20 @@ class FileBrowser internal constructor(
 
     fun delete(entries: List<RemoteFile>) = operate { fs -> entries.forEach { fs.delete(it.path, recursive = true) } }
 
+    /**
+     * Moves [entries] into [dir] on this same machine: a rename, so nothing travels. Refused when
+     * one of the names is already there, or a folder would end up inside itself.
+     */
+    fun moveInto(entries: List<RemoteFile>, dir: String): Job = operate { fs ->
+        val moving = entries.filter { parentPath(it.path) != dir }
+        moving.firstOrNull { dir == it.path || dir.startsWith(it.path.trimEnd('/') + "/") }?.let {
+            throw IllegalStateException("${it.name} non può andare dentro se stessa")
+        }
+        val taken = moving.filter { fs.stat(childPath(dir, it.name)) != null }.map { it.name }
+        if (taken.isNotEmpty()) throw IllegalStateException("In $dir c'è già ${taken.joinToString(", ")}: rinominalo prima di spostare")
+        moving.forEach { fs.rename(it.path, childPath(dir, it.name)) }
+    }
+
     fun chmod(entry: RemoteFile, mode: Int) = operate { fs -> fs.chmod(entry.path, mode) }
 
     fun notify(message: String) {
@@ -139,7 +153,7 @@ class FileBrowser internal constructor(
 
     private fun currentPath() = path.value ?: throw IllegalStateException("La cartella non è ancora aperta")
 
-    private fun operate(block: suspend (FileSystem) -> Unit) {
+    private fun operate(block: suspend (FileSystem) -> Unit): Job =
         scope.launch {
             try {
                 block(fs.await())
@@ -150,7 +164,6 @@ class FileBrowser internal constructor(
             }
             refresh()
         }
-    }
 
     suspend fun close() {
         loadJob?.cancel()

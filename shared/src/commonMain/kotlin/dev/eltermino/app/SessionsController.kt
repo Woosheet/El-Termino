@@ -1,5 +1,6 @@
 package dev.eltermino.app
 
+import dev.eltermino.core.data.ExternalApp
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.newId
 import dev.eltermino.core.ssh.AgentUnavailableException
@@ -297,8 +298,9 @@ class SessionsController(
     /** [path] as text in a new tab; it gets its own share of the link, so closing the panel doesn't stop it. */
     fun openEditor(endpoint: Endpoint, path: String): EditorTab = add(createEditor(endpoint, path))
 
-    /** [path] in the system's app for it; the tab stays open to upload every save. */
-    fun openExternalEditor(endpoint: Endpoint, path: String): EditorTab = add(createEditor(endpoint, path, external = true))
+    /** [path] in [app], or the system's app for it; the tab stays open to upload every save. */
+    fun openExternalEditor(endpoint: Endpoint, path: String, app: ExternalApp? = null): EditorTab =
+        add(createEditor(endpoint, path, external = true, app = app))
 
     /** HTTP requests sent from [host], through its shared link. */
     fun openRequests(host: Host): RequestsTab = add(createRequests(host))
@@ -451,7 +453,7 @@ class SessionsController(
         return register(FilesTab(newId(), host?.id, host?.label ?: "Questo computer", browser))
     }
 
-    private fun createEditor(endpoint: Endpoint, path: String, external: Boolean = false): EditorTab {
+    private fun createEditor(endpoint: Endpoint, path: String, external: Boolean = false, app: ExternalApp? = null): EditorTab {
         val host = (endpoint as? Endpoint.Remote)?.let { services.workspace.workspace.value.host(it.hostId) }
         val tab = register(EditorTab(newId(), host?.id, fileName(path), path, external))
         tab.job = scope.launch {
@@ -462,7 +464,7 @@ class SessionsController(
                     services.localFiles ?: throw IllegalStateException("Su questo dispositivo non ci sono file locali")
                 }
                 if (external) {
-                    followExternally(tab, RemoteEditor(endpoint, path, fs, EXTERNAL_EDIT_LIMIT_BYTES))
+                    followExternally(tab, RemoteEditor(endpoint, path, fs, EXTERNAL_EDIT_LIMIT_BYTES), app)
                     return@launch
                 }
                 val editor = RemoteEditor(endpoint, path, fs)
@@ -477,8 +479,8 @@ class SessionsController(
         return tab
     }
 
-    private suspend fun followExternally(tab: EditorTab, editor: RemoteEditor) {
-        val file = services.platform.openExternally(tab.label, editor.loadBytes())
+    private suspend fun followExternally(tab: EditorTab, editor: RemoteEditor, app: ExternalApp?) {
+        val file = services.platform.openExternally(tab.label, editor.loadBytes(), app)
             ?: throw IllegalStateException("Su questo dispositivo non si può aprire un editor esterno")
         tab.finishExternal = file::finish
         tab.mutableEditor.value = editor

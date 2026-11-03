@@ -45,6 +45,8 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.isAltPressed
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
@@ -66,6 +68,8 @@ import dev.eltermino.app.FileSortColumn
 import dev.eltermino.app.FilesTab
 import dev.eltermino.app.Location
 import dev.eltermino.app.childPath
+import dev.eltermino.core.data.ExternalApp
+import dev.eltermino.app.parentPath
 import dev.eltermino.app.failureMessage
 import dev.eltermino.app.fileName
 import dev.eltermino.app.formatBytes
@@ -105,9 +109,19 @@ internal class FileDrag {
     /** Where each panel on screen is, to know which one is under the pointer. A panel leaves when it's no longer shown. */
     val zones = mutableStateMapOf<String, Rect>()
 
+    /** Option (Alt) held while dragging: a copy, even within one machine. */
+    var copying by mutableStateOf(false)
+
+    /** Where each folder row on screen is, by panel id and path: a drop on one goes inside it. */
+    val folders = mutableStateMapOf<Pair<String, String>, Rect>()
+
     val active: Boolean get() = source != null
 
     fun over(): String? = if (!active) null else zones.entries.firstOrNull { it.key != source?.id && it.value.contains(pointer) }?.key
+
+    /** The folder row under the pointer, as panel id and path; never one of the items being dragged. */
+    fun overFolder(): Pair<String, String>? = if (!active) null else
+        folders.entries.firstOrNull { (key, rect) -> rect.contains(pointer) && items.none { it.path == key.second } }?.key
 }
 
 /** A copy waiting for the user to say what to do with names already at the destination. */
@@ -176,6 +190,8 @@ private sealed interface FileDialogState {
     class Rename(val entry: RemoteFile) : FileDialogState
     class Delete(val entries: List<RemoteFile>) : FileDialogState
     class Permissions(val entry: RemoteFile) : FileDialogState
+    class OpenWith(val entry: RemoteFile) : FileDialogState
+    class Move(val entries: List<RemoteFile>) : FileDialogState
 }
 
 /** A right click: where it landed and the row under it, if any. */
@@ -242,6 +258,16 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
         }
     }
 
+    // Within one machine a move is a rename; the panels showing where it went catch up after.
+    fun moveTo(items: List<RemoteFile>, dir: String) {
+        scope.launch {
+            browser.moveInto(items, dir).join()
+            tabs.filterIsInstance<FilesTab>()
+                .filter { it.id != tab.id && it.browser.endpoint == browser.endpoint && it.browser.path.value == dir }
+                .forEach { it.browser.refresh() }
+        }
+    }
+
     fun openEntry(entry: RemoteFile) {
         scope.launch {
             if (!browser.enter(entry)) state.sessions.openEditor(browser.endpoint, entry.path)
@@ -257,7 +283,7 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
         } else {
             MenuItem("Modifica", onClick = { close(); state.sessions.openEditor(browser.endpoint, entry.path) })
             if (state.services.platform.isDesktop) {
-                MenuItem("Apri con editor esterno", onClick = { close(); state.sessions.openExternalEditor(browser.endpoint, entry.path) })
+                MenuItem("Apri con…", onClick = { close(); dialog = FileDialogState.OpenWith(entry) })
             }
         }
         if (entry.type == RemoteFile.Type.File && state.services.platform.hasDocumentPicker) {
@@ -271,11 +297,14 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
         CopyTargets(state, targets) { target -> close(); copyTo(target, listOf(entry)) }
         MenuDivider()
         MenuItem("Rinomina…", onClick = { close(); dialog = FileDialogState.Rename(entry) })
+        MenuItem("Sposta in…", onClick = { close(); dialog = FileDialogState.Move(if (entry.path in selection) selected else listOf(entry)) })
         MenuItem("Permessi…", onClick = { close(); dialog = FileDialogState.Permissions(entry) })
         MenuItem("Elimina…", danger = true, onClick = { close(); dialog = FileDialogState.Delete(listOf(entry)) })
     }
 
     val dropTarget = drag?.over() == tab.id
+    // Within one machine a drop moves, as in the Finder; Option (Alt) makes it a copy.
+    val dropMoves = drag?.source?.browser?.endpoint == browser.endpoint && drag?.copying != true
     Column(
         Modifier
             .fillMaxSize()
@@ -291,7 +320,7 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
         copier?.error?.let { Banner(it, action = "Chiudi") { copier.error = null } }
         if (dropTarget || externalHover) {
             Text(
-                "Rilascia per copiare in ${path.orEmpty()}",
+                if (dropTarget && dropMoves) "Rilascia per spostare in ${path.orEmpty()}, con Option per copiare" else "Rilascia per copiare in ${path.orEmpty()}",
                 modifier = Modifier.fillMaxWidth().background(colors.accentBackground).padding(horizontal = 12.dp, vertical = 6.dp),
                 style = Carta.type.small,
                 color = colors.accent,
@@ -355,15 +384,33 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
                                 },
                                 onDrag = { position -> drag?.pointer = position },
                                 onDragEnd = {
-                                    val target = drag?.over()?.let { id -> targets.firstOrNull { it.id == id } }
                                     val items = drag?.items.orEmpty()
+                                    val folder = drag?.overFolder()
+                                    val panel = drag?.over()
                                     drag?.source = null
-                                    if (target != null) copyTo(target, items)
+                                    val copy = drag?.copying == true
+                                    if (folder != null) {
+                                        val (panelId, dir) = folder
+                                        val target = (targets + tab).firstOrNull { it.id == panelId }
+                                        if (target != null && target.browser.endpoint == browser.endpoint && !copy) moveTo(items, dir)
+                                        else if (target != null) copier?.copy(browser.endpoint, items, Location(target.browser.endpoint, dir), tabs.titles()[target.id] ?: target.label)
+                                    } else if (panel != null) {
+                                        val target = targets.firstOrNull { it.id == panel }
+                                        val dir = target?.browser?.path?.value
+                                        if (target != null && dir != null && target.browser.endpoint == browser.endpoint && !copy) moveTo(items, dir)
+                                        else if (target != null) copyTo(target, items)
+                                    }
                                 },
                                 onDragCancel = { drag?.source = null },
+                                onOption = { held -> drag?.copying = held },
                                 onRightClick = { clickedRow = entry },
+                                dropHere = entry.isDirectory && drag?.overFolder() == (tab.id to entry.path),
+                                onPlaced = if (entry.isDirectory && drag != null) { rect -> drag.folders[tab.id to entry.path] = rect } else null,
                                 menu = { close -> entryItems(entry, close) },
                             )
+                            if (entry.isDirectory && drag != null) {
+                                DisposableEffect(tab.id, entry.path) { onDispose { drag.folders.remove(tab.id to entry.path) } }
+                            }
                         }
                     }
                 }
@@ -429,6 +476,24 @@ internal fun FilesPane(state: AppState, tab: FilesTab, focused: Boolean) {
         is FileDialogState.Permissions -> PermissionsDialog(open.entry) { mode ->
             dialog = null
             if (mode != null) browser.chmod(open.entry, mode)
+        }
+        is FileDialogState.OpenWith -> OpenWithDialog(state, open.entry, onDismiss = { dialog = null }) { app ->
+            dialog = null
+            if (app != null) {
+                scope.launch {
+                    state.services.workspace.update { ws -> ws.copy(ui = ws.ui.copy(recentApps = (listOf(app) + ws.ui.recentApps.filter { it.path != app.path }).take(5))) }
+                }
+            }
+            state.sessions.openExternalEditor(browser.endpoint, open.entry.path, app)
+        }
+        is FileDialogState.Move -> {
+            val others = tabs.filterIsInstance<FilesTab>()
+                .filter { it.id != tab.id && it.browser.endpoint == browser.endpoint }
+                .mapNotNull { other -> other.browser.path.value?.let { (tabs.titles()[other.id] ?: other.label) to it } }
+            MoveDialog(open.entries, path.orEmpty(), others) { dir ->
+                dialog = null
+                if (dir != null) moveTo(open.entries, dir)
+            }
         }
     }
 
@@ -555,6 +620,12 @@ private fun FileRow(
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
     onRightClick: () -> Unit,
+    /** Hears whether Option (Alt) is down, from each mouse event, before the drag reacts to it. */
+    onOption: (Boolean) -> Unit = {},
+    /** A folder that a drag in progress would drop into. */
+    dropHere: Boolean = false,
+    /** Hears where a folder row is in the window, so a drop can find it. */
+    onPlaced: ((Rect) -> Unit)? = null,
     menu: @Composable ((close: () -> Unit) -> Unit),
 ) {
     val colors = Carta.colors
@@ -568,19 +639,30 @@ private fun FileRow(
     val dragged by rememberUpdatedState(onDrag)
     val dragEnded by rememberUpdatedState(onDragEnd)
     val dragCancelled by rememberUpdatedState(onDragCancel)
+    val optionHeld by rememberUpdatedState(onOption)
     Row(
         Modifier
             .fillMaxWidth()
-            .onGloballyPositioned { coordinates = it }
+            .onGloballyPositioned {
+                coordinates = it
+                onPlaced?.invoke(it.boundsInWindow())
+            }
+            .then(if (dropHere) Modifier.border(2.dp, colors.accent) else Modifier)
             .background(
                 when {
-                    selected -> colors.accentBackground
+                    dropHere || selected -> colors.accentBackground
                     hovered -> colors.hover
                     else -> colors.background
                 },
             )
             .hoverable(interaction)
             .onSecondaryClick(entry.path) { onRightClick() }
+            // The drop is decided on the release, so the keys have to be read from the mouse's own events.
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) optionHeld(awaitPointerEvent(PointerEventPass.Initial).keyboardModifiers.isAltPressed)
+                }
+            }
             .pointerInput(entry.path) {
                 detectDragGestures(
                     onDragStart = { offset -> dragStarted((coordinates?.positionInWindow() ?: Offset.Zero) + offset) },
@@ -703,6 +785,70 @@ private fun Banner(text: String, action: String, onAction: () -> Unit) {
 @Composable
 private fun Centered(content: @Composable () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { content() }
+}
+
+/** Which app opens [entry]: the system's own, one used before, an editor found installed, or any other. */
+@Composable
+private fun OpenWithDialog(state: AppState, entry: RemoteFile, onDismiss: () -> Unit, onOpen: (ExternalApp?) -> Unit) {
+    val workspace by state.services.workspace.workspace.collectAsState()
+    val recent = workspace.ui.recentApps
+    val installed = remember { state.services.platform.externalApps() }.filter { app -> recent.none { it.path == app.path } }
+    val scope = rememberCoroutineScope()
+    Dialog(
+        onDismiss = onDismiss,
+        title = "Apri ${entry.name} con",
+        width = 440.dp,
+        actions = {
+            Button("Scegli un'altra app…", kind = ButtonKind.Ghost, onClick = { scope.launch { state.services.platform.pickApp()?.let(onOpen) } })
+            Box(Modifier.weight(1f))
+            Button("Annulla", onClick = onDismiss, kind = ButtonKind.Ghost)
+        },
+    ) {
+        Text("Ogni salvataggio fatto nell'app viene caricato sul server.", style = Carta.type.small, color = Carta.colors.textDim, modifier = Modifier.padding(bottom = 8.dp))
+        MenuItem("App predefinita del sistema", onClick = { onOpen(null) })
+        if (recent.isNotEmpty()) {
+            MenuLabel("Usate di recente")
+            recent.forEach { app -> MenuItem(app.name, onClick = { onOpen(app) }) }
+        }
+        if (installed.isNotEmpty()) {
+            MenuLabel("Installate")
+            installed.forEach { app -> MenuItem(app.name, onClick = { onOpen(app) }) }
+        }
+    }
+}
+
+/**
+ * Where to move [entries] on this machine: a path typed or taken from the folder above and the
+ * other panels open on it. Relative paths start from [from].
+ */
+@Composable
+private fun MoveDialog(entries: List<RemoteFile>, from: String, others: List<Pair<String, String>>, onDone: (String?) -> Unit) {
+    var dir by remember { mutableStateOf(from) }
+    fun target(): String {
+        val typed = dir.trim().trimEnd('/').ifEmpty { "/" }
+        return if (typed.startsWith("/") || Regex("^[A-Za-z]:").containsMatchIn(typed)) typed else childPath(from, typed)
+    }
+    val valid = dir.isNotBlank() && target() != from
+    val submit = { if (valid) onDone(target()) }
+    Dialog(
+        onDismiss = { onDone(null) },
+        title = if (entries.size == 1) "Sposta ${entries.single().name}" else "Sposta ${entries.size} elementi",
+        actions = {
+            Button("Annulla", onClick = { onDone(null) }, kind = ButtonKind.Ghost)
+            Button("Sposta", onClick = submit, enabled = valid)
+        },
+    ) {
+        Field("Nella cartella", dir, { dir = it }, monospace = true, fieldModifier = Modifier.onEnter(submit))
+        val parent = parentPath(from)
+        if (parent != from) MenuItem("Cartella superiore", detail = parent, icon = CartaIcons.Folder, onClick = { dir = parent })
+        others.forEach { (label, path) -> MenuItem(label, detail = path, icon = CartaIcons.Folder, onClick = { dir = path }) }
+        Text(
+            "Sulla stessa macchina è un cambio di percorso: non si scarica né si ricarica niente.",
+            style = Carta.type.small,
+            color = Carta.colors.textDim,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
 }
 
 @Composable
