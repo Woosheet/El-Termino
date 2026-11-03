@@ -282,6 +282,8 @@ data class UiSettings(
     val localBookmarks: List<String> = emptyList(),
     /** A theme id, or "system" to follow the OS: Carta by day, Notte in dark mode. */
     val theme: String = "system",
+    /** The terminal's colours by id, or "app" for the ones of [theme]. */
+    val terminalTheme: String = "app",
     /** The app icon's `AppIconStyle` id, shown in the Dock, taskbar and window. */
     val appIcon: String = "bigote",
     /** System notifications when a transfer finishes or fails. */

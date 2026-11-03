@@ -227,6 +227,107 @@ private val TokyoNightTerminal = TerminalTheme(
     ),
 )
 
+// Terminal colours on their own, from each scheme's published palette, for any app theme.
+
+/** Catppuccin, the dark Mocha flavour. */
+private val CatppuccinMocha = TerminalTheme(
+    name = "Catppuccin Mocha",
+    background = Color(0xFF1E1E2E),
+    foreground = Color(0xFFCDD6F4),
+    cursor = Color(0xFFF5E0DC),
+    ansi = ansi(
+        0xFF45475A, 0xFFF38BA8, 0xFFA6E3A1, 0xFFF9E2AF, 0xFF89B4FA, 0xFFF5C2E7, 0xFF94E2D5, 0xFFBAC2DE,
+        0xFF585B70, 0xFFF38BA8, 0xFFA6E3A1, 0xFFF9E2AF, 0xFF89B4FA, 0xFFF5C2E7, 0xFF94E2D5, 0xFFA6ADC8,
+    ),
+)
+
+/** Catppuccin, the light Latte flavour. */
+private val CatppuccinLatte = TerminalTheme(
+    name = "Catppuccin Latte",
+    background = Color(0xFFEFF1F5),
+    foreground = Color(0xFF4C4F69),
+    cursor = Color(0xFFDC8A78),
+    ansi = ansi(
+        0xFF5C5F77, 0xFFD20F39, 0xFF40A02B, 0xFFDF8E1D, 0xFF1E66F5, 0xFFEA76CB, 0xFF179299, 0xFFACB0BE,
+        0xFF6C6F85, 0xFFD20F39, 0xFF40A02B, 0xFFDF8E1D, 0xFF1E66F5, 0xFFEA76CB, 0xFF179299, 0xFFBCC0CC,
+    ),
+)
+
+/** Pavel Pertsev's Gruvbox, dark with medium contrast. */
+private val GruvboxDark = TerminalTheme(
+    name = "Gruvbox scuro",
+    background = Color(0xFF282828),
+    foreground = Color(0xFFEBDBB2),
+    cursor = Color(0xFFEBDBB2),
+    ansi = ansi(
+        0xFF282828, 0xFFCC241D, 0xFF98971A, 0xFFD79921, 0xFF458588, 0xFFB16286, 0xFF689D6A, 0xFFA89984,
+        0xFF928374, 0xFFFB4934, 0xFFB8BB26, 0xFFFABD2F, 0xFF83A598, 0xFFD3869B, 0xFF8EC07C, 0xFFEBDBB2,
+    ),
+)
+
+/** Gruvbox, light with medium contrast. */
+private val GruvboxLight = TerminalTheme(
+    name = "Gruvbox chiaro",
+    background = Color(0xFFFBF1C7),
+    foreground = Color(0xFF3C3836),
+    cursor = Color(0xFF3C3836),
+    ansi = ansi(
+        0xFFFBF1C7, 0xFFCC241D, 0xFF98971A, 0xFFD79921, 0xFF458588, 0xFFB16286, 0xFF689D6A, 0xFF7C6F64,
+        0xFF928374, 0xFF9D0006, 0xFF79740E, 0xFFB57614, 0xFF076678, 0xFF8F3F71, 0xFF427B58, 0xFF3C3836,
+    ),
+)
+
+/** Atom's One Dark. Black is a step off the background, so black text still shows. */
+private val OneDark = TerminalTheme(
+    name = "One Dark",
+    background = Color(0xFF282C34),
+    foreground = Color(0xFFABB2BF),
+    cursor = Color(0xFF528BFF),
+    ansi = ansi(
+        0xFF3F4451, 0xFFE06C75, 0xFF98C379, 0xFFE5C07B, 0xFF61AFEF, 0xFFC678DD, 0xFF56B6C2, 0xFFABB2BF,
+        0xFF5C6370, 0xFFE06C75, 0xFF98C379, 0xFFE5C07B, 0xFF61AFEF, 0xFFC678DD, 0xFF56B6C2, 0xFFFFFFFF,
+    ),
+)
+
+/** Atom's One Light. */
+private val OneLight = TerminalTheme(
+    name = "One Light",
+    background = Color(0xFFFAFAFA),
+    foreground = Color(0xFF383A42),
+    cursor = Color(0xFF526FFF),
+    ansi = ansi(
+        0xFF383A42, 0xFFE45649, 0xFF50A14F, 0xFFC18401, 0xFF4078F2, 0xFFA626A4, 0xFF0184BC, 0xFFA0A1A7,
+        0xFF696C77, 0xFFE45649, 0xFF50A14F, 0xFFC18401, 0xFF4078F2, 0xFFA626A4, 0xFF0184BC, 0xFFCACACC,
+    ),
+)
+
+/** Ethan Schoonover's Solarized, dark variant, with the usual bright slots for the base tones. */
+private val SolarizedDark = TerminalTheme(
+    name = "Solarized scuro",
+    background = Color(0xFF002B36),
+    foreground = Color(0xFF839496),
+    cursor = Color(0xFF93A1A1),
+    ansi = ansi(
+        0xFF073642, 0xFFDC322F, 0xFF859900, 0xFFB58900, 0xFF268BD2, 0xFFD33682, 0xFF2AA198, 0xFFEEE8D5,
+        0xFF002B36, 0xFFCB4B16, 0xFF586E75, 0xFF657B83, 0xFF839496, 0xFF6C71C4, 0xFF93A1A1, 0xFFFDF6E3,
+    ),
+)
+
+/** Wimer Hazenberg's Monokai. */
+private val Monokai = TerminalTheme(
+    name = "Monokai",
+    background = Color(0xFF272822),
+    foreground = Color(0xFFF8F8F2),
+    cursor = Color(0xFFF8F8F0),
+    ansi = ansi(
+        0xFF272822, 0xFFF92672, 0xFFA6E22E, 0xFFF4BF75, 0xFF66D9EF, 0xFFAE81FF, 0xFFA1EFE4, 0xFFF8F8F2,
+        0xFF75715E, 0xFFF92672, 0xFFA6E22E, 0xFFF4BF75, 0xFF66D9EF, 0xFFAE81FF, 0xFFA1EFE4, 0xFFF9F8F5,
+    ),
+)
+
+/** The terminal setting that keeps the colours of the app's theme. */
+const val FOLLOW_APP_TERMINAL = "app"
+
 object Themes {
     val Carta = AppTheme("carta", "Carta", dark = false, colors = CartaLight, terminal = TerminalTheme.CartaLight)
     val Notte = AppTheme("notte", "Notte", dark = true, colors = CartaNight, terminal = NightTerminal)
@@ -240,4 +341,19 @@ object Themes {
     /** The theme for setting [id]; [SYSTEM_THEME] or an unknown id follows [systemDark]. */
     fun resolve(id: String, systemDark: Boolean): AppTheme =
         all.firstOrNull { it.id == id } ?: if (systemDark) Notte else Carta
+
+    /** Every terminal palette by id: the app themes' own, under the same ids, then the extra ones. */
+    val terminals: List<Pair<String, TerminalTheme>> = all.map { it.id to it.terminal } + listOf(
+        "catppuccin-mocha" to CatppuccinMocha,
+        "catppuccin-latte" to CatppuccinLatte,
+        "gruvbox-scuro" to GruvboxDark,
+        "gruvbox-chiaro" to GruvboxLight,
+        "one-dark" to OneDark,
+        "one-light" to OneLight,
+        "solarized-scuro" to SolarizedDark,
+        "monokai" to Monokai,
+    )
+
+    /** The terminal colours for setting [id]; [FOLLOW_APP_TERMINAL] or an unknown id keeps [app]'s. */
+    fun terminalFor(id: String, app: AppTheme): TerminalTheme = terminals.firstOrNull { it.first == id }?.second ?: app.terminal
 }

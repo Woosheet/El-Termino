@@ -26,6 +26,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Spacer
+import dev.eltermino.core.terminal.TerminalTheme
 import dev.eltermino.app.AppCommand
 import dev.eltermino.app.AppState
 import dev.eltermino.app.Shortcuts
@@ -37,6 +41,7 @@ import dev.eltermino.ui.components.Pressable
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.AppTheme
 import dev.eltermino.ui.theme.Carta
+import dev.eltermino.ui.theme.FOLLOW_APP_TERMINAL
 import dev.eltermino.ui.theme.SYSTEM_THEME
 import dev.eltermino.ui.theme.Themes
 import kotlinx.coroutines.launch
@@ -52,7 +57,7 @@ internal fun SettingsScreen(state: AppState, modifier: Modifier = Modifier, extr
     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp)) {
         ScreenTitle("Impostazioni")
         Hint("Valgono per questo dispositivo e si salvano da sole.")
-        SettingsSection("Tema", "Colori dell'app e del terminale insieme. \"Segui il sistema\" usa Carta di giorno e Notte quando il sistema è in modalità scura.") {
+        SettingsSection("Tema", "Colori dell'app. \"Segui il sistema\" usa Carta di giorno e Notte quando il sistema è in modalità scura.") {
             val ids = listOf(SYSTEM_THEME) + Themes.all.map { it.id }
             ids.chunked(3).forEach { row ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -63,6 +68,21 @@ internal fun SettingsScreen(state: AppState, modifier: Modifier = Modifier, extr
                         }
                     }
                     repeat(3 - row.size) { Box(Modifier.weight(1f)) }
+                }
+            }
+        }
+        SettingsSection("Terminale", "I colori del terminale. \"Come l'app\" usa quelli del tema scelto sopra, gli altri valgono con qualsiasi tema.") {
+            val appTerminal = Themes.resolve(chosen, isSystemInDarkTheme()).terminal
+            val choices = listOf(FOLLOW_APP_TERMINAL to appTerminal) + Themes.terminals
+            choices.chunked(4).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { (id, terminal) ->
+                        val name = if (id == FOLLOW_APP_TERMINAL) "Come l'app" else terminal.name
+                        ThemeCard(name, selected = workspace.ui.terminalTheme == id, onClick = { update { it.copy(terminalTheme = id) } }, modifier = Modifier.weight(1f)) {
+                            TerminalPreview(terminal)
+                        }
+                    }
+                    repeat(4 - row.size) { Box(Modifier.weight(1f)) }
                 }
             }
         }
@@ -223,6 +243,26 @@ private fun ThemePreview(theme: AppTheme) {
 @Composable
 private fun Bar(color: androidx.compose.ui.graphics.Color, width: Int) {
     Box(Modifier.size(width = width.dp, height = 5.dp).clip(RoundedCornerShape(2.dp)).background(color))
+}
+
+/** A prompt, a listing and the eight base colours, in [theme]'s own colours. */
+@Composable
+private fun TerminalPreview(theme: TerminalTheme) {
+    val line = Carta.type.small.copy(fontFamily = Carta.monospace, fontSize = 11.sp, lineHeight = 15.sp)
+    Column(Modifier.fillMaxSize().background(theme.background).padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row {
+            Text("dev@web-01", style = line, color = theme.ansi[2], maxLines = 1)
+            Text(":~$ ls", style = line, color = theme.foreground, maxLines = 1)
+        }
+        Row {
+            Text("logs  ", style = line, color = theme.ansi[4], maxLines = 1)
+            Text("app.yaml", style = line, color = theme.foreground, maxLines = 1)
+        }
+        Spacer(Modifier.weight(1f))
+        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            (1..6).forEach { Box(Modifier.weight(1f).height(8.dp).clip(RoundedCornerShape(2.dp)).background(theme.ansi[it])) }
+        }
+    }
 }
 
 /** Carta and Notte side by side. */

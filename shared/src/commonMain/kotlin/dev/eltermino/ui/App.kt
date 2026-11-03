@@ -109,11 +109,15 @@ fun App(state: AppState, onExit: () -> Unit = {}, titleBarHeight: Dp = 0.dp) {
     }
 }
 
-/** The theme the user picked, or the one the system's light or dark mode calls for. */
+/**
+ * The theme the user picked, or the one the system's light or dark mode calls for, with the
+ * terminal colours they chose apart, if any.
+ */
 @Composable
 fun currentTheme(state: AppState): AppTheme {
     val workspace by state.services.workspace.workspace.collectAsState()
-    return Themes.resolve(workspace.ui.theme, isSystemInDarkTheme())
+    val app = Themes.resolve(workspace.ui.theme, isSystemInDarkTheme())
+    return app.copy(terminal = Themes.terminalFor(workspace.ui.terminalTheme, app))
 }
 
 @Composable
