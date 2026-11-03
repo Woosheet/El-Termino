@@ -1,5 +1,7 @@
 package dev.eltermino.ui.components
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -85,7 +87,8 @@ fun Dialog(
             Text(title, style = Carta.type.dialogTitle, color = toneColor)
             Spacer(Modifier.height(12.dp))
             CompositionLocalProvider(LocalTextStyle provides Carta.type.body, LocalContentColor provides colors.text) {
-                Column(content = content)
+                // Taller than the window, the content scrolls; the title and the actions stay in view.
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), content = content)
             }
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), content = actions)
