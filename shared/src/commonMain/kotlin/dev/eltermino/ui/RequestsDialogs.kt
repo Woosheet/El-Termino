@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -32,14 +33,18 @@ import dev.eltermino.app.HttpRequestException
 import dev.eltermino.app.RequestsTab
 import dev.eltermino.app.RunCell
 import dev.eltermino.app.describe
+import dev.eltermino.app.formatFileTime
 import dev.eltermino.app.isOpenApi
 import dev.eltermino.app.isOpenApiYaml
 import dev.eltermino.app.parseOpenApi
 import dev.eltermino.app.parseCurl
 import dev.eltermino.app.parsePostman
 import dev.eltermino.app.variables
+import dev.eltermino.core.data.ApiDiscovery
+import dev.eltermino.core.data.DiscoveredApi
 import dev.eltermino.core.data.Host
 import dev.eltermino.core.data.HttpCollection
+import dev.eltermino.core.data.HttpRequest
 import dev.eltermino.core.data.Workspace
 import dev.eltermino.core.data.groupPath
 import dev.eltermino.core.data.newId
@@ -54,6 +59,7 @@ import dev.eltermino.ui.components.Pressable
 import dev.eltermino.ui.components.RadioOption
 import dev.eltermino.ui.components.Text
 import dev.eltermino.ui.theme.Carta
+import dev.eltermino.ui.theme.tabular
 import kotlinx.coroutines.launch
 
 @Composable
@@ -312,6 +318,61 @@ private fun RunCellView(cell: RunCell, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** What looking for APIs on the host found, or the search under way. */
+@Composable
+private fun ApiFinder(host: String, discovery: ApiDiscovery?, searching: String?, onSearch: () -> Unit, onUse: (DiscoveredApi) -> Unit) {
+    val colors = Carta.colors
+    Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("API su $host", style = Carta.type.bodyStrong, modifier = Modifier.weight(1f))
+            if (searching != null) {
+                HoppingSombrero(height = 18.dp)
+                Text("$searching…", style = Carta.type.small, color = colors.textDim, modifier = Modifier.padding(start = 8.dp))
+            } else {
+                Button(if (discovery == null) "Cerca" else "Cerca di nuovo", onClick = onSearch, kind = ButtonKind.Ghost)
+            }
+        }
+        Text(
+            discovery?.let { "Ultima ricerca: ${formatFileTime(it.atEpochSeconds)}, tra le porte in ascolto e con sole richieste GET." }
+                ?: "Guarda le porte in ascolto sull'host e su ognuna cerca una descrizione OpenAPI, con sole richieste GET.",
+            style = Carta.type.small,
+            color = colors.textDim,
+        )
+        if (discovery != null && discovery.apis.isEmpty() && searching == null) {
+            Text("Nessuna porta risponde in HTTP, a parte SSH.", style = Carta.type.small, modifier = Modifier.padding(top = 6.dp))
+        }
+        val apis = discovery?.apis.orEmpty()
+        if (apis.isNotEmpty() && apis.none { it.descriptionUrl != null } && searching == null) {
+            Text(
+                "Nessuna porta pubblica una descrizione nei posti soliti. Con Prova apri una richiesta verso la porta e vedi cosa risponde.",
+                style = Carta.type.small,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+            apis.forEach { api ->
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(":${api.port}", style = Carta.type.small.tabular(), fontFamily = Carta.monospace, color = colors.textDim, modifier = Modifier.width(60.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(api.title ?: api.program ?: "Risponde in HTTP", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        val details = if (api.descriptionUrl != null) {
+                            listOfNotNull(if (api.requests == 1) "1 richiesta" else "${api.requests} richieste", api.program.takeIf { api.title != null }, api.note)
+                        } else {
+                            listOfNotNull("nessuna descrizione", api.note)
+                        }
+                        Text(details.joinToString(" · "), style = Carta.type.small, color = colors.textDim, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                    Button(
+                        if (api.descriptionUrl != null) "Usa" else "Prova",
+                        onClick = { onUse(api) },
+                        kind = if (api.descriptionUrl != null) ButtonKind.Primary else ButtonKind.Secondary,
+                    )
+                }
+            }
+        }
+    }
+}
+
 /**
  * A Postman v2.1 collection, an OpenAPI or Swagger description (pasted, from a file or fetched
  * from the tab's host) or a `curl` command.
@@ -319,8 +380,12 @@ private fun RunCellView(cell: RunCell, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun ImportDialog(state: AppState, tab: RequestsTab, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
-    val workspace = state.services.workspace.workspace.value
+    val workspace by state.services.workspace.workspace.collectAsState()
     val collections = workspace.httpCollections
+    val hostLabel = workspace.host(tab.hostId)?.label ?: "questo host"
+    val discovery = workspace.apiDiscoveries[tab.hostId]
+    // What the search on the host is doing; null when it isn't running.
+    var searching by remember { mutableStateOf<String?>(null) }
     var text by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     // Where an OpenAPI description came from, to resolve its relative server URLs.
@@ -348,6 +413,34 @@ private fun ImportDialog(state: AppState, tab: RequestsTab, onDismiss: () -> Uni
             }
         }
     }
+
+    fun discover() {
+        searching = "Mi collego"
+        error = null
+        scope.launch {
+            try {
+                state.requests.discoverApis(tab) { step -> searching = step }
+            } catch (e: HttpRequestException) {
+                error = e.message
+            } finally {
+                searching = null
+            }
+        }
+    }
+
+    // A port without a description: a GET to it, opened in the editor, shows what it answers.
+    fun tryOut(api: DiscoveredApi) {
+        scope.launch {
+            val name = "Trovate su $hostLabel"
+            val collection = workspace.httpCollections.firstOrNull { it.name == name } ?: HttpCollection(newId(), name).also { state.actions.saveCollection(it) }
+            val request = state.actions.saveRequest(collection.id, HttpRequest(newId(), api.program?.let { "$it (porta ${api.port})" } ?: "Porta ${api.port}", url = api.baseUrl + "/"))
+            tab.selected.value = request.id
+            onDismiss()
+        }
+    }
+
+    // The first time on a host it looks by itself; then what it found waits here.
+    LaunchedEffect(tab.hostId) { if (discovery == null) discover() }
 
     fun import() {
         scope.launch {
@@ -393,10 +486,19 @@ private fun ImportDialog(state: AppState, tab: RequestsTab, onDismiss: () -> Uni
             color = Carta.colors.textDim,
             modifier = Modifier.padding(bottom = 8.dp),
         )
+        ApiFinder(hostLabel, discovery, searching, onSearch = ::discover) { api ->
+            val description = api.descriptionUrl
+            if (description != null) {
+                address = description
+                fetch()
+            } else {
+                tryOut(api)
+            }
+        }
         // The description an API serves about itself, fetched through the tunnel like any request.
         Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
             Field(
-                "OpenAPI da ${workspace.host(tab.hostId)?.label ?: "questo host"}",
+                "OpenAPI da $hostLabel",
                 address,
                 { address = it },
                 Modifier.weight(1f),

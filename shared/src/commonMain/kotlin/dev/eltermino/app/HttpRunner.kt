@@ -21,6 +21,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import dev.eltermino.core.data.ApiDiscovery
+import dev.eltermino.core.data.DiscoveredApi
 
 /** A Requests tab: the collections, sent from one host through its shared link. */
 class RequestsTab internal constructor(id: String, override val hostId: String, label: String) : Tab(id, label) {
@@ -184,6 +192,91 @@ class HttpRunner(private val services: AppServices, private val connections: Con
         throw HttpRequestException("Non trovo una descrizione OpenAPI su $base: ho provato anche ${API_DESCRIPTION_PATHS.joinToString(", ")}" + (last?.let { ". L'ultima risposta: $it" } ?: ""))
     }
 
+    /**
+     * Looks for HTTP APIs on [tab]'s host and keeps what it finds on the workspace: the TCP ports
+     * listening there, then on each one that answers HTTP a description at the usual places. Only
+     * GET requests, a few per port; [progress] hears each step.
+     */
+    suspend fun discoverApis(tab: RequestsTab, progress: (String) -> Unit = {}): ApiDiscovery {
+        val connection = connectionOf(tab.lease.filterNotNull().first())
+        progress("Leggo le porte in ascolto")
+        val listing = connection.exec(LISTENING_PORTS_COMMAND).stdout.decodeToString()
+        val sshPort = services.workspace.workspace.value.host(tab.hostId)?.port
+        val ports = parseListeningPorts(listing)
+            .groupBy { it.port }
+            .map { (_, bound) -> bound.firstOrNull { it.probeHost() == "127.0.0.1" } ?: bound.first() }
+            .filter { it.port !in NOT_HTTP_PORTS && it.port != sshPort }
+            .sortedBy { it.port }
+        if (listing.isBlank()) throw HttpRequestException("${tab.label} non dice quali porte ha in ascolto: né /proc/net/tcp né netstat")
+        progress("Cerco i programmi dietro le porte")
+        val programs = try {
+            parseListeningPrograms(connection.exec(PROCESSES_COMMAND).stdout.decodeToString())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        val gate = Semaphore(4)
+        val apis = coroutineScope {
+            ports.map { port -> async { gate.withPermit { probe(connection, tab.hostId, port, programs[port.port], progress) } } }.awaitAll()
+        }.filterNotNull().sortedWith(compareBy({ it.descriptionUrl == null }, { it.port }))
+        val discovery = ApiDiscovery(nowEpochSeconds(), apis)
+        services.workspace.update { it.copy(apiDiscoveries = it.apiDiscoveries + (tab.hostId to discovery)) }
+        return discovery
+    }
+
+    /**
+     * Whether [port] answers HTTP, and with a description where; null when it doesn't answer HTTP at
+     * all. [args], its command line when known, names it and may give the path a Spring app serves under.
+     */
+    private suspend fun probe(connection: SshConnection, hostId: String, port: ListeningPort, args: String?, progress: (String) -> Unit): DiscoveredApi? {
+        val program = args?.let(::programName)
+        val prefix = args?.let(::contextPath)
+        val paths = (if (prefix != null) API_DESCRIPTION_PATHS.map { prefix + it } else emptyList()) + API_DESCRIPTION_PATHS
+        for (scheme in if (port.port in TLS_PORTS) listOf("https", "http") else listOf("http")) {
+            val base = "$scheme://${port.probeHost()}:${port.port}"
+            progress("Provo la porta ${port.port}")
+            val home = try {
+                probeGet(connection, hostId, "$base/")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: HttpCertificateException) {
+                return DiscoveredApi(port.port, base, note = "certificato HTTPS non attendibile", program = program)
+            } catch (e: Exception) {
+                continue
+            }
+            val server = home.headers.firstOrNull { it.first.equals("Server", ignoreCase = true) }?.second
+            // A description behind a login is there all the same: worth saying so.
+            var locked: String? = null
+            for (path in paths) {
+                val answer = try {
+                    probeGet(connection, hostId, base + path)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    continue
+                }
+                if ((answer.status == 401 || answer.status == 403) && locked == null) locked = "$path chiede l'accesso (${answer.status})"
+                if (answer.status != 200 || !isOpenApi(answer.text)) continue
+                val imported = runCatching { parseOpenApi(answer.text, base + path) }.getOrNull() ?: continue
+                return DiscoveredApi(port.port, base, base + path, imported.collection.name, imported.collection.requests.size, server, program)
+            }
+            val note = listOfNotNull("/ risponde ${home.status}", locked, server).joinToString(" · ")
+            return DiscoveredApi(port.port, base, note = note, program = program)
+        }
+        return null
+    }
+
+    private suspend fun probeGet(connection: SshConnection, hostId: String, url: String): HttpResponse = sendRequest(
+        connection,
+        HttpRequest(newId(), "Ricerca delle API", url = url, headers = listOf(HttpHeader("Accept", "application/json"))),
+        null,
+        hostId,
+        ::secret,
+        timeout = PROBE_TIMEOUT,
+        trustedCerts = trustedCerts(),
+    )
+
     private suspend fun connectionOf(lease: LinkLease): SshConnection {
         val state = withTimeoutOrNull(2.minutes) { lease.link.state.first { it is LinkState.Up || it is LinkState.Down } }
         return when (state) {
@@ -206,3 +299,6 @@ class HttpRunner(private val services: AppServices, private val connections: Con
 
     private fun message(e: Exception) = if (e is HttpRequestException) e.message ?: "Richiesta non riuscita" else failureMessage(e)
 }
+
+/** A port that doesn't answer in this long isn't serving HTTP to us. */
+private val PROBE_TIMEOUT = 4.seconds

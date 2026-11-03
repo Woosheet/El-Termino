@@ -135,10 +135,18 @@ class AppSnapshotTest {
     fun requestsImportDialog(): Unit = runBlocking {
         val state = lightState()
         val web = seed(state)
+        state.scope.launch {
+            state.sessions.prompter.prompt.filterNotNull().collect { if (it is PendingPrompt.HostKey) it.answer(true) else it.cancel() }
+        }
         val tab = state.sessions.openRequests(web)
         ImageComposeScene(1500, 1300, Density(2f)) {
             dev.eltermino.ui.theme.CartaTheme { dev.eltermino.ui.RequestsDialogs(state, tab, dev.eltermino.ui.RequestsDialog.Import) {} }
         }.use { scene ->
+            // The dialog looks for the host's APIs by itself the first time; show what it found.
+            eventually({ "no search result" }, timeoutMs = 60_000) {
+                scene.render(System.nanoTime())
+                state.services.workspace.workspace.value.apiDiscoveries[web.id] != null
+            }
             repeat(3) { scene.render(System.nanoTime()); Thread.sleep(80) }
             val png = scene.render(System.nanoTime()).encodeToData(EncodedImageFormat.PNG)!!.bytes
             File("build/snapshots/requests-import.png").apply { parentFile.mkdirs(); writeBytes(png) }

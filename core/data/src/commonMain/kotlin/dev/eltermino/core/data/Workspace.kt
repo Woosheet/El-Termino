@@ -25,6 +25,8 @@ data class Workspace(
     val snippets: List<Snippet> = emptyList(),
     /** Saved HTTP requests, sent from a host through its SSH connection. */
     val httpCollections: List<HttpCollection> = emptyList(),
+    /** What the last look for HTTP APIs found on each host, by host id. */
+    val apiDiscoveries: Map<String, ApiDiscovery> = emptyMap(),
     /** Tab layouts saved by name, to reopen with one click. */
     val savedLayouts: List<SavedLayout> = emptyList(),
     /** What was open last time, offered again at the next start. */
@@ -64,6 +66,28 @@ data class Host(
     val forwards: List<PortForwardRule> = emptyList(),
     /** Lets this host use this device's SSH agent while connected. */
     val agentForwarding: Boolean = false,
+)
+
+/** What looking for HTTP APIs on a host found: the ports that answer HTTP, with their description where they serve one. */
+@Serializable
+data class ApiDiscovery(
+    val atEpochSeconds: Long,
+    val apis: List<DiscoveredApi> = emptyList(),
+)
+
+@Serializable
+data class DiscoveredApi(
+    val port: Int,
+    /** Where it answers through the tunnel, like http://127.0.0.1:8080. */
+    val baseUrl: String,
+    /** Where its OpenAPI or Swagger description is; null when it answers HTTP without one. */
+    val descriptionUrl: String? = null,
+    val title: String? = null,
+    val requests: Int = 0,
+    /** What it answered and its Server header, or what kept it from answering normally. */
+    val note: String? = null,
+    /** The program listening there, like the jar it runs, where the host lets this user see it. */
+    val program: String? = null,
 )
 
 /**
